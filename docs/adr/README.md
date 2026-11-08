@@ -8,13 +8,13 @@ Each record documents one significant decision: its context, the decision itself
 |---|---|---|
 | [001](0001-tauri-desktop-shell.md) | Tauri 2 as the desktop shell | Accepted |
 | [002](0002-modular-monolith-hexagonal.md) | Modular monolith with hexagonal boundaries | Accepted |
-| [003](0003-sqlite-system-of-record.md) | SQLite (rusqlite) as the system of record | Accepted |
+| [003](0003-sqlite-system-of-record.md) | SQLite (rusqlite) as the system of record | Accepted, amended by 022 |
 | [004](0004-integer-money-and-cost-kinds.md) | Integer money and three non-addable cost kinds | Accepted |
-| [005](0005-canonical-token-semantics.md) | Canonical token semantics | Accepted |
+| [005](0005-canonical-token-semantics.md) | Canonical token semantics | Accepted, amended by 022 |
 | [006](0006-per-metric-accuracy.md) | Per-metric accuracy classes; NULL for unavailable | Accepted |
 | [007](0007-effective-dated-pricing-catalogue.md) | Effective-dated, version-controlled pricing catalogue | Accepted |
 | [008](0008-derived-metrics-in-rust.md) | Additive sums in SQL, derived metrics in one Rust engine | Accepted |
-| [009](0009-fifteen-minute-utc-rollups.md) | 15-minute UTC rollup buckets | Accepted |
+| [009](0009-fifteen-minute-utc-rollups.md) | 15-minute UTC rollup buckets | Accepted, amended by 022 |
 | [010](0010-generated-contracts.md) | Generated Rust→TypeScript contracts from one command catalogue | Accepted |
 | [011](0011-echarts.md) | Apache ECharts as the single chart library | Accepted |
 | [012](0012-typescript-6.md) | TypeScript 6.0 with type-aware ESLint | Accepted |
@@ -27,3 +27,4 @@ Each record documents one significant decision: its context, the decision itself
 | [019](0019-licence.md) | Licence: Apache-2.0 OR MIT | Accepted |
 | [020](0020-ipc-security-baseline.md) | IPC and webview security baseline | Accepted |
 | [021](0021-ci-scope-while-private.md) | CI scope while the repository is private | Accepted |
+| [022](0022-data-core-implementation.md) | Data-core implementation refinements | Accepted |

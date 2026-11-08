@@ -4,6 +4,15 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Added
+- **Data core (M1).**
+  - Domain model: events, canonical tokens, accuracy classes, integer money and non-addable cost kinds.
+  - Pricing engine with effective dates, prompt tiers, service tiers and recorded assumptions.
+  - Registry of providers and models, and price catalogue 2026-11-08.1 (Anthropic, OpenAI, Google), verified on the official pages.
+  - Metric registry and time-zone-aware analytics engine with comparisons and top-N.
+  - SQLite store with idempotent writes, three rollup levels, re-pricing and backups.
+  - Synthetic performance tool and a `Performance` CI workflow.
+
 ### Changed
 - **CI scope while the repository is private (ADR-021).**
   - macOS builds run only on manual dispatch.

@@ -66,6 +66,15 @@ flowchart LR
 
 ## M1 — Data core (L)
 
+> **Implementation notes (2026-11-08).** Delivered as `veyra-domain`, `veyra-registry`, `veyra-analytics`, `veyra-store` and `tools/perf`, with these refinements (ADR-022):
+> - **Migrations:** our own migration runner replaces `rusqlite_migration`, which is incompatible with the pinned rusqlite.
+> - **Field names:** the cache-write fields are named short/long TTL.
+> - **Rollups:** three clustered rollup levels (totals, per dimension, full), rebuilt set-based.
+> - **Property tests:** written with a seeded in-repo generator instead of `proptest`.
+> - **Compile-fail test:** a `compile_fail,E0308` doctest instead of a separate test crate.
+> - **Prices:** the catalogue was verified row by row on the official pages on 2026-11-08.
+> - **Performance:** budgets met at 1M events (overview query p95 51–81 ms) when measured with free memory; the `Performance` CI workflow re-checks on a clean runner.
+
 **Goal.** Domain, store, pricing and metric engines, fully tested, with no UI or connectors.
 
 **Tasks.**

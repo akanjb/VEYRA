@@ -6,7 +6,7 @@
 
 Veyra is a local-first desktop application that consolidates AI usage from model providers, coding agents, IDEs, desktop apps and CLIs into one accurate, privacy-preserving analytics product. Everything runs on your own machine.
 
-![Status](https://img.shields.io/badge/status-early%20development%20(M0)-orange)
+![Status](https://img.shields.io/badge/status-early%20development%20(M1)-orange)
 ![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Stack](https://img.shields.io/badge/stack-Tauri%202%20%C2%B7%20Rust%20%C2%B7%20React%2019%20%C2%B7%20SQLite-6f42c1)
@@ -27,7 +27,11 @@ Veyra is a local-first desktop application that consolidates AI usage from model
 ---
 
 > [!IMPORTANT]
-> **Project status: Milestone M0 (Foundations) complete.** The secure desktop shell, the generated Rust-to-TypeScript contract pipeline, the quality tooling and CI are in place. Usage collection and the analytics dashboard arrive in milestones M1–M8. This README marks every capability as **Available** or **Planned**.
+> **Project status: Milestones M0 (Foundations) and M1 (Data core) complete.**
+> - **Built:** the secure desktop shell, generated contracts, the domain model, the verified pricing engine and price catalogue, the SQLite store and the analytics engine. All are tested and performance-checked at one million events.
+> - **Next:** collecting usage from real tools (M2) and the dashboard (M3).
+>
+> This README marks every capability as **Available** or **Planned**.
 
 ## Table of contents
 
@@ -43,6 +47,8 @@ Veyra is a local-first desktop application that consolidates AI usage from model
   - [Frontend (dashboard)](#frontend-dashboard)
   - [Command catalogue and generated contracts](#command-catalogue-and-generated-contracts)
   - [Data model](#data-model)
+  - [Pricing and cost model](#pricing-and-cost-model)
+  - [Performance](#performance)
 - [Privacy and security](#privacy-and-security)
 - [Technology stack](#technology-stack)
 - [Repository structure](#repository-structure)
@@ -84,8 +90,11 @@ Veyra answers the questions no single tool can:
 |---|---|
 | Secure desktop shell (Windows, macOS, Linux) with a capability-restricted IPC and a strict Content Security Policy | **Available** |
 | Typed command layer generated from a single Rust catalogue (handlers, permissions, TypeScript types) | **Available** |
-| Local SQLite store with idempotent, deduplicated, incremental ingestion | Planned (M1–M2) |
-| Version-controlled pricing engine with historical, effective-dated prices | Planned (M1) |
+| Local SQLite store: idempotent, deduplicated writes, three rollup levels, re-pricing, backups | **Available** |
+| Pricing engine with effective-dated prices, prompt-length tiers, service tiers and recorded assumptions | **Available** |
+| Price catalogue for Anthropic, OpenAI and Google, verified on the official pages (2026-11-08) | **Available** |
+| Analytics engine: one metric registry, exact local days and weeks in any time zone, comparisons, top-N | **Available** |
+| Incremental collection from local tool data (watchers, checkpoints) | Planned (M2) |
 | Connectors: Claude Code (CLI, desktop Code tab, IDE), Codex CLI, Gemini CLI, OpenCode, Copilot CLI | Planned (M2–M4) |
 | Dashboard: Overview, Usage, Cost, Cache, Models & Providers, Projects, Sessions, Activity | Planned (M3–M5) |
 | Tools & Agents, Quotas & Limits, deterministic Optimization recommendations | Planned (M7) |
@@ -237,32 +246,35 @@ flowchart TB
 
 ### Backend (Rust core)
 
-**Crate dependency graph.** Solid boxes exist today; dashed boxes arrive in later milestones.
+**Crate dependency graph.** Solid boxes exist today; dashed boxes arrive in later milestones. Ports belong to their consumer: the analytics crate defines the read port and the store implements it.
 
 ```mermaid
 flowchart LR
   desktop[veyra-desktop<br/>src-tauri · composition root]
   app[veyra-app<br/>use cases · DTOs · catalogue]
   gen[veyra-contracts-gen<br/>tools/contracts-gen]
-  dom[veyra-domain]:::planned
-  reg[veyra-registry]:::planned
+  perf[veyra-perf<br/>tools/perf · budgets]
+  dom[veyra-domain<br/>events · tokens · money · pricing engine]
+  reg[veyra-registry<br/>providers · models · prices]
+  ana[veyra-analytics<br/>metrics · queries · engine]
+  sto[veyra-store<br/>SQLite · rollups · reads]
   con[veyra-connectors]:::planned
   ing[veyra-ingest]:::planned
-  sto[veyra-store]:::planned
-  ana[veyra-analytics]:::planned
 
   desktop --> app
   gen --> app
-  app -.-> dom
+  perf --> sto
+  perf --> reg
+  reg --> dom
+  ana --> dom
+  sto --> dom
+  sto -->|implements read port| ana
   app -.-> ing
   app -.-> ana
   desktop -.-> sto
   desktop -.-> con
   ing -.-> dom
-  ana -.-> dom
   con -.-> dom
-  sto -.-> dom
-  reg -.-> dom
 
   classDef planned stroke-dasharray: 5 5,opacity:0.7
 ```
@@ -381,51 +393,95 @@ flowchart LR
 
 ### Data model
 
-This is the planned core schema (M1). Unavailable values are stored as `NULL`, never `0`. Money is stored as integer nano-USD.
+Implemented in migration 0001 (M1). Unavailable values are stored as `NULL`, never `0`. Money is stored as integer nano-USD. Prices are not in the database: they come from the version-controlled registry, and every stored cost records the catalogue version and rule that produced it.
 
 ```mermaid
 erDiagram
-  SOURCES ||--o{ SOURCE_FILES : "checkpoints"
-  SOURCES ||--o{ SESSIONS : "produces"
-  PROJECTS ||--o{ SESSIONS : "groups"
+  PROJECTS ||--o{ USAGE_EVENTS : "groups"
+  DEVICES ||--o{ USAGE_EVENTS : "recorded on"
   SESSIONS ||--o{ USAGE_EVENTS : "contains"
   SESSIONS ||--o{ SESSIONS : "parent of (subagents)"
   USAGE_EVENTS ||--|| EVENT_COSTS : "priced as"
-  PRICE_RULES ||--o{ EVENT_COSTS : "applied"
-  USAGE_EVENTS ||--o{ TOOL_CALLS : "records"
 
   USAGE_EVENTS {
-    text id PK
+    int id PK
     text dedup_key UK
+    int fingerprint
     int occurred_at
+    int bucket_start
     text provider_id
     text model_id
     text app_id
     text interface
     int input_uncached
     int cache_read
-    int cache_write_5m
-    int cache_write_1h
+    int cache_write_short
+    int cache_write_long
     int output_total
     int reasoning
-    text accuracy_flags
+    text acc_tokens
   }
   EVENT_COSTS {
-    text event_id FK
+    int event_id PK
     text catalog_version
-    int total_nusd
+    text rule_id
     text status
+    int assumptions
+    int total_nusd
+    int cache_read_saving_nusd
   }
-  PRICE_RULES {
-    text model_pattern
-    date effective_from
-    date effective_to
-    text source_url
-    date verified_at
+  SESSIONS {
+    int id PK
+    text key UK
+    int parent_session_id FK
   }
 ```
 
-A 15-minute UTC rollup table backs fast dashboard queries. Every real-world UTC offset is a multiple of 15 minutes, so local days and hours stay exact in zones like Asia/Kolkata (+05:30). See [ADR-009](docs/adr/0009-fifteen-minute-utc-rollups.md).
+**Rollups.** Events are aggregated into three levels of 15-minute UTC buckets, all clustered by time and all rebuilt in the same transaction as each write. Every real-world UTC offset is a multiple of 15 minutes, so local days, hours and weeks stay exact in zones like Asia/Kolkata (+05:30). See [ADR-009](docs/adr/0009-fifteen-minute-utc-rollups.md) and [ADR-022](docs/adr/0022-data-core-implementation.md).
+
+```mermaid
+flowchart LR
+  Q[Analytics query] --> D{Grouping and filters?}
+  D -->|none| T[(rollup_15m_totals<br/>one row per bucket)]
+  D -->|one dimension| B[(rollup_15m_by_dimension<br/>one row per bucket and value)]
+  D -->|several dimensions| F[(rollup_15m<br/>one row per bucket and combination)]
+  E[(usage_events + event_costs)] -->|set-based rebuild per batch| F --> B
+  F --> T
+```
+
+### Pricing and cost model
+
+```mermaid
+flowchart LR
+  EV[Usage event<br/>model · time · tokens · tier] --> R{Rule in effect<br/>at event time?}
+  CAT[(registry/pricing/*.toml<br/>official prices · dates · source URLs)] --> R
+  R -->|none| U[Unpriced: shown as no price, never $0]
+  R -->|found| TIER[Prompt-length tier<br/>and service-tier factors]
+  TIER --> C[Exact integer cost per component<br/>input · cache read · cache write · output]
+  C --> A[Assumptions recorded<br/>e.g. unknown cache TTL]
+  C --> S[Cache saving and write overhead]
+```
+
+- **Three cost kinds, never added together.** API-equivalent estimates, actual charges and subscription spend are distinct types; the code cannot add one to another.
+- **Historical accuracy.** Each event is priced with the rule in effect at its timestamp, so scheduled changes (for example Gemini 4 Argon on 2026-12-01) and promotional end dates apply on their dates.
+- **Catalogue 2026-11-08.1.** It covers Anthropic (19 models), OpenAI (14) and Google (10), including:
+  - long-context tiers;
+  - batch, flex, priority, fast and ultrafast pricing;
+  - Anthropic's US-only inference multiplier.
+
+  Every rule names its official source page. Updating prices is a reviewed pull request ([CONTRIBUTING](CONTRIBUTING.md#updating-prices)).
+
+### Performance
+
+Measured with `veyra-perf` on one million synthetic events (a realistic year of sessions), on a machine with free memory:
+
+| Overview query | p95 | Budget |
+|---|---|---|
+| 30-day daily trend by application, with comparison | 76 ms | 150 ms |
+| 30-day model ranking (top 8 + other) | 51 ms | 150 ms |
+| 12-month trend | 81 ms | 150 ms |
+
+Ingest runs at about 35,000 events per second in session order. The `Performance` workflow repeats this check on a clean CI runner.
 
 ## Privacy and security
 
@@ -460,7 +516,7 @@ flowchart LR
 |---|---|---|
 | Desktop shell | **Tauri 2.12** | System webview: small installers, low memory, capability-based IPC security |
 | Core | **Rust 1.99** (edition 2024) | Memory safety, low footprint, excellent SQLite and filesystem libraries |
-| Storage | **SQLite** via rusqlite (planned) | Embedded and zero-ops, with WAL for safe concurrent reads |
+| Storage | **SQLite** via rusqlite (bundled) | Embedded and zero-ops, with WAL for safe concurrent reads |
 | UI | **React 19.3** + **TypeScript 6.0** (strict) | Mature ecosystem; strict typing end to end |
 | Build | **Vite 8.3** | Fast, Tauri-native |
 | Contracts | **ts-rs 12** + command catalogue macro | Rust is the single source of truth for every IPC type |
@@ -486,17 +542,23 @@ veyra/
 ├── packages/
 │   └── contracts/               # GENERATED TypeScript contracts (never edit)
 ├── crates/
+│   ├── veyra-domain/            # pure domain: events, tokens, accuracy, money, pricing engine
+│   ├── veyra-registry/          # loads + validates registry/*.toml (single source of truth)
+│   ├── veyra-analytics/         # metric registry, query specs, time-zone-aware engine
+│   ├── veyra-store/             # SQLite: migrations, idempotent writes, rollups, reads
 │   └── veyra-app/               # application layer: Api, DTOs, command catalogue
 ├── src-tauri/                   # Tauri shell: composition root, commands, capabilities
 │   ├── capabilities/            # IPC permission grants
 │   └── tests/                   # IPC access-control integration tests
+├── registry/                    # providers, models and official prices (TOML, reviewed by PR)
 ├── tools/
-│   └── contracts-gen/           # generates packages/contracts from Rust
+│   ├── contracts-gen/           # generates packages/contracts from Rust
+│   └── perf/                    # synthetic dataset + performance budget check
 ├── tooling/
 │   └── eslint/                  # custom module-boundaries lint rule + tests
 ├── docs/
 │   ├── planning/                # research, PRD, architecture, UX, risks, roadmap
-│   └── adr/                     # architecture decision records 0001–0021
+│   └── adr/                     # architecture decision records 0001–0022
 ├── .github/workflows/           # CI and security pipelines
 └── .githooks/                   # pre-commit checks
 ```
@@ -567,11 +629,13 @@ The compiler, the IPC access tests and the contract drift check catch any missed
 
 | Level | What it covers | Tooling |
 |---|---|---|
-| Unit | Domain rules, use cases, error contracts, API client behaviour, lint rules | `cargo test`, Vitest |
+| Unit | Domain invariants, pricing (hand-derived values), metrics, time zones, use cases, API client, lint rules | `cargo test`, Vitest |
+| Pricing data | Published prices reproduced exactly through the engine (tiers, scheduled changes, re-routes) | `cargo test` (`veyra-registry`) |
+| Storage | Idempotency, moved events, rollups equal raw events on random data, all rollup levels agree, re-pricing, backups | `cargo test` (`veyra-store`) |
 | Integration | IPC access control against a mock Tauri runtime, with the real configuration | `cargo test` (`src-tauri/tests`) |
 | Contract | Generated TypeScript matches Rust DTOs and the command catalogue | `pnpm contracts:check` |
 | Parser / golden (M2+) | Each connector and format version: fixtures → expected normalised events | `cargo test` |
-| Performance (M1+) | Query and ingest budgets on 1M / 10M synthetic events | Nightly CI |
+| Performance | Overview query and ingest budgets on 1M synthetic events | `veyra-perf`, `Performance` workflow |
 | End-to-end (M3+) | UI flows with IPC fixtures; smoke tests on real bundles for all three OSes | Playwright, WebdriverIO |
 
 Test data is always synthetic. Real transcripts or credentials are never committed.
@@ -596,7 +660,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  M0[M0 Foundations<br/>✅ complete]:::done --> M1[M1 Data core<br/>domain · store · pricing · metrics]
+  M0[M0 Foundations<br/>✅ complete]:::done --> M1[M1 Data core<br/>✅ complete]:::done
   M1 --> M2[M2 Claude Code<br/>end-to-end ingestion]
   M2 --> M3[M3 Dashboard shell<br/>design system]
   M2 --> M4[M4 Codex · Gemini CLI<br/>OpenCode · Copilot CLI]
@@ -631,7 +695,7 @@ The detailed, dependency-ordered plan with acceptance criteria is in [`docs/plan
 | [UX plan](docs/planning/03-ux.md) | Sitemap, page anatomy, chart choices, design system, accessibility |
 | [Feasibility and risks](docs/planning/04-feasibility-risks.md) | Feasibility, risk register, hidden costs, prioritisation |
 | [Roadmap](docs/planning/05-roadmap.md) | Milestones, tasks, acceptance criteria |
-| [Decision records](docs/adr/README.md) | ADR 0001–0021 |
+| [Decision records](docs/adr/README.md) | ADR 0001–0022 |
 
 ## Author
 

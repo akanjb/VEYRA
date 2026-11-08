@@ -36,6 +36,16 @@ Follow the development section of the [README](README.md), then run `pnpm hooks:
 4. Grant `allow-<command-name>` in `src-tauri/capabilities/main.json`.
 5. Run `pnpm contracts:generate` and commit the generated files.
 
+## Updating prices
+
+Prices live in `registry/pricing/*.toml` and are the single source of truth for every cost Veyra shows (ADR-007).
+
+1. Read the provider's **official** pricing page. Never use third-party aggregators.
+2. For a price change, end the old rule with `until = "<change date>"` and add a new rule with `from = "<change date>"`, so historical events keep their historical price.
+3. Update `verified_at` on every rule you re-checked, and record judgement calls (display rounding, unpriceable items) as comments next to the rule.
+4. Bump `version` in `registry/pricing/catalog.toml`. Stored events are re-priced against the new version.
+5. Add or adjust a spot-check test in `crates/veyra-registry/src/tests.rs` that reproduces a published figure exactly.
+
 ## Code standards
 
 - **Single responsibility.** Each file, function and component has one clear purpose. Prefer cohesion over many tiny files.

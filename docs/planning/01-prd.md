@@ -195,7 +195,7 @@ Each module is detailed in [03-ux.md](03-ux.md). Requirements common to all modu
 |---|---|---|
 | `input_uncached` | Prompt tokens billed at the normal input rate | OpenAI/Codex: `input − cached_input`; Anthropic: `input_tokens` |
 | `cache_read` | Prompt tokens served from cache | |
-| `cache_write_5m`, `cache_write_1h` | Tokens written to cache, by TTL | When only an undifferentiated count exists → `cache_write_unspecified` |
+| `cache_write_short`, `cache_write_long` | Tokens written to the provider's short / long cache TTL (Anthropic 5m / 1h, OpenAI 30m / 12h) | When only an undifferentiated count exists → `cache_write_unspecified` (ADR-022) |
 | `output_total` | All generated tokens **including** reasoning | |
 | `reasoning` | Reasoning tokens, a reported **subset** of `output_total` | Informational; never added to totals again |
 | `tool_tokens` | Tool-related tokens where a source reports them separately (e.g. Gemini `tool`) | Semantics per connector; documented |
@@ -206,7 +206,7 @@ All derived metrics are computed from sums (Σ) over the filtered event set.
 
 | Metric | Definition |
 |---|---|
-| Input tokens | Σ(input_uncached + cache_read + cache_write_*) |
+| Input tokens | Σ(input_uncached + cache_read + cache_write_short + cache_write_long + cache_write_unspecified) |
 | Total tokens | Input tokens + Σ output_total |
 | Cache hit ratio | Σ cache_read ÷ Input tokens |
 | Cache reuse ratio | Σ cache_read ÷ Σ cache_write_* (reads per written token) |
@@ -217,7 +217,7 @@ All derived metrics are computed from sums (Σ) over the filtered event set.
 | Effective $/1M output | API-equivalent cost ÷ Σ output_total × 10⁶ |
 | Avg cost per request / session / active hour | Cost ÷ requests / sessions / active hours |
 | Gross cache saving | Σ cache_read × (input_rate − cache_read_rate) |
-| Cache write overhead | Σ cache_write_5m × (w5m_rate − input_rate) + Σ cache_write_1h × (w1h_rate − input_rate) |
+| Cache write overhead | Σ cache_write_short × (short_rate − input_rate) + Σ cache_write_long × (long_rate − input_rate) |
 | Net cache benefit | Gross cache saving − Cache write overhead (only over events where all four rates are known) |
 | Active time | Union over sessions of intervals [tᵢ, tᵢ + min(tᵢ₊₁ − tᵢ, T)], with idle threshold T (default 5 min, configurable). Labelled *Derived* |
 | Wall-clock duration | Last event − first event, per session |

@@ -1,6 +1,6 @@
 # 0005. Canonical token semantics
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [ADR-022](0022-data-core-implementation.md)
 - **Date:** 2026-11-08
 
 ## Context
