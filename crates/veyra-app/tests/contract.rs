@@ -8,7 +8,6 @@
 )]
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -25,6 +24,7 @@ use veyra_domain::source::{DiscoveryEnv, IngestControl};
 use veyra_ingest::{DEFAULT_CHUNK_BYTES, IngestContext, discover, scan_all};
 use veyra_registry::Registry;
 use veyra_store::Store;
+use veyra_testkit::TempDir;
 
 struct NoIngest;
 
@@ -33,49 +33,25 @@ impl IngestControl for NoIngest {
     fn sources_changed(&self) {}
 }
 
-fn copy_tree(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let target = to.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &target);
-        } else {
-            std::fs::copy(entry.path(), target).unwrap();
-        }
-    }
-}
-
 /// A database holding the ingested fixtures, removed on drop.
 struct Ingested {
-    dir: PathBuf,
+    _dir: TempDir,
     store: Arc<Store>,
 }
 
-impl Drop for Ingested {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.dir);
-    }
-}
-
-fn ingested(name: &str) -> Ingested {
-    let dir = std::env::temp_dir().join(format!("veyra-contract-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    copy_tree(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/claude-code/v2.1/projects"),
-        &dir.join("home/.claude/projects"),
-    );
-    let store = Arc::new(Store::open(&dir.join("veyra.db")).unwrap());
+fn ingested() -> Ingested {
+    let dir = TempDir::new("veyra-contract");
+    let home = dir.with_claude_code_home();
+    let store = Arc::new(Store::open(&dir.path().join("veyra.db")).unwrap());
     let registry = Registry::bundled().unwrap();
     let connectors = veyra_connectors::all();
     let env = DiscoveryEnv {
-        home: Some(dir.join("home")),
+        home: Some(home),
         location_overrides: BTreeMap::new(),
     };
     for source in discover(&store, &connectors, &env).unwrap() {
         store
-            .set_source_enabled(source.id, true, veyra_ingest::now())
+            .set_source_enabled(source.id, true, veyra_domain::time::UtcMillis::now())
             .unwrap();
     }
     let cancel = AtomicBool::new(false);
@@ -92,7 +68,7 @@ fn ingested(name: &str) -> Ingested {
     )
     .unwrap();
     assert_eq!(report.inserted, 4, "the fixtures hold four requests");
-    Ingested { dir, store }
+    Ingested { _dir: dir, store }
 }
 
 fn api(store: &Arc<Store>) -> Api {
@@ -151,7 +127,7 @@ fn engine_value(store: &Store, metric: MetricId) -> Option<f64> {
 
 #[test]
 fn overview_numbers_equal_the_metric_engine() {
-    let data = ingested("overview");
+    let data = ingested();
     let overview = api(&data.store)
         .get_overview(OverviewRequest { scope: scope() })
         .unwrap();
@@ -210,7 +186,7 @@ fn overview_numbers_equal_the_metric_engine() {
 
 #[test]
 fn sessions_and_their_timelines_match_the_overview() {
-    let data = ingested("sessions");
+    let data = ingested();
     let api = api(&data.store);
     let list = api
         .list_sessions(SessionsRequest {

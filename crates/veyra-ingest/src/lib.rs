@@ -18,12 +18,3 @@ pub use fs::{FoundFile, ScopedFs};
 pub use normalize::{NormalizeError, normalize, project_key};
 pub use pipeline::{DEFAULT_CHUNK_BYTES, IngestContext, ScanReport, scan_all, scan_source};
 pub use worker::{ChangeListener, IngestHandle, IngestWorker, WorkerConfig, spawn};
-
-/// The current time as UTC milliseconds.
-#[must_use]
-pub fn now() -> veyra_domain::time::UtcMillis {
-    let millis = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX));
-    veyra_domain::time::UtcMillis(millis)
-}

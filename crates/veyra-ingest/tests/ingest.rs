@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
@@ -24,30 +24,14 @@ use veyra_ingest::{
 };
 use veyra_registry::Registry;
 use veyra_store::{SourceRecord, Store};
+use veyra_testkit::{TempDir, claude_code_projects};
 
 const SESSION: &str = "C--work-demo/11111111-1111-4111-8111-111111111111.jsonl";
 const SUBAGENT: &str = "C--work-demo/11111111-1111-4111-8111-111111111111/subagents/agent-a1.jsonl";
 
-fn fixture_projects() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/claude-code/v2.1/projects")
-}
-
-fn copy_tree(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap() {
-        let entry = entry.unwrap();
-        let target = to.join(entry.file_name());
-        if entry.file_type().unwrap().is_dir() {
-            copy_tree(&entry.path(), &target);
-        } else {
-            std::fs::copy(entry.path(), target).unwrap();
-        }
-    }
-}
-
 /// A temporary home directory holding a copy of the fixtures, plus a database.
 struct Fixture {
-    dir: PathBuf,
+    dir: TempDir,
     store: Store,
     registry: Registry,
     connectors: Vec<Box<dyn SourceConnector>>,
@@ -56,15 +40,9 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        static COUNTER: AtomicU32 = AtomicU32::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "veyra-ingest-test-{}-{}",
-            std::process::id(),
-            COUNTER.fetch_add(1, Ordering::Relaxed)
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        copy_tree(&fixture_projects(), &dir.join("home/.claude/projects"));
-        let store = Store::open(&dir.join("veyra.db")).unwrap();
+        let dir = TempDir::new("veyra-ingest-test");
+        let _home = dir.with_claude_code_home();
+        let store = Store::open(&dir.path().join("veyra.db")).unwrap();
         Self {
             dir,
             store,
@@ -76,13 +54,13 @@ impl Fixture {
 
     fn env(&self) -> DiscoveryEnv {
         DiscoveryEnv {
-            home: Some(self.dir.join("home")),
+            home: Some(self.dir.path().join("home")),
             location_overrides: BTreeMap::new(),
         }
     }
 
     fn projects(&self) -> PathBuf {
-        self.dir.join("home/.claude/projects")
+        self.dir.path().join("home/.claude/projects")
     }
 
     fn context(&self, chunk_bytes: u64) -> IngestContext<'_> {
@@ -138,15 +116,9 @@ impl Fixture {
     }
 }
 
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.dir);
-    }
-}
-
 /// A new, complete subagent request line, based on the fixture's `req_D`.
 fn request_line(id: &str, timestamp: &str) -> String {
-    let fixture = std::fs::read_to_string(fixture_projects().join(SUBAGENT)).unwrap();
+    let fixture = std::fs::read_to_string(claude_code_projects().join(SUBAGENT)).unwrap();
     let template = fixture.lines().find(|l| l.contains("\"req_D\"")).unwrap();
     format!(
         "{}\n",
@@ -197,10 +169,10 @@ fn discovery_registers_sources_disabled_and_nothing_is_read_before_consent() {
 #[test]
 fn the_documented_location_override_replaces_the_default_root() {
     let fixture = Fixture::new();
-    let relocated = fixture.dir.join("relocated");
+    let relocated = fixture.dir.path().join("relocated");
     std::fs::create_dir_all(relocated.join("projects")).unwrap();
     let env = DiscoveryEnv {
-        home: Some(fixture.dir.join("home")),
+        home: Some(fixture.dir.path().join("home")),
         location_overrides: BTreeMap::from([("CLAUDE_CONFIG_DIR".to_owned(), relocated.clone())]),
     };
     let sources = discover(&fixture.store, &fixture.connectors, &env).unwrap();
@@ -245,7 +217,7 @@ fn no_content_reaches_the_database() {
     );
     fixture.scan();
     let mut checked = 0;
-    for entry in std::fs::read_dir(&fixture.dir).unwrap() {
+    for entry in std::fs::read_dir(fixture.dir.path()).unwrap() {
         let path = entry.unwrap().path();
         if path.is_file() {
             let bytes = std::fs::read(&path).unwrap();
@@ -436,7 +408,7 @@ fn reads_while_the_tool_keeps_appending() {
 
 fn worker(fixture: &Fixture, watch: bool, changes: mpsc::Sender<u64>) -> IngestWorker {
     IngestWorker {
-        store: Arc::new(Store::open(&fixture.dir.join("veyra.db")).unwrap()),
+        store: Arc::new(Store::open(&fixture.dir.path().join("veyra.db")).unwrap()),
         registry: Arc::new(Registry::bundled().unwrap()),
         connectors: veyra_connectors::all(),
         env: fixture.env(),

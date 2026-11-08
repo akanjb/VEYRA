@@ -1,0 +1,12 @@
+[package]
+name = "veyra-testkit"
+description = "Veyra test support: synthetic fixtures and self-cleaning temporary directories."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

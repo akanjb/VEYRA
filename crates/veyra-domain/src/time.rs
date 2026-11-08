@@ -25,6 +25,16 @@ impl UtcMillis {
     pub fn is_bucket_aligned(self) -> bool {
         self.0.rem_euclid(Self::BUCKET_MILLIS) == 0
     }
+
+    /// The system clock now. The single source of "now" for adapters and use cases;
+    /// domain rules never read the clock and take instants as inputs instead.
+    #[must_use]
+    pub fn now() -> Self {
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX));
+        Self(millis)
+    }
 }
 
 /// Error raised for an invalid calendar date.

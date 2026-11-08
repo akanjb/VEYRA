@@ -47,8 +47,8 @@ fn run(
     let registry = Registry::bundled()?;
     let connectors = veyra_connectors::all();
     let root = root.to_str().ok_or("the root must be valid UTF-8")?;
-    let source = store.register_source("claude-code", root, veyra_ingest::now())?;
-    store.set_source_enabled(source.id, true, veyra_ingest::now())?;
+    let source = store.register_source("claude-code", root, UtcMillis::now())?;
+    store.set_source_enabled(source.id, true, UtcMillis::now())?;
     let cancel = AtomicBool::new(false);
     let context = IngestContext {
         store: &store,

@@ -46,13 +46,6 @@ pub struct DataServices {
     pub ingest: Box<dyn IngestControl>,
 }
 
-fn now() -> UtcMillis {
-    let millis = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX));
-    UtcMillis(millis)
-}
-
 impl std::fmt::Debug for DataServices {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DataServices")
@@ -118,7 +111,7 @@ impl Api {
     /// # Errors
     /// [`ApiError::Busy`] while starting; [`ApiError::Internal`] on database failure.
     pub fn list_sources(&self, _request: ListSourcesRequest) -> Result<SourceList, ApiError> {
-        views::sources::list(self.data()?, now())
+        views::sources::list(self.data()?, UtcMillis::now())
     }
 
     /// Enables (recording consent) or disables a source, then lets ingestion react: an
@@ -134,13 +127,13 @@ impl Api {
         let data = self.data()?;
         let record = data
             .sources
-            .set_source_enabled(request.source_id, request.enabled, now())
+            .set_source_enabled(request.source_id, request.enabled, UtcMillis::now())
             .map_err(|e| ApiError::internal(&e))?
             .ok_or_else(|| ApiError::NotFound {
                 message: format!("source {} does not exist", request.source_id),
             })?;
         data.ingest.sources_changed();
-        Ok(views::sources::list(data, now())?
+        Ok(views::sources::list(data, UtcMillis::now())?
             .sources
             .into_iter()
             .find(|s| s.id == record.id)

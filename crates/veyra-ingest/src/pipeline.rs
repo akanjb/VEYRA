@@ -12,16 +12,17 @@ use std::time::Duration;
 
 use veyra_domain::pricing::price_event;
 use veyra_domain::source::{FileContext, ParseIssue, SourceConnector};
+use veyra_domain::time::UtcMillis;
 use veyra_registry::Registry;
 use veyra_store::{
     FileCheckpoint, IngestBatch, PricedEvent, RunStats, SourceRecord, Store, StoredCheckpoint,
     WriteSummary,
 };
 
+use crate::IngestError;
 use crate::fs::{FoundFile, ScopedFs};
 use crate::normalize::normalize;
 use crate::tail::{self, HEAD_LEN, ReadPlan, Restart};
-use crate::{IngestError, now};
 
 /// Deepest directory level searched below a source root.
 const MAX_DEPTH: usize = 4;
@@ -118,13 +119,15 @@ pub fn scan_all(context: &IngestContext<'_>, trigger: &str) -> Result<ScanReport
     if enabled.is_empty() {
         return Ok(total);
     }
-    let run_id = context.store.start_run(trigger, now())?;
+    let run_id = context.store.start_run(trigger, UtcMillis::now())?;
     let mut outcome = "ok";
     for source in &enabled {
         match scan_source(context, source, run_id) {
             Ok(report) => {
                 total.absorb(&report);
-                context.store.record_scan(source.id, now(), None)?;
+                context
+                    .store
+                    .record_scan(source.id, UtcMillis::now(), None)?;
             }
             Err(IngestError::Cancelled) => {
                 outcome = "cancelled";
@@ -133,20 +136,20 @@ pub fn scan_all(context: &IngestContext<'_>, trigger: &str) -> Result<ScanReport
             Err(IngestError::Store(error)) => {
                 let _ = context
                     .store
-                    .finish_run(run_id, total.stats(), "failed", now());
+                    .finish_run(run_id, total.stats(), "failed", UtcMillis::now());
                 return Err(IngestError::Store(error));
             }
             Err(error) => {
                 outcome = "partial";
                 context
                     .store
-                    .record_scan(source.id, now(), Some(&error.to_string()))?;
+                    .record_scan(source.id, UtcMillis::now(), Some(&error.to_string()))?;
             }
         }
     }
     context
         .store
-        .finish_run(run_id, total.stats(), outcome, now())?;
+        .finish_run(run_id, total.stats(), outcome, UtcMillis::now())?;
     if outcome == "cancelled" {
         return Err(IngestError::Cancelled);
     }
@@ -345,7 +348,7 @@ impl FileReader<'_, '_> {
     /// Commits a step: its events, tool outcomes and checkpoint in one transaction.
     fn commit(&self, step: &Step, report: &mut ScanReport) -> Result<(), IngestError> {
         report.lines += step.lines;
-        report.record_write(self.context.store.commit(&step.batch, now())?);
+        report.record_write(self.context.store.commit(&step.batch, UtcMillis::now())?);
         report.issues += count(step.issues.len());
         self.context.store.record_issues(
             self.run_id,

@@ -22,6 +22,7 @@ veyra-connectors.workspace = true
 veyra-ingest.workspace = true
 veyra-registry.workspace = true
 veyra-store.workspace = true
+veyra-testkit.workspace = true
 
 [lints]
 workspace = true

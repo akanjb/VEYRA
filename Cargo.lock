@@ -3834,6 +3834,7 @@ dependencies = [
  "veyra-ingest",
  "veyra-registry",
  "veyra-store",
+ "veyra-testkit",
 ]
 
 [[package]]
@@ -3887,6 +3888,7 @@ dependencies = [
  "veyra-domain",
  "veyra-registry",
  "veyra-store",
+ "veyra-testkit",
 ]
 
 [[package]]
@@ -3921,6 +3923,10 @@ dependencies = [
  "veyra-domain",
  "veyra-registry",
 ]
+
+[[package]]
+name = "veyra-testkit"
+version = "0.1.0"
 
 [[package]]
 name = "vswhom"

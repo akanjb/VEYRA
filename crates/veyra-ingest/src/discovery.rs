@@ -6,9 +6,10 @@
 use std::path::PathBuf;
 
 use veyra_domain::source::{DiscoveryEnv, SourceConnector};
+use veyra_domain::time::UtcMillis;
 use veyra_store::{SourceRecord, Store};
 
-use crate::{IngestError, now};
+use crate::IngestError;
 
 /// Documented location variables connectors may consult (ADR-014). No other environment
 /// variable is read: in particular, never one that holds a credential.
@@ -53,7 +54,11 @@ pub fn discover(
             if root.is_dir()
                 && let Some(text) = root.to_str()
             {
-                store.register_source(connector.descriptor().id.as_str(), text, now())?;
+                store.register_source(
+                    connector.descriptor().id.as_str(),
+                    text,
+                    UtcMillis::now(),
+                )?;
             }
         }
     }

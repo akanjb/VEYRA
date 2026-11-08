@@ -20,6 +20,7 @@ veyra-domain = { path = "crates/veyra-domain" }
 veyra-ingest = { path = "crates/veyra-ingest" }
 veyra-registry = { path = "crates/veyra-registry" }
 veyra-store = { path = "crates/veyra-store" }
+veyra-testkit = { path = "crates/veyra-testkit" }
 jiff = "=0.2.38"
 memchr = "=2.8.3"
 notify = "=8.2.1"

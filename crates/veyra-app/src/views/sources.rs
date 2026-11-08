@@ -6,7 +6,7 @@ use jiff::tz::TimeZone;
 use veyra_analytics::dimension::{Dimension, Filters};
 use veyra_analytics::engine::evaluate;
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
-use veyra_domain::source::{SourceHealth, SourceRecord};
+use veyra_domain::source::{ConnectorDescriptor, SourceHealth, SourceRecord};
 use veyra_domain::time::UtcMillis;
 
 use super::internal;
@@ -19,6 +19,13 @@ const ISSUE_WINDOW_MS: i64 = 7 * 86_400_000;
 /// One rollup bucket.
 const BUCKET_MS: i64 = 15 * 60_000;
 
+/// The connector a source belongs to (absent for connectors not in this build).
+fn descriptor<'a>(data: &'a DataServices, connector_id: &str) -> Option<&'a ConnectorDescriptor> {
+    data.connectors
+        .iter()
+        .find(|d| d.id.as_str() == connector_id)
+}
+
 /// Builds one source's summary.
 pub(crate) fn summary(
     data: &DataServices,
@@ -26,10 +33,7 @@ pub(crate) fn summary(
     health: Option<&SourceHealth>,
     events: u64,
 ) -> SourceSummary {
-    let descriptor = data
-        .connectors
-        .iter()
-        .find(|d| d.id.as_str() == record.connector_id);
+    let descriptor = descriptor(data, &record.connector_id);
     let health = health.cloned().unwrap_or_default();
     SourceSummary {
         id: record.id,
@@ -97,11 +101,7 @@ pub(crate) fn list(data: &DataServices, now: UtcMillis) -> Result<SourceList, Ap
     let sources = records
         .iter()
         .map(|record| {
-            let app = data
-                .connectors
-                .iter()
-                .find(|d| d.id.as_str() == record.connector_id)
-                .map(|d| d.app.as_str());
+            let app = descriptor(data, &record.connector_id).map(|d| d.app.as_str());
             summary(
                 data,
                 record,
