@@ -95,6 +95,20 @@ impl Registry {
         &self.models
     }
 
+    /// `(id, display name)` of every provider.
+    pub fn provider_names(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        self.providers
+            .iter()
+            .map(|p| (p.id.as_str().to_owned(), p.name.clone()))
+    }
+
+    /// `(canonical id, display name)` of every model.
+    pub fn model_names(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        self.models
+            .iter()
+            .map(|m| (m.id.as_str().to_owned(), m.name.clone()))
+    }
+
     #[must_use]
     pub fn catalog(&self) -> &PriceCatalog {
         &self.catalog

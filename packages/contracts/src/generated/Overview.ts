@@ -3,6 +3,7 @@ import type { CalendarDay } from "./CalendarDay";
 import type { Composition } from "./Composition";
 import type { DailyPoint } from "./DailyPoint";
 import type { HourCell } from "./HourCell";
+import type { Labelled } from "./Labelled";
 import type { OverviewKpis } from "./OverviewKpis";
 import type { RankRow } from "./RankRow";
 
@@ -13,7 +14,11 @@ export type Overview = { kpis: OverviewKpis, composition: Composition,
 /**
  * Applications in the stacked trend, largest first.
  */
-apps: Array<string>, daily: Array<DailyPoint>, 
+apps: Array<Labelled>, 
+/**
+ * Providers with usage in the scope, by name.
+ */
+providers: Array<Labelled>, daily: Array<DailyPoint>, 
 /**
  * Top models by tokens, plus "Other".
  */

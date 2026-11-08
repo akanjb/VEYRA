@@ -15,19 +15,24 @@ use crate::dto::{
     ToolCallSummary,
 };
 use crate::error::ApiError;
+use crate::names::DisplayNames;
 use crate::scope::Resolved;
 
 /// The largest page the explorer may request.
 const MAX_PAGE_SIZE: u32 = 500;
 
-fn row(summary: &SessionSummary, active_ms: i64) -> SessionRow {
+fn row(names: &DisplayNames, summary: &SessionSummary, active_ms: i64) -> SessionRow {
     let sums = &summary.sums;
     SessionRow {
         id: summary.id,
         key: summary.key.clone(),
         app: summary.app.clone(),
         project: summary.project.clone(),
-        models: summary.models.clone(),
+        models: summary
+            .models
+            .iter()
+            .map(|m| names.label_model(m.clone()))
+            .collect(),
         is_subagent: summary.is_subagent,
         parent_id: summary.parent_id,
         started_at: summary.first_at.0,
@@ -103,7 +108,7 @@ pub(crate) fn list(
             let active = times
                 .get(&s.id)
                 .map_or(0, |t| session_active_ms(t, DEFAULT_IDLE_THRESHOLD_MS));
-            row(s, active)
+            row(&data.names, s, active)
         })
         .collect();
     Ok(SessionList {
@@ -112,11 +117,16 @@ pub(crate) fn list(
     })
 }
 
-fn timeline_event(event: &reads::SessionEvent) -> TimelineEvent {
+fn timeline_event(names: &DisplayNames, event: &reads::SessionEvent) -> TimelineEvent {
     let t = &event.tokens;
     TimelineEvent {
         at: event.at.0,
-        model: event.model.clone().or_else(|| event.raw_model.clone()),
+        provider: event.provider.clone(),
+        model: event
+            .model
+            .clone()
+            .or_else(|| event.raw_model.clone())
+            .map(|m| names.label_model(m)),
         tokens: TokenBreakdown {
             input: t.input_uncached,
             cache_read: t.cache_read,
@@ -160,11 +170,15 @@ pub(crate) fn detail(data: &DataServices, id: i64) -> Result<SessionDetail, ApiE
             .session(child.id)
             .map_err(|e| internal(&e))?
             .map_or(0, |d| active_of(&d.events));
-        subagents.push(row(child, active));
+        subagents.push(row(&data.names, child, active));
     }
     Ok(SessionDetail {
-        session: row(&found.summary, active_of(&found.events)),
-        events: found.events.iter().map(timeline_event).collect(),
+        session: row(&data.names, &found.summary, active_of(&found.events)),
+        events: found
+            .events
+            .iter()
+            .map(|e| timeline_event(&data.names, e))
+            .collect(),
         subagents,
     })
 }

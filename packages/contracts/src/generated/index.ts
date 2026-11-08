@@ -12,6 +12,7 @@ export type * from "./DataChanged";
 export type * from "./HourCell";
 export type * from "./IssueCount";
 export type * from "./Kpi";
+export type * from "./Labelled";
 export type * from "./ListSourcesRequest";
 export type * from "./Measures";
 export type * from "./Overview";

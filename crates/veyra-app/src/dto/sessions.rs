@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::analytics::{AccuracyClass, Measures, Scope};
+use super::analytics::{AccuracyClass, Labelled, Measures, Scope};
 
 /// How the session explorer is ordered (always descending).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -47,7 +47,8 @@ pub struct SessionRow {
     pub app: String,
     /// Normalised project path.
     pub project: Option<String>,
-    pub models: Vec<String>,
+    /// Models used, with display names.
+    pub models: Vec<Labelled>,
     pub is_subagent: bool,
     #[ts(type = "number | null")]
     pub parent_id: Option<i64>,
@@ -113,8 +114,10 @@ pub struct ToolCallSummary {
 pub struct TimelineEvent {
     #[ts(type = "number")]
     pub at: i64,
-    /// Canonical model id, or the reported string when unrecognised.
-    pub model: Option<String>,
+    /// Provider of the model, for its identity colour.
+    pub provider: Option<String>,
+    /// Canonical model id (or the reported string when unrecognised) and its name.
+    pub model: Option<Labelled>,
     pub tokens: TokenBreakdown,
     /// API-equivalent estimate; `null` when the request could not be priced.
     #[ts(type = "number | null")]

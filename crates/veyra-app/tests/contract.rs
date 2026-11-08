@@ -17,9 +17,10 @@ use veyra_analytics::engine::evaluate;
 use veyra_analytics::metrics::{MetricId, MetricValue};
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_app::dto::{
-    Comparison, OverviewRequest, Scope, ScopeFilters, SessionRequest, SessionSort, SessionsRequest,
+    Comparison, Labelled, OverviewRequest, Scope, ScopeFilters, SessionRequest, SessionSort,
+    SessionsRequest,
 };
-use veyra_app::{Api, AppMetadata, DataServices};
+use veyra_app::{Api, AppMetadata, DataServices, DisplayNames};
 use veyra_domain::source::{DiscoveryEnv, IngestControl};
 use veyra_ingest::{DEFAULT_CHUNK_BYTES, IngestContext, discover, scan_all};
 use veyra_registry::Registry;
@@ -78,22 +79,22 @@ fn api(store: &Arc<Store>) -> Api {
         build_profile: veyra_app::dto::BuildProfile::Debug,
     });
     let registry = Registry::bundled().unwrap();
-    assert!(
-        api.attach(Ok(DataServices {
-            sources: Arc::clone(store) as _,
-            analytics: Arc::clone(store) as _,
-            connectors: veyra_connectors::all()
-                .iter()
-                .map(|c| c.descriptor().clone())
-                .collect(),
-            model_names: registry
-                .models()
-                .iter()
-                .map(|m| (m.id.as_str().to_owned(), m.name.clone()))
-                .collect(),
-            ingest: Box::new(NoIngest),
-        }))
+    let connectors: Vec<_> = veyra_connectors::all()
+        .iter()
+        .map(|c| c.descriptor().clone())
+        .collect();
+    let names = DisplayNames::new(
+        registry.provider_names(),
+        registry.model_names(),
+        &connectors,
     );
+    assert!(api.attach(Ok(DataServices {
+        sources: Arc::clone(store) as _,
+        analytics: Arc::clone(store) as _,
+        connectors,
+        names,
+        ingest: Box::new(NoIngest),
+    })));
     api
 }
 
@@ -133,12 +134,17 @@ fn overview_numbers_equal_the_metric_engine() {
         .unwrap();
     let k = &overview.kpis;
     for (kpi, metric) in [
-        (k.tokens, MetricId::TotalTokens),
-        (k.cost_nano_usd, MetricId::ApiEquivalentCost),
-        (k.requests, MetricId::Requests),
-        (k.cache_hit_ratio, MetricId::CacheHitRatio),
+        (&k.tokens, MetricId::TotalTokens),
+        (&k.cost_nano_usd, MetricId::ApiEquivalentCost),
+        (&k.requests, MetricId::Requests),
+        (&k.cache_hit_ratio, MetricId::CacheHitRatio),
     ] {
         assert_eq!(kpi.value, engine_value(&data.store, metric), "{metric:?}");
+        assert_eq!(
+            kpi.definition,
+            metric.definition().description,
+            "one source of definitions"
+        );
         assert!(kpi.value.is_some(), "{metric:?} is reported");
     }
     // Nothing was recorded the day before: not reported, never shown as zero.
@@ -170,7 +176,12 @@ fn overview_numbers_equal_the_metric_engine() {
     ] {
         assert_eq!(part as f64, tokens, "{name}");
     }
-    assert_eq!(overview.apps, ["claude-code"]);
+    let named = |key: &str, label: &str| Labelled {
+        key: key.to_owned(),
+        label: label.to_owned(),
+    };
+    assert_eq!(overview.apps, [named("claude-code", "Claude Code")]);
+    assert_eq!(overview.providers, [named("anthropic", "Anthropic")]);
     let labels: Vec<&str> = overview.models.iter().map(|m| m.label.as_str()).collect();
     assert_eq!(labels.len(), 2);
     assert!(
@@ -226,4 +237,19 @@ fn sessions_and_their_timelines_match_the_overview() {
     assert!(tools.contains(&"Bash"), "{tools:?}");
     let events_total: u64 = detail.events.iter().map(|e| e.tokens.total).sum();
     assert_eq!(events_total, main.measures.tokens);
+
+    // Every page names a model the same way.
+    let overview_names: Vec<&str> = overview.models.iter().map(|m| m.label.as_str()).collect();
+    let session_names = main.models.iter().map(|m| m.label.as_str());
+    let timeline_names = detail
+        .events
+        .iter()
+        .flat_map(|e| &e.model)
+        .map(|m| m.label.as_str());
+    for name in session_names.chain(timeline_names) {
+        assert!(
+            overview_names.contains(&name),
+            "{name} vs {overview_names:?}"
+        );
+    }
 }

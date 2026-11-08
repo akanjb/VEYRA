@@ -61,7 +61,7 @@ pub struct Measures {
 }
 
 /// A headline number with its comparison. `null` means not reported, never zero.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Kpi {
     pub value: Option<f64>,
@@ -70,10 +70,12 @@ pub struct Kpi {
     pub change: Option<f64>,
     /// The weakest accuracy class contributing; `null` for derived measures.
     pub accuracy: Option<AccuracyClass>,
+    /// What the number means, from the metric registry (the single source of definitions).
+    pub definition: String,
 }
 
 /// The Overview headline tiles.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct OverviewKpis {
     pub tokens: Kpi,
@@ -106,6 +108,14 @@ pub struct Composition {
 pub struct DailyPoint {
     pub date: String,
     pub values: Vec<Measures>,
+}
+
+/// A dimension value and its display name (e.g. `claude-code`, "Claude Code").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct Labelled {
+    pub key: String,
+    pub label: String,
 }
 
 /// One row of a ranking. The "Other" row merges every group below the top N exactly.
@@ -160,7 +170,9 @@ pub struct Overview {
     pub kpis: OverviewKpis,
     pub composition: Composition,
     /// Applications in the stacked trend, largest first.
-    pub apps: Vec<String>,
+    pub apps: Vec<Labelled>,
+    /// Providers with usage in the scope, by name.
+    pub providers: Vec<Labelled>,
     pub daily: Vec<DailyPoint>,
     /// Top models by tokens, plus "Other".
     pub models: Vec<RankRow>,

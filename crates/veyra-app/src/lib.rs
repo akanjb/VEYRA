@@ -9,9 +9,11 @@ mod commands;
 pub mod dto;
 mod error;
 pub mod events;
+mod names;
 mod scope;
 mod views;
 
 pub use api::{AnalyticsReader, Api, AppMetadata, DataServices};
 pub use commands::COMMAND_NAMES;
 pub use error::ApiError;
+pub use names::DisplayNames;

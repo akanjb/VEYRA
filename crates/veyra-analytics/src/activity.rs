@@ -8,6 +8,13 @@
 
 use veyra_domain::time::UtcMillis;
 
+/// What the session count means (shown with every session figure).
+pub const SESSIONS_DEFINITION: &str =
+    "Distinct sessions with at least one request in the period; subagents count separately.";
+
+/// What active time means (shown with every active-time figure).
+pub const ACTIVE_TIME_DEFINITION: &str = "Derived from exact request times: the gaps between consecutive requests of each session, each capped at 5 minutes of idle time, with overlapping sessions counted once.";
+
 /// Default idle threshold `T`: five minutes.
 pub const DEFAULT_IDLE_THRESHOLD_MS: i64 = 5 * 60_000;
 

@@ -1,6 +1,5 @@
 //! The application facade: one method per use case, named after its command.
 
-use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock};
 
 use veyra_analytics::port::{ActivityReader, BaseSumsReader, LabelReader};
@@ -14,6 +13,7 @@ use crate::dto::{
     SetSourceEnabledRequest, SourceList, SourceSummary,
 };
 use crate::error::ApiError;
+use crate::names::DisplayNames;
 use crate::{scope, views};
 
 /// Static facts about the build, supplied by the composition root.
@@ -41,8 +41,8 @@ pub struct DataServices {
     pub analytics: Arc<dyn AnalyticsReader>,
     /// Descriptors of every connector in this build.
     pub connectors: Vec<ConnectorDescriptor>,
-    /// Display names of known models, by canonical id (from the registry).
-    pub model_names: BTreeMap<String, String>,
+    /// Display names of providers, models and applications.
+    pub names: DisplayNames,
     pub ingest: Box<dyn IngestControl>,
 }
 
@@ -50,7 +50,6 @@ impl std::fmt::Debug for DataServices {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DataServices")
             .field("connectors", &self.connectors.len())
-            .field("model_names", &self.model_names.len())
             .finish_non_exhaustive()
     }
 }
@@ -189,7 +188,6 @@ impl Api {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -197,7 +195,7 @@ mod tests {
     use veyra_domain::time::UtcMillis;
     use veyra_store::Store;
 
-    use super::{Api, AppMetadata, DataServices};
+    use super::{Api, AppMetadata, DataServices, DisplayNames};
     use crate::ApiError;
     use crate::dto::{
         AppInfoRequest, BuildProfile, Comparison, ListSourcesRequest, OverviewRequest,
@@ -246,7 +244,7 @@ mod tests {
                     .iter()
                     .map(|c| c.descriptor().clone())
                     .collect(),
-                model_names: BTreeMap::new(),
+                names: DisplayNames::default(),
                 ingest: Box::new(FakeIngest(Arc::clone(&calls))),
             }))
         );

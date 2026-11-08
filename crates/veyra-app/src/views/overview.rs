@@ -3,7 +3,9 @@
 use std::collections::BTreeMap;
 
 use jiff::ToSpan;
-use veyra_analytics::activity::{Activity, DEFAULT_IDLE_THRESHOLD_MS, activity};
+use veyra_analytics::activity::{
+    ACTIVE_TIME_DEFINITION, Activity, DEFAULT_IDLE_THRESHOLD_MS, SESSIONS_DEFINITION, activity,
+};
 use veyra_analytics::composition::AccuracyComposition;
 use veyra_analytics::dimension::Dimension;
 use veyra_analytics::engine::{GroupResult, evaluate};
@@ -17,8 +19,8 @@ use veyra_domain::accuracy::Accuracy;
 use super::{accuracy_class, internal, local_time, measures};
 use crate::DataServices;
 use crate::dto::{
-    AccuracyClass, CalendarDay, Composition, DailyPoint, HourCell, Kpi, Overview, OverviewKpis,
-    RankRow,
+    AccuracyClass, CalendarDay, Composition, DailyPoint, HourCell, Kpi, Labelled, Overview,
+    OverviewKpis, RankRow,
 };
 use crate::error::ApiError;
 use crate::scope::Resolved;
@@ -34,12 +36,14 @@ fn kpi(
     current: Option<MetricValue>,
     previous: Option<MetricValue>,
     accuracy: Option<AccuracyClass>,
+    definition: &str,
 ) -> Kpi {
     Kpi {
         value: current.map(MetricValue::as_f64),
         previous: previous.map(MetricValue::as_f64),
         change: delta(current, previous).and_then(|d| d.relative),
         accuracy,
+        definition: definition.to_owned(),
     }
 }
 
@@ -53,6 +57,7 @@ fn metric_kpi(
         metric.compute(current),
         previous.and_then(|p| metric.compute(p)),
         accuracy,
+        metric.definition().description,
     )
 }
 
@@ -174,11 +179,13 @@ fn kpis(
             count(now.sessions),
             before.and_then(|b| count(b.sessions)),
             token_accuracy,
+            SESSIONS_DEFINITION,
         ),
         active_ms: kpi(
             millis(now.active_ms),
             before.and_then(|b| millis(b.active_ms)),
             None,
+            ACTIVE_TIME_DEFINITION,
         ),
         cache_hit_ratio: metric_kpi(MetricId::CacheHitRatio, current, previous, token_accuracy),
     })
@@ -188,7 +195,7 @@ fn kpis(
 fn daily(
     data: &DataServices,
     scope: &Resolved,
-) -> Result<(Vec<String>, Vec<DailyPoint>), ApiError> {
+) -> Result<(Vec<Labelled>, Vec<DailyPoint>), ApiError> {
     let result = evaluated(
         data,
         &scope.spec(vec![Dimension::App], TimeGrain::Day, false),
@@ -219,17 +226,35 @@ fn daily(
             })
         })
         .collect::<Result<Vec<_>, ApiError>>()?;
-    let names = apps
+    let labelled = apps
         .iter()
         .map(|g| {
-            g.key
-                .first()
-                .cloned()
-                .flatten()
-                .unwrap_or_else(|| "unknown".to_owned())
+            data.names.label_app(
+                g.key
+                    .first()
+                    .cloned()
+                    .flatten()
+                    .unwrap_or_else(|| "unknown".to_owned()),
+            )
         })
         .collect();
-    Ok((names, points))
+    Ok((labelled, points))
+}
+
+/// The providers with usage in the scope, by display name (the provider filter's choices).
+fn providers(data: &DataServices, scope: &Resolved) -> Result<Vec<Labelled>, ApiError> {
+    let result = evaluated(
+        data,
+        &scope.spec(vec![Dimension::Provider], TimeGrain::Total, false),
+    )?;
+    let mut providers: Vec<Labelled> = result
+        .groups
+        .into_iter()
+        .filter_map(|group| group.key.into_iter().next().flatten())
+        .map(|key| data.names.label_provider(key))
+        .collect();
+    providers.sort_by(|a, b| a.label.cmp(&b.label));
+    Ok(providers)
 }
 
 /// The model mix, keyed by (provider, model).
@@ -249,15 +274,9 @@ fn models(
     Ok(ranking(result.groups, TOP_MODELS, scope_tokens, |group| {
         let provider = group.key.first().cloned().flatten();
         let model = group.key.get(1).cloned().flatten();
-        let label = model.as_ref().map_or_else(
-            || "Unknown model".to_owned(),
-            |id| {
-                data.model_names
-                    .get(id)
-                    .cloned()
-                    .unwrap_or_else(|| id.clone())
-            },
-        );
+        let label = model
+            .as_deref()
+            .map_or_else(|| "Unknown model".to_owned(), |id| data.names.model(id));
         (model, label, provider)
     }))
 }
@@ -353,6 +372,7 @@ pub(crate) fn overview(data: &DataServices, scope: &Resolved) -> Result<Overview
         kpis: kpis(data, scope, current, totals.previous_totals.as_ref())?,
         composition: composition(current),
         apps,
+        providers: providers(data, scope)?,
         daily: daily_points,
         models: models(data, scope, scope_tokens)?,
         projects: projects(data, scope, scope_tokens)?,

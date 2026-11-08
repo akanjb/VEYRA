@@ -12,4 +12,8 @@ change: number | null,
 /**
  * The weakest accuracy class contributing; `null` for derived measures.
  */
-accuracy: AccuracyClass | null, };
+accuracy: AccuracyClass | null, 
+/**
+ * What the number means, from the metric registry (the single source of definitions).
+ */
+definition: string, };

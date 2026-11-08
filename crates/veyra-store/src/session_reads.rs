@@ -147,6 +147,7 @@ fn event_from(row: &Row<'_>) -> Result<(i64, SessionEvent), StoreError> {
         row.get(0)?,
         SessionEvent {
             at: UtcMillis(row.get(1)?),
+            provider: row.get(15)?,
             model: row.get(2)?,
             raw_model: row.get(3)?,
             tokens: TokenCounts {
@@ -206,7 +207,7 @@ fn detail(connection: &Connection, id: i64) -> Result<Option<SessionDetail>, Sto
     let mut statement = connection.prepare_cached(
         "SELECT e.id, e.occurred_at, e.model_id, e.raw_model, e.input_uncached, e.cache_read, \
          e.cache_write_short, e.cache_write_long, e.cache_write_unspecified, e.output_total, \
-         e.reasoning, e.tool_tokens, e.acc_tokens, c.total_nusd, c.status \
+         e.reasoning, e.tool_tokens, e.acc_tokens, c.total_nusd, c.status, e.provider_id \
          FROM usage_events e LEFT JOIN event_costs c ON c.event_id = e.id \
          WHERE e.session_id = ?1 ORDER BY e.occurred_at, e.id",
     )?;

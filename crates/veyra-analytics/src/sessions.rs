@@ -71,6 +71,7 @@ pub struct ToolUse {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionEvent {
     pub at: UtcMillis,
+    pub provider: Option<String>,
     pub model: Option<String>,
     pub raw_model: Option<String>,
     pub tokens: TokenCounts,
