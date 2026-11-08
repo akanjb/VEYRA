@@ -12,6 +12,7 @@ use crate::StoreError;
 const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_initial.sql"),
     include_str!("../migrations/0002_ingestion.sql"),
+    include_str!("../migrations/0003_write_path.sql"),
 ];
 
 /// The schema version this build creates and understands.
@@ -94,6 +95,55 @@ mod tests {
             )
             .unwrap();
         assert_eq!(dropped, 0);
+    }
+
+    #[test]
+    fn rekeys_tool_calls_without_losing_them() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        connection.execute_batch(super::MIGRATIONS[0]).unwrap();
+        connection.execute_batch(super::MIGRATIONS[1]).unwrap();
+        connection.pragma_update(None, "user_version", 2).unwrap();
+        // A stand-alone row: no parent event exists in this scratch database.
+        connection
+            .pragma_update(None, "foreign_keys", "OFF")
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO tool_calls (event_id, tool_use_id, tool_name, is_error) \
+                 VALUES (7, 'toolu_kept', 'Bash', 1)",
+                [],
+            )
+            .unwrap();
+
+        assert_eq!(migrate(&mut connection).unwrap(), LATEST_SCHEMA_VERSION);
+        let kept: (i64, String, i64) = connection
+            .query_row(
+                "SELECT event_id, tool_name, is_error FROM tool_calls WHERE tool_use_id = 'toolu_kept'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(kept, (7, "Bash".to_owned(), 1));
+        let schema: String = connection
+            .query_row(
+                "SELECT sql FROM sqlite_schema WHERE name = 'tool_calls'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(schema.contains("WITHOUT ROWID"));
+        let index: i64 = connection
+            .query_row(
+                "SELECT count(*) FROM sqlite_schema WHERE name IN \
+                 ('tool_calls_event', 'event_costs_catalog_version')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            index, 1,
+            "the event index is kept, the catalogue index is gone"
+        );
     }
 
     #[test]
