@@ -122,8 +122,8 @@ flowchart LR
 > - **Golden tests:** expressed as field-level assertions per request on the fixtures, which fail with clearer messages than byte-for-byte golden files.
 > - **Safety:** canary fixtures, plus a real-data check in which the source logs contain canaries and the database holds none. A share-mode test renames and deletes a file while it is open. A concurrent writer appends half-lines during scans.
 > - **Throughput (budget amended 2026-11-08):**
->   - End to end, ingestion runs at about 50,000–60,000 events/s on the build machine, from overlapped parsing and committing, and at 43,000–49,000 events/s on GitHub-hosted runners.
->   - The CI budget is therefore **≥ 40,000 events/s, best of three runs**, below the slowest measured runner. The original ≥ 50k target holds on developer hardware only.
+>   - End to end, ingestion runs at about 50,000–60,000 events/s on the build machine, from overlapped parsing and committing, and at 39,000–49,000 events/s per attempt on GitHub-hosted runners (best of three: 41,400–48,900).
+>   - The CI budget is therefore **≥ 40,000 events/s, best of three runs**, just below the slowest best-of-three result measured (41,400 events/s); the margin is thin, so a weekly failure most likely means a slow runner, not a regression. The original ≥ 50k target holds on developer hardware only.
 >   - Real backfill: 1.3 GB of logs in 8.9 s, dominated by reading the logs rather than the store; rescans take 0.2 s.
 >   - Store write-path tuning: migration 0003, and statements prepared once per batch.
 > - **Deferred:** process-priority lowering and jittered backoff were not needed to meet the budgets. Failures are recorded per source, and the periodic scan retries.

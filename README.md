@@ -574,12 +574,12 @@ Ingestion:
 
 | Measurement | Developer machine | CI runners | Budget (CI) |
 |---|---|---|---|
-| End to end: one large Claude Code log, read → parse → price → commit | about 50,000–60,000 events/s | 43,000–49,000 events/s | ≥ 40,000 events/s, best of three |
-| Store writes alone, one million synthetic events | about 35,000 events/s | 35,000–43,000 events/s | — |
+| End to end: one large Claude Code log, read → parse → price → commit | about 50,000–60,000 events/s | 39,000–49,000 events/s per attempt (best of three: 41,400–48,900) | ≥ 40,000 events/s, best of three |
+| Store writes alone, one million synthetic events | about 35,000 events/s | 34,000–43,000 events/s | — |
 | Real backfill: 249 logs, 1.3 GB, 38,509 requests | 8.9 s | — | — |
 | Rescan with nothing new | 0.2 s, no writes | — | — |
 
-GitHub-hosted runners vary by up to about 15% between runs, so the ingest budget is set below the slowest measured runner and takes the best of three attempts. The `Performance` workflow checks both the query and ingest budgets weekly and on demand. After a backfill the worker blocks until the next change, so idle CPU is zero.
+GitHub-hosted runners vary by up to about 20% between runs. The ingest budget takes the best of three attempts and sits just below the slowest best-of-three result measured (41,400 events/s). The `Performance` workflow checks both the query and ingest budgets weekly and on demand. After a backfill the worker blocks until the next change, so idle CPU is zero.
 
 ## Privacy and security
 

@@ -20,7 +20,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
   - Session links are applied once per batch.
   - Dropped the unused `usage_events_occurred_at` index.
   - Migration 0003: dropped the unused cost catalogue-version index, and keyed tool calls by their tool-use id (WITHOUT ROWID).
-- **Performance budget.** The CI ingest budget is ≥ 40,000 events/s, best of three runs. GitHub-hosted runners measure 43,000–49,000 events/s; developer machines measure 50,000–60,000.
+- **Performance budget.** The CI ingest budget is ≥ 40,000 events/s, best of three runs. GitHub-hosted runners measure 39,000–49,000 events/s per attempt (best of three 41,400–48,900); developer machines measure 50,000–60,000.
 - **Supply chain.** `cargo-deny` accepts the permissive ISC licence (used by the Linux file-watcher backend).
 
 ### Added

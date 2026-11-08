@@ -457,7 +457,7 @@ fn the_worker_picks_up_changes_without_being_asked() {
 
 /// Throughput budget (ADR-023): at least 40,000 events per second end to end on one
 /// large log, measured on a standard GitHub-hosted runner (which reaches about
-/// 43,000-49,000; developer machines about 50,000-60,000). The best of three runs counts,
+/// 39,000-49,000 per attempt; developer machines about 50,000-60,000). The best of three runs counts,
 /// so a transient stall does not fail the budget; a systematic slowdown still does.
 /// Run with `cargo test -p veyra-ingest --release -- --ignored throughput --nocapture`.
 #[test]
