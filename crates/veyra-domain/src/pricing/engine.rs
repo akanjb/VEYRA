@@ -129,7 +129,7 @@ impl Assumptions {
 }
 
 /// Cost per token component, plus the cache economics of the event.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct CostBreakdown {
     pub input: NanoUsd,
     pub cache_read: NanoUsd,
@@ -149,7 +149,7 @@ impl CostBreakdown {
 }
 
 /// The API-equivalent cost of one event and how it was derived.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EventCost {
     pub status: CostStatus,
     pub rule_id: Option<String>,

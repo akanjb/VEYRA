@@ -77,7 +77,7 @@ str_enum!(ServiceTier {
 });
 
 /// Where an event came from.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SourceRef {
     pub connector: ConnectorId,
     pub parser_version: u32,
@@ -86,7 +86,7 @@ pub struct SourceRef {
 }
 
 /// Who served the request and through which application (PRD FR-NORM-01).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Attribution {
     pub provider: Option<ProviderId>,
     /// Canonical model id from the registry, if recognised.
@@ -100,7 +100,7 @@ pub struct Attribution {
 
 /// Natural keys linking the event to sessions, projects and devices. The store maps
 /// them to its own identifiers.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct EventContext {
     /// Source-scoped session key, e.g. `claude-code:<session-id>`.
     pub session_key: Option<String>,
@@ -112,7 +112,7 @@ pub struct EventContext {
 }
 
 /// One unit of AI usage in canonical form.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UsageEvent {
     pub dedup_key: DedupKey,
     pub occurred_at: UtcMillis,

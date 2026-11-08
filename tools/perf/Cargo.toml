@@ -1,0 +1,19 @@
+[package]
+name = "veyra-perf"
+description = "Synthetic dataset generator and performance budget checks for the data core."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+jiff.workspace = true
+veyra-analytics.workspace = true
+veyra-domain.workspace = true
+veyra-registry.workspace = true
+veyra-store.workspace = true
+
+[lints]
+workspace = true

@@ -58,7 +58,7 @@ pub fn weakest_of(classes: impl IntoIterator<Item = Accuracy>) -> Option<Accurac
 }
 
 /// Accuracy of each metric group on one event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AccuracyMap {
     pub tokens: Accuracy,
     pub cache: Accuracy,

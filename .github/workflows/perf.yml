@@ -1,0 +1,36 @@
+name: Performance
+
+# Data-core performance budgets (PRD NFR-06) on a clean runner: ingests one million
+# synthetic events and fails if any overview query's p95 exceeds 150 ms. Manual and
+# weekly only, to keep private-repository minutes low (ADR-021).
+
+on:
+  workflow_dispatch:
+    inputs:
+      events:
+        description: Number of synthetic events
+        default: "1000000"
+  schedule:
+    - cron: "41 5 * * 1"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  budgets:
+    name: Data-core budgets
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Run budgets
+        env:
+          EVENTS: ${{ inputs.events || '1000000' }}
+        run: cargo run --release --locked -p veyra-perf -- "$EVENTS"

@@ -5,7 +5,7 @@
 //! source into these canonical fields. `None` always means "not reported", never zero.
 
 /// Token counts of one usage event in canonical form.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct TokenCounts {
     /// Prompt tokens billed at the normal input rate.
     pub input_uncached: Option<u64>,

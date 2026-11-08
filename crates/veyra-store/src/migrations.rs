@@ -1,0 +1,75 @@
+//! Forward-only schema migrations tracked with `PRAGMA user_version` (ADR-003).
+//!
+//! Each migration runs in its own transaction together with the version bump, so an
+//! interrupted upgrade leaves the database at the last complete version.
+
+use rusqlite::Connection;
+
+use crate::StoreError;
+
+/// Migration SQL, in order. Index `i` upgrades version `i` to `i + 1`. Never edit a
+/// released migration; add a new one.
+const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_initial.sql")];
+
+/// The schema version this build creates and understands.
+#[expect(clippy::cast_possible_truncation, reason = "a handful of migrations")]
+pub const LATEST_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
+
+/// Applies every pending migration. Returns the resulting version.
+pub fn migrate(connection: &mut Connection) -> Result<u32, StoreError> {
+    let current: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if current > LATEST_SCHEMA_VERSION {
+        return Err(StoreError::SchemaTooNew {
+            found: current,
+            supported: LATEST_SCHEMA_VERSION,
+        });
+    }
+    for (index, sql) in MIGRATIONS.iter().enumerate().skip(current as usize) {
+        let version =
+            u32::try_from(index + 1).map_err(|_| StoreError::OutOfRange("schema version"))?;
+        let apply = |connection: &mut Connection| -> Result<(), rusqlite::Error> {
+            let transaction = connection.transaction()?;
+            transaction.execute_batch(sql)?;
+            transaction.pragma_update(None, "user_version", version)?;
+            transaction.commit()
+        };
+        apply(connection).map_err(|source| StoreError::Migration { version, source })?;
+    }
+    Ok(LATEST_SCHEMA_VERSION)
+}
+
+#[cfg(test)]
+mod tests {
+    use rusqlite::Connection;
+
+    use super::{LATEST_SCHEMA_VERSION, migrate};
+    use crate::StoreError;
+
+    #[test]
+    fn migrates_a_fresh_database_and_is_idempotent() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        assert_eq!(migrate(&mut connection).unwrap(), LATEST_SCHEMA_VERSION);
+        assert_eq!(migrate(&mut connection).unwrap(), LATEST_SCHEMA_VERSION);
+        let tables: i64 = connection
+            .query_row(
+                "SELECT count(*) FROM sqlite_schema WHERE type = 'table' \
+                 AND name IN ('usage_events', 'event_costs', 'rollup_15m', 'sessions')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(tables, 4);
+    }
+
+    #[test]
+    fn refuses_databases_from_newer_versions() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        connection
+            .pragma_update(None, "user_version", LATEST_SCHEMA_VERSION + 1)
+            .unwrap();
+        assert!(matches!(
+            migrate(&mut connection),
+            Err(StoreError::SchemaTooNew { .. })
+        ));
+    }
+}
