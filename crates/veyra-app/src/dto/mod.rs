@@ -4,5 +4,10 @@
 //! generated from them (`pnpm contracts:generate`); never edit the generated files.
 
 mod app_info;
+mod sources;
 
 pub use app_info::{AppInfo, AppInfoRequest, BuildProfile};
+pub use sources::{
+    DataChanged, ListSourcesRequest, RescanAccepted, RescanRequest, SetSourceEnabledRequest,
+    SourceList, SourceSummary,
+};

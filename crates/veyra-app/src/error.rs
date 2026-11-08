@@ -31,6 +31,21 @@ pub enum ApiError {
     },
 }
 
+impl ApiError {
+    /// An internal error. The details stay in the core's diagnostic output under a fresh
+    /// correlation id; only the id crosses the IPC boundary.
+    pub(crate) fn internal(details: &dyn std::fmt::Display) -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        let started = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let correlation_id = format!("{started:x}-{}", NEXT.fetch_add(1, Ordering::Relaxed));
+        eprintln!("veyra: internal error {correlation_id}: {details}");
+        Self::Internal { correlation_id }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::ApiError;

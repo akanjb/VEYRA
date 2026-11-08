@@ -4,6 +4,7 @@
 //! over Tauri IPC. Contains no business logic.
 
 mod commands;
+mod data;
 
 use tauri::{Context, PackageInfo, Runtime};
 use veyra_app::dto::BuildProfile;
@@ -11,7 +12,8 @@ use veyra_app::{Api, AppMetadata};
 
 /// Registers Veyra's application state and command handlers on a Tauri builder.
 ///
-/// Generic over the runtime so tests can use Tauri's mock runtime.
+/// Generic over the runtime so tests can use Tauri's mock runtime. Data services are
+/// started by [`run`], so tests never touch the user's database.
 pub fn configure<R: Runtime>(
     builder: tauri::Builder<R>,
     context: &Context<R>,
@@ -27,7 +29,12 @@ pub fn configure<R: Runtime>(
 /// Returns an error if the Tauri runtime fails to start.
 pub fn run() -> Result<(), tauri::Error> {
     let context = tauri::generate_context!();
-    configure(tauri::Builder::default(), &context).run(context)
+    configure(tauri::Builder::default(), &context)
+        .setup(|app| {
+            data::start(app.handle());
+            Ok(())
+        })
+        .run(context)
 }
 
 fn app_metadata(info: &PackageInfo) -> AppMetadata {

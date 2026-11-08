@@ -19,6 +19,10 @@ veyra-app.workspace = true
 [dependencies]
 tauri.workspace = true
 veyra-app.workspace = true
+veyra-connectors.workspace = true
+veyra-ingest.workspace = true
+veyra-registry.workspace = true
+veyra-store.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

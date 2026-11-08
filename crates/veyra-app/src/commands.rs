@@ -13,6 +13,21 @@ macro_rules! for_each_command {
     ($callback:ident) => {
         $callback! {
             get_app_info($crate::dto::AppInfoRequest) -> $crate::dto::AppInfo;
+            list_sources($crate::dto::ListSourcesRequest) -> $crate::dto::SourceList;
+            set_source_enabled($crate::dto::SetSourceEnabledRequest) -> $crate::dto::SourceSummary;
+            request_rescan($crate::dto::RescanRequest) -> $crate::dto::RescanAccepted;
+        }
+    };
+}
+
+/// Expands `$callback!` with every event the core emits to the dashboard.
+///
+/// The callback macro receives a list of `NAME_CONSTANT => Payload;` entries.
+#[macro_export]
+macro_rules! for_each_event {
+    ($callback:ident) => {
+        $callback! {
+            $crate::events::DATA_CHANGED => $crate::dto::DataChanged;
         }
     };
 }

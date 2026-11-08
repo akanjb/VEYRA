@@ -3,5 +3,10 @@
   "identifier": "main",
   "description": "The dashboard window. Grants only the application commands it needs; no core plugins.",
   "windows": ["main"],
-  "permissions": ["allow-get-app-info"]
+  "permissions": [
+    "allow-get-app-info",
+    "allow-list-sources",
+    "allow-set-source-enabled",
+    "allow-request-rescan"
+  ]
 }

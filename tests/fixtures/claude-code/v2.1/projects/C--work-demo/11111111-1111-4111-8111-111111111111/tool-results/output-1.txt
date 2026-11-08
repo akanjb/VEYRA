@@ -1,0 +1,1 @@
+VEYRA-CANARY-IGNORED-FILE tool output that must never be read

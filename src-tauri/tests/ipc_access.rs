@@ -37,13 +37,21 @@ fn invoke(window: &WebviewWindow<MockRuntime>, cmd: &str) -> Result<Value, Strin
         callback: CallbackFn(0),
         error: CallbackFn(1),
         url: origin.parse().expect("valid origin"),
-        body: InvokeBody::Json(json!({ "request": {} })),
+        body: InvokeBody::Json(json!({ "request": valid_request(cmd) })),
         headers: tauri::http::HeaderMap::default(),
         invoke_key: INVOKE_KEY.to_owned(),
     };
     get_ipc_response(window, request)
         .map(|body| body.deserialize::<Value>().expect("JSON response"))
         .map_err(|error| error.to_string())
+}
+
+/// A well-formed request body for each command.
+fn valid_request(cmd: &str) -> Value {
+    match cmd {
+        "set_source_enabled" => json!({ "sourceId": 1, "enabled": false }),
+        _ => json!({}),
+    }
 }
 
 #[test]
@@ -56,11 +64,31 @@ fn main_window_can_call_declared_command() {
 }
 
 #[test]
-fn other_windows_are_denied() {
+fn main_window_reaches_every_catalogue_command() {
     let app = app();
-    let error = invoke(&window(&app, "other"), "get_app_info").expect_err("must be denied");
+    let main = window(&app, "main");
+    for command in veyra_app::COMMAND_NAMES {
+        if let Err(error) = invoke(&main, command) {
+            // Data services are not started under test: the command ran and said so.
+            assert!(
+                error.contains("\"busy\""),
+                "{command}: unexpected error: {error}"
+            );
+        }
+    }
+}
 
-    assert!(error.contains("not allowed"), "unexpected error: {error}");
+#[test]
+fn other_windows_are_denied_every_command() {
+    let app = app();
+    let other = window(&app, "other");
+    for command in veyra_app::COMMAND_NAMES {
+        let error = invoke(&other, command).expect_err("must be denied");
+        assert!(
+            error.contains("not allowed"),
+            "{command}: unexpected error: {error}"
+        );
+    }
 }
 
 #[test]

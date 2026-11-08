@@ -6,3 +6,4 @@ src-tauri/icons/
 packages/contracts/src/generated/
 docs/
 *.md
+tests/fixtures/

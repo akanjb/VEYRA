@@ -15,10 +15,14 @@ publish = false
 [workspace.dependencies]
 veyra-analytics = { path = "crates/veyra-analytics" }
 veyra-app = { path = "crates/veyra-app" }
+veyra-connectors = { path = "crates/veyra-connectors" }
 veyra-domain = { path = "crates/veyra-domain" }
+veyra-ingest = { path = "crates/veyra-ingest" }
 veyra-registry = { path = "crates/veyra-registry" }
 veyra-store = { path = "crates/veyra-store" }
 jiff = "=0.2.38"
+memchr = "=2.8.3"
+notify = "=8.2.1"
 rusqlite = { version = "=0.41.1", features = ["bundled"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"

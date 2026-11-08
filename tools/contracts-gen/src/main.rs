@@ -98,9 +98,46 @@ fn generate(dir: &Path) -> BoxResult<()> {
     veyra_app::for_each_command!(export_commands);
     <veyra_app::ApiError as TS>::export_all(&cfg)?;
 
+    let mut events: Vec<(&'static str, TypeRef)> = Vec::new();
+    macro_rules! export_events {
+        ($($name:expr => $payload:ty;)*) => {$(
+            <$payload as TS>::export_all(&cfg)?;
+            events.push(($name, type_ref::<$payload>(&cfg)?));
+        )*};
+    }
+    veyra_app::for_each_event!(export_events);
+
     fs::write(dir.join("commands.ts"), render_commands(&commands))?;
+    fs::write(dir.join("events.ts"), render_events(&events))?;
     fs::write(dir.join("index.ts"), render_index(dir)?)?;
     Ok(())
+}
+
+fn render_events(events: &[(&str, TypeRef)]) -> String {
+    let mut imports: Vec<&TypeRef> = events.iter().map(|(_, payload)| payload).collect();
+    imports.sort();
+    imports.dedup();
+
+    let mut out = String::from(HEADER);
+    for import in imports {
+        let _ = writeln!(
+            out,
+            "import type {{ {} }} from \"{}\";",
+            import.name, import.module
+        );
+    }
+    out.push_str("\n/** Payload of every event the core emits, keyed by event name. */\n");
+    out.push_str("export interface EventMap {\n");
+    for (name, payload) in events {
+        let _ = writeln!(out, "  \"{name}\": {};", payload.name);
+    }
+    out.push_str("}\n\nexport type EventName = keyof EventMap;\n\n");
+    out.push_str("export const EVENT_NAMES = [\n");
+    for (name, _) in events {
+        let _ = writeln!(out, "  \"{name}\",");
+    }
+    out.push_str("] as const satisfies readonly EventName[];\n");
+    out
 }
 
 fn render_commands(commands: &[CommandEntry]) -> String {
@@ -140,12 +177,13 @@ fn render_commands(commands: &[CommandEntry]) -> String {
 /// Barrel file re-exporting every generated module.
 fn render_index(dir: &Path) -> BoxResult<String> {
     let mut modules = ts_modules(dir)?;
-    modules.retain(|m| m != "index" && m != "commands");
+    modules.retain(|m| !matches!(m.as_str(), "index" | "commands" | "events"));
     let mut out = String::from(HEADER);
     for module in modules {
         let _ = writeln!(out, "export type * from \"./{module}\";");
     }
     out.push_str("export * from \"./commands\";\n");
+    out.push_str("export * from \"./events\";\n");
     Ok(out)
 }
 

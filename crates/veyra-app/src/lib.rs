@@ -8,7 +8,8 @@ mod api;
 mod commands;
 pub mod dto;
 mod error;
+pub mod events;
 
-pub use api::{Api, AppMetadata};
+pub use api::{Api, AppMetadata, DataServices};
 pub use commands::COMMAND_NAMES;
 pub use error::ApiError;

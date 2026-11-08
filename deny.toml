@@ -24,6 +24,8 @@ allow = [
   "Apache-2.0",
   "Apache-2.0 WITH LLVM-exception",
   "BSD-3-Clause",
+  # Permissive, MIT-equivalent; used by inotify (the Linux backend of notify).
+  "ISC",
   "Zlib",
   "CC0-1.0",
   "0BSD",
