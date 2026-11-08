@@ -1,0 +1,172 @@
+/*
+ * Veyra design tokens: the single source for CSS and charts (docs/planning/03-ux.md §5.1).
+ *
+ * Theme values live on :root (light) and [data-theme="dark"]; Tailwind utilities map to
+ * them through @theme, so components never hard-code a colour. Charts read the same
+ * variables at runtime. `tooling/palette/check-palette.js` validates the data palette
+ * (contrast and colour-blind separation) in CI.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Chrome: cool-gray neutral ramp. */
+  --gray-1: #fbfcfd;
+  --gray-2: #f6f7f9;
+  --gray-3: #eef0f3;
+  --gray-4: #e6e8ec;
+  --gray-5: #dfe2e7;
+  --gray-6: #d5d9df;
+  --gray-7: #c4c9d1;
+  --gray-8: #a9b0bb;
+  --gray-9: #7d8592;
+  --gray-10: #6b7380;
+  --gray-11: #4b5260;
+  --gray-12: #1a1d24;
+
+  --bg: #f4f5f8;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: var(--gray-2);
+  --border: #e3e6eb;
+  --border-strong: #cfd4dc;
+  --text: var(--gray-12);
+  --text-muted: var(--gray-11);
+  --text-subtle: var(--gray-10);
+
+  /* One accent: focus, selection and primary actions only. */
+  --accent: #3b4fd8;
+  --accent-hover: #3243bd;
+  --accent-soft: #e9ecfc;
+  --accent-text: #ffffff;
+
+  /* Semantic states: never "more" or "less". */
+  --success: #2b8a3e;
+  --warning: #b35c00;
+  --danger: #c92a2a;
+  --info: var(--accent);
+
+  /* Data: 10 categorical slots, validated by tooling/palette/check-palette.js.
+     Slots 1–3 are the Anthropic, OpenAI and Google identity hues. */
+  --data-1: #d0602a;
+  --data-2: #0e8f7e;
+  --data-3: #3567d6;
+  --data-4: #b5179e;
+  --data-5: #8f5b00;
+  --data-6: #5d6b80;
+  --data-7: #0a84a3;
+  --data-8: #448a26;
+  --data-9: #8550e6;
+  --data-10: #b33f3f;
+
+  /* Sequential ramp (calendar, heatmaps): lightest to strongest. */
+  --seq-0: #eef0f5;
+  --seq-1: #d6ddfb;
+  --seq-2: #b1bff6;
+  --seq-3: #8a9ef0;
+  --seq-4: #627ce6;
+  --seq-5: #3f59d4;
+  --seq-6: #2a3ea6;
+
+  --shadow-overlay: 0 12px 32px -8px rgb(16 20 28 / 0.18), 0 2px 6px rgb(16 20 28 / 0.08);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --gray-1: #0c0e12;
+  --gray-2: #111419;
+  --gray-3: #171b22;
+  --gray-4: #1c2129;
+  --gray-5: #222831;
+  --gray-6: #2a313b;
+  --gray-7: #353e4a;
+  --gray-8: #485260;
+  --gray-9: #6b7584;
+  --gray-10: #7a8494;
+  --gray-11: #a8b0bd;
+  --gray-12: #e8ebf0;
+
+  --bg: #0b0d11;
+  --surface: #12151b;
+  --surface-raised: #171b22;
+  --surface-sunken: #0e1015;
+  --border: #232832;
+  --border-strong: #313846;
+  --text: var(--gray-12);
+  --text-muted: var(--gray-11);
+  --text-subtle: var(--gray-10);
+
+  --accent: #7d8dff;
+  --accent-hover: #93a1ff;
+  --accent-soft: #1d2346;
+  --accent-text: #0b0d11;
+
+  --success: #51cf66;
+  --warning: #ffa94d;
+  --danger: #ff6b6b;
+
+  --data-1: #f0864f;
+  --data-2: #2bc4ad;
+  --data-3: #6f97ff;
+  --data-4: #e05cc8;
+  --data-5: #d9b44a;
+  --data-6: #94a3b8;
+  --data-7: #34c3e0;
+  --data-8: #7cc45a;
+  --data-9: #a98bfa;
+  --data-10: #ff7b7b;
+
+  --seq-0: #181c25;
+  --seq-1: #1f2747;
+  --seq-2: #2b386a;
+  --seq-3: #394b92;
+  --seq-4: #4e65bd;
+  --seq-5: #6e85e6;
+  --seq-6: #a3b3ff;
+
+  --shadow-overlay: 0 16px 40px -8px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.4);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-raised);
+  --color-sunken: var(--surface-sunken);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--accent-text);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-gray-3: var(--gray-3);
+  --color-gray-4: var(--gray-4);
+  --color-gray-6: var(--gray-6);
+
+  --font-sans: "Inter Variable", system-ui, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "Cascadia Mono", monospace;
+
+  /* Type scale: 12/13/14/16/20/24/32/40. */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+  --text-3xl: 40px;
+
+  --radius-control: 6px;
+  --radius-card: 10px;
+  --radius-sheet: 14px;
+
+  --shadow-overlay: var(--shadow-overlay);
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
