@@ -26,7 +26,16 @@ fn window(app: &App<MockRuntime>, label: &str) -> WebviewWindow<MockRuntime> {
         .expect("window builds")
 }
 
+/// Invokes an application command with a well-formed request.
 fn invoke(window: &WebviewWindow<MockRuntime>, cmd: &str) -> Result<Value, String> {
+    invoke_with(window, cmd, json!({ "request": valid_request(cmd) }))
+}
+
+fn invoke_with(
+    window: &WebviewWindow<MockRuntime>,
+    cmd: &str,
+    body: Value,
+) -> Result<Value, String> {
     let origin = if cfg!(windows) {
         "http://tauri.localhost"
     } else {
@@ -37,7 +46,7 @@ fn invoke(window: &WebviewWindow<MockRuntime>, cmd: &str) -> Result<Value, Strin
         callback: CallbackFn(0),
         error: CallbackFn(1),
         url: origin.parse().expect("valid origin"),
-        body: InvokeBody::Json(json!({ "request": valid_request(cmd) })),
+        body: InvokeBody::Json(body),
         headers: tauri::http::HeaderMap::default(),
         invoke_key: INVOKE_KEY.to_owned(),
     };
@@ -99,6 +108,53 @@ fn other_windows_are_denied_every_command() {
         assert!(
             error.contains("not allowed"),
             "{command}: unexpected error: {error}"
+        );
+    }
+}
+
+/// What `listen()` of `@tauri-apps/api/event` sends.
+fn listen_request() -> Value {
+    json!({
+        "event": veyra_app::events::DATA_CHANGED,
+        "target": { "kind": "Any" },
+        "handler": 7,
+    })
+}
+
+#[test]
+fn main_window_may_listen_to_application_events() {
+    let app = app();
+    let main = window(&app, "main");
+    let id = invoke_with(&main, "plugin:event|listen", listen_request()).expect("may listen");
+    let unlisten = json!({ "event": veyra_app::events::DATA_CHANGED, "eventId": id });
+    invoke_with(&main, "plugin:event|unlisten", unlisten).expect("may unlisten");
+}
+
+#[test]
+fn other_windows_may_not_listen() {
+    let app = app();
+    let error = invoke_with(
+        &window(&app, "other"),
+        "plugin:event|listen",
+        listen_request(),
+    )
+    .expect_err("must be denied");
+    assert!(error.contains("not allowed"), "unexpected error: {error}");
+}
+
+#[test]
+fn main_window_may_not_emit_or_use_other_plugins() {
+    let app = app();
+    let main = window(&app, "main");
+    let emit = json!({ "event": veyra_app::events::DATA_CHANGED, "payload": null });
+    for (cmd, body) in [
+        ("plugin:event|emit", emit),
+        ("plugin:window|close", json!({ "label": "main" })),
+    ] {
+        let error = invoke_with(&main, cmd, body).expect_err("must be denied");
+        assert!(
+            error.contains("not allowed"),
+            "{cmd}: unexpected error: {error}"
         );
     }
 }

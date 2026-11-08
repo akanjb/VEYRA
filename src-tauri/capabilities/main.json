@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "The dashboard window. Grants only the application commands it needs; no core plugins.",
+  "description": "The dashboard window. Grants only the application commands it needs, plus listening to (and unlistening from) the application's own events; no other core plugin.",
   "windows": ["main"],
   "permissions": [
     "allow-get-app-info",
@@ -10,6 +10,8 @@
     "allow-request-rescan",
     "allow-get-overview",
     "allow-list-sessions",
-    "allow-get-session"
+    "allow-get-session",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
   ]
 }
