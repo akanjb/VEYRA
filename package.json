@@ -19,6 +19,7 @@
     "test:rust": "cargo test --workspace --locked",
     "contracts:generate": "cargo run -q --locked -p veyra-contracts-gen",
     "contracts:check": "cargo run -q --locked -p veyra-contracts-gen -- --check",
+    "palette:check": "node tooling/palette/check-palette.js",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm contracts:check && pnpm lint:rust && pnpm test:rust",
     "hooks:install": "git config core.hooksPath .githooks"
   },
