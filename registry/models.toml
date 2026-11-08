@@ -1,0 +1,259 @@
+# Canonical models. `id` is Veyra's canonical identifier; `aliases` are other strings
+# that sources report for the same model (dated snapshots, older names). Matching is
+# case-insensitive. Gateway prefixes (e.g. `anthropic/`) are stripped by the normaliser.
+#
+# Model ids verified 2026-11-08 against:
+#   Anthropic  https://platform.claude.com/docs/en/about-claude/model-deprecations
+#   OpenAI     https://developers.openai.com/api/docs/pricing
+#   Google     https://aistudio.google.com/docs/pricing
+
+# --- Anthropic -------------------------------------------------------------------------
+
+[[model]]
+id = "claude-fable-5-1"
+provider = "anthropic"
+name = "Claude Fable 5.1"
+
+[[model]]
+id = "claude-mythos-5-1"
+provider = "anthropic"
+name = "Claude Mythos 5.1"
+
+[[model]]
+id = "claude-opus-5-5"
+provider = "anthropic"
+name = "Claude Opus 5.5"
+
+[[model]]
+id = "claude-sonnet-5-5"
+provider = "anthropic"
+name = "Claude Sonnet 5.5"
+
+[[model]]
+id = "claude-haiku-5-5"
+provider = "anthropic"
+name = "Claude Haiku 5.5"
+
+[[model]]
+id = "claude-fable-5"
+provider = "anthropic"
+name = "Claude Fable 5"
+
+[[model]]
+id = "claude-mythos-5"
+provider = "anthropic"
+name = "Claude Mythos 5"
+
+[[model]]
+id = "claude-mythos-preview"
+provider = "anthropic"
+name = "Claude Mythos Preview"
+
+[[model]]
+id = "claude-opus-5"
+provider = "anthropic"
+name = "Claude Opus 5"
+
+[[model]]
+id = "claude-opus-4-8"
+provider = "anthropic"
+name = "Claude Opus 4.8"
+
+[[model]]
+id = "claude-opus-4-7"
+provider = "anthropic"
+name = "Claude Opus 4.7"
+
+[[model]]
+id = "claude-opus-4-6"
+provider = "anthropic"
+name = "Claude Opus 4.6"
+
+[[model]]
+id = "claude-opus-4-5"
+provider = "anthropic"
+name = "Claude Opus 4.5"
+aliases = ["claude-opus-4-5-20251101"]
+
+[[model]]
+id = "claude-opus-4-1"
+provider = "anthropic"
+name = "Claude Opus 4.1"
+aliases = ["claude-opus-4-1-20250805"]
+
+[[model]]
+id = "claude-opus-4"
+provider = "anthropic"
+name = "Claude Opus 4"
+aliases = ["claude-opus-4-20250514"]
+
+[[model]]
+id = "claude-sonnet-5"
+provider = "anthropic"
+name = "Claude Sonnet 5"
+
+[[model]]
+id = "claude-sonnet-4-6"
+provider = "anthropic"
+name = "Claude Sonnet 4.6"
+
+[[model]]
+id = "claude-sonnet-4-5"
+provider = "anthropic"
+name = "Claude Sonnet 4.5"
+aliases = ["claude-sonnet-4-5-20250929"]
+
+[[model]]
+id = "claude-sonnet-4"
+provider = "anthropic"
+name = "Claude Sonnet 4"
+aliases = ["claude-sonnet-4-20250514"]
+
+[[model]]
+id = "claude-haiku-4-5"
+provider = "anthropic"
+name = "Claude Haiku 4.5"
+aliases = ["claude-haiku-4-5-20251001"]
+
+[[model]]
+id = "claude-3-7-sonnet"
+provider = "anthropic"
+name = "Claude Sonnet 3.7"
+aliases = ["claude-3-7-sonnet-20250219"]
+
+[[model]]
+id = "claude-3-5-haiku"
+provider = "anthropic"
+name = "Claude Haiku 3.5"
+aliases = ["claude-3-5-haiku-20241022"]
+
+[[model]]
+id = "claude-3-haiku"
+provider = "anthropic"
+name = "Claude Haiku 3"
+aliases = ["claude-3-haiku-20240307"]
+
+# --- OpenAI ----------------------------------------------------------------------------
+
+[[model]]
+id = "gpt-6-astra"
+provider = "openai"
+name = "GPT-6 Astra"
+
+[[model]]
+id = "gpt-6.1-sol"
+provider = "openai"
+name = "GPT-6.1 Sol"
+
+[[model]]
+id = "gpt-6.1-terra"
+provider = "openai"
+name = "GPT-6.1 Terra"
+
+[[model]]
+id = "gpt-6-luna"
+provider = "openai"
+name = "GPT-6 Luna"
+
+[[model]]
+id = "gpt-6-sol"
+provider = "openai"
+name = "GPT-6 Sol"
+
+[[model]]
+id = "gpt-5.6-sol"
+provider = "openai"
+name = "GPT-5.6 Sol"
+
+[[model]]
+id = "gpt-5.6-terra"
+provider = "openai"
+name = "GPT-5.6 Terra"
+
+[[model]]
+id = "gpt-5.6-luna"
+provider = "openai"
+name = "GPT-5.6 Luna"
+
+[[model]]
+id = "gpt-5.5"
+provider = "openai"
+name = "GPT-5.5"
+
+[[model]]
+id = "gpt-5.5-pro"
+provider = "openai"
+name = "GPT-5.5 Pro"
+
+[[model]]
+id = "gpt-5.4"
+provider = "openai"
+name = "GPT-5.4"
+
+[[model]]
+id = "gpt-5.4-pro"
+provider = "openai"
+name = "GPT-5.4 Pro"
+
+[[model]]
+id = "gpt-5.3-codex"
+provider = "openai"
+name = "GPT-5.3 Codex"
+
+[[model]]
+id = "chat-latest"
+provider = "openai"
+name = "ChatGPT (chat-latest)"
+
+# --- Google ----------------------------------------------------------------------------
+
+[[model]]
+id = "gemini-4-argon"
+provider = "google"
+name = "Gemini 4 Argon"
+
+[[model]]
+id = "gemini-3.8-flash"
+provider = "google"
+name = "Gemini 3.8 Flash"
+
+[[model]]
+id = "gemini-3.6-flash"
+provider = "google"
+name = "Gemini 3.6 Flash"
+
+[[model]]
+id = "gemini-3.5-flash-lite"
+provider = "google"
+name = "Gemini 3.5 Flash-Lite"
+
+[[model]]
+id = "gemini-3.1-flash-lite"
+provider = "google"
+name = "Gemini 3.1 Flash-Lite"
+
+[[model]]
+id = "gemini-3.1-pro-preview"
+provider = "google"
+name = "Gemini 3.1 Pro Preview"
+aliases = ["gemini-3.1-pro-preview-customtools"]
+
+[[model]]
+id = "gemini-3-flash-preview"
+provider = "google"
+name = "Gemini 3 Flash Preview"
+
+[[model]]
+id = "gemini-2.5-pro"
+provider = "google"
+name = "Gemini 2.5 Pro"
+
+[[model]]
+id = "gemini-2.5-flash"
+provider = "google"
+name = "Gemini 2.5 Flash"
+
+[[model]]
+id = "gemini-2.5-flash-lite"
+provider = "google"
+name = "Gemini 2.5 Flash-Lite"

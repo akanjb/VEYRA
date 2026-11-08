@@ -1,0 +1,3 @@
+# Pricing catalogue metadata. Bump `version` whenever any pricing file changes; stored
+# event costs record the version that produced them, and changed versions are re-priced.
+version = "2026-11-08.1"

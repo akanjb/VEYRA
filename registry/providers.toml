@@ -1,0 +1,17 @@
+# Model providers: the organisations that train and serve models.
+# Single source of truth for provider identity (ADR-007). Reviewed by pull request.
+
+[[provider]]
+id = "anthropic"
+name = "Anthropic"
+pricing_url = "https://platform.claude.com/docs/en/about-claude/pricing"
+
+[[provider]]
+id = "openai"
+name = "OpenAI"
+pricing_url = "https://developers.openai.com/api/docs/pricing"
+
+[[provider]]
+id = "google"
+name = "Google"
+pricing_url = "https://aistudio.google.com/docs/pricing"

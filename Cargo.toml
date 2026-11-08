@@ -13,12 +13,19 @@ publish = false
 # Exact pins: every version was published at least a week before adoption
 # (supply-chain policy, ADR-017). Cargo.lock is committed.
 [workspace.dependencies]
+veyra-analytics = { path = "crates/veyra-analytics" }
 veyra-app = { path = "crates/veyra-app" }
+veyra-domain = { path = "crates/veyra-domain" }
+veyra-registry = { path = "crates/veyra-registry" }
+veyra-store = { path = "crates/veyra-store" }
+jiff = "=0.2.38"
+rusqlite = { version = "=0.41.1", features = ["bundled"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
 tauri = "=2.12.5"
 tauri-build = "=2.7.4"
 thiserror = "=2.0.21"
+toml = "=1.1.8"
 ts-rs = "=12.0.1"
 
 [workspace.lints.rust]

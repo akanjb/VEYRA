@@ -1,0 +1,141 @@
+# Gemini Developer API prices, USD per 1M tokens (paid tier, text input).
+# Source: https://aistudio.google.com/docs/pricing (read 2026-11-08 via its Markdown
+# rendering, which includes every Standard / Batch / Flex / Priority tab).
+#
+# Mapping: cache_read = context caching price. Gemini has no per-token cache-write price;
+#          the per-hour cache *storage* fee cannot be derived from usage records and is
+#          not included. Output prices include thinking tokens (canonical output_total).
+# Modality: audio input is priced higher on some models; usage records do not report
+#           modality, so the text price is used.
+# Modifiers:
+#   - Batch and Flex: 0.5x on input and output. Cache reads are 0.5x on newer models but
+#     "Same as Standard" on others (cache_read factor 1.0), as listed per model.
+#   - Priority: 1.8x on every component.
+# Scheduled changes on the page are encoded as dated rules ("through November 30, 2026"
+# ends at 2026-12-01T00:00Z; UTC boundaries are an assumption, the page names no zone).
+# Deprecated models that are re-routed and "billed at" another model's rates switch to
+# those rates on the published date.
+
+[defaults]
+provider = "google"
+source_url = "https://aistudio.google.com/docs/pricing"
+verified_at = "2026-11-08"
+history_assumed = true
+
+# --- Gemini 4 Argon: prices double on 2026-12-01 -------------------------------------
+
+[[rule]]
+id = "google/gemini-4-argon/until-2026-12"
+models = ["gemini-4-argon"]
+until = "2026-12-01"
+rates = { input = 2.0, output = 10.0, cache_read = 0.10 }
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, priority = { factor = 1.8 } }
+
+[[rule]]
+id = "google/gemini-4-argon/from-2026-12"
+models = ["gemini-4-argon"]
+from = "2026-12-01"
+history_assumed = false
+rates = { input = 4.0, output = 20.0, cache_read = 0.20 }
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, priority = { factor = 1.8 } }
+
+# --- Gemini 3.8 / 3.6 Flash: prices double on 2027-01-01 -----------------------------
+
+[[rule]]
+id = "google/gemini-3.8-3.6-flash/until-2027-01"
+models = ["gemini-3.8-flash", "gemini-3.6-flash"]
+until = "2027-01-01"
+rates = { input = 0.75, output = 3.75, cache_read = 0.075 }
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, priority = { factor = 1.8 } }
+
+[[rule]]
+id = "google/gemini-3.8-3.6-flash/from-2027-01"
+models = ["gemini-3.8-flash", "gemini-3.6-flash"]
+from = "2027-01-01"
+history_assumed = false
+rates = { input = 1.50, output = 7.50, cache_read = 0.15 }
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, priority = { factor = 1.8 } }
+
+# --- Current Flash-Lite and preview models ---------------------------------------------
+
+# The page displays Flex cache $0.02 and Priority cache $0.05 for 3.5 Flash-Lite, while
+# Batch shows $0.015 = 0.03 x 0.5 and every other component follows 0.5x / 1.8x exactly;
+# the displayed values are treated as rounding and the uniform factors are applied.
+[[rule]]
+id = "google/gemini-3.5-flash-lite"
+models = ["gemini-3.5-flash-lite"]
+rates = { input = 0.30, output = 2.50, cache_read = 0.03 }
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, priority = { factor = 1.8 } }
+
+[[rule]]
+id = "google/gemini-3.1-flash-lite"
+models = ["gemini-3.1-flash-lite"]
+rates = { input = 0.25, output = 1.50, cache_read = 0.025 }
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, priority = { factor = 1.8 } }
+
+[[rule]]
+id = "google/gemini-3.1-pro-preview"
+models = ["gemini-3.1-pro-preview"]
+rates = { input = 2.0, output = 12.0, cache_read = 0.20 }
+tier = [
+  { above_prompt_tokens = 200000, rates = { input = 4.0, output = 18.0, cache_read = 0.40 } },
+]
+modifiers = { batch = { factor = 0.5, cache_read = 1.0 }, flex = { factor = 0.5, cache_read = 1.0 }, priority = { factor = 1.8 } }
+
+[[rule]]
+id = "google/gemini-3-flash-preview"
+models = ["gemini-3-flash-preview"]
+rates = { input = 0.50, output = 3.00, cache_read = 0.05 }
+modifiers = { batch = { factor = 0.5, cache_read = 1.0 }, flex = { factor = 0.5, cache_read = 1.0 }, priority = { factor = 1.8 } }
+
+[[rule]]
+id = "google/gemini-2.5-flash-lite"
+models = ["gemini-2.5-flash-lite"]
+rates = { input = 0.10, output = 0.40, cache_read = 0.01 }
+modifiers = { batch = { factor = 0.5, cache_read = 1.0 }, flex = { factor = 0.5, cache_read = 1.0 }, priority = { factor = 1.8 } }
+
+# --- Gemini 2.5 Pro: re-routed to Gemini 3.8 Flash and billed at its rates from 2026-12-01
+
+[[rule]]
+id = "google/gemini-2.5-pro/until-2026-12"
+models = ["gemini-2.5-pro"]
+until = "2026-12-01"
+rates = { input = 1.25, output = 10.0, cache_read = 0.125 }
+tier = [
+  { above_prompt_tokens = 200000, rates = { input = 2.50, output = 15.0, cache_read = 0.25 } },
+]
+modifiers = { batch = { factor = 0.5, cache_read = 1.0 }, flex = { factor = 0.5, cache_read = 1.0 }, priority = { factor = 1.8 } }
+
+[[rule]]
+id = "google/gemini-2.5-pro/as-3.8-flash-2026-12"
+models = ["gemini-2.5-pro"]
+from = "2026-12-01"
+until = "2027-01-01"
+history_assumed = false
+rates = { input = 0.75, output = 3.75, cache_read = 0.075 }
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, priority = { factor = 1.8 } }
+
+[[rule]]
+id = "google/gemini-2.5-pro/as-3.8-flash-2027-01"
+models = ["gemini-2.5-pro"]
+from = "2027-01-01"
+history_assumed = false
+rates = { input = 1.50, output = 7.50, cache_read = 0.15 }
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, priority = { factor = 1.8 } }
+
+# --- Gemini 2.5 Flash: re-routed to Gemini 3.5 Flash-Lite and billed at its rates from 2026-12-01
+
+[[rule]]
+id = "google/gemini-2.5-flash/until-2026-12"
+models = ["gemini-2.5-flash"]
+until = "2026-12-01"
+rates = { input = 0.30, output = 2.50, cache_read = 0.03 }
+modifiers = { batch = { factor = 0.5, cache_read = 1.0 }, flex = { factor = 0.5, cache_read = 1.0 }, priority = { factor = 1.8 } }
+
+[[rule]]
+id = "google/gemini-2.5-flash/as-3.5-flash-lite"
+models = ["gemini-2.5-flash"]
+from = "2026-12-01"
+history_assumed = false
+rates = { input = 0.30, output = 2.50, cache_read = 0.03 }
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, priority = { factor = 1.8 } }

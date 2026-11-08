@@ -1,0 +1,140 @@
+# OpenAI API prices, USD per 1M tokens (standard tier, short context).
+# Source: https://developers.openai.com/api/docs/pricing (read 2026-11-08, including the
+# expanded model list and the Long / Flex-Batch / Fast / Ultrafast views).
+#
+# Mapping: cache_read = cached input, cache_write_short = 30-minute write,
+#          cache_write_long = 12-hour write.
+# Long context: prompts over 272K input tokens use the `tier` rates.
+# Modifiers (verified table by table for the GPT-6 family, short and long context):
+#   - Flex and Batch: exactly 0.5x on every component, cache included.
+#   - Fast: 2x on every component; GPT-5.5 is 2.5x. Pro models have no Fast price.
+#   - Ultrafast: 6x, published only for gpt-6-astra and gpt-6.1-sol.
+#   - "Priority processing was renamed Fast mode on July 30, 2026": events recorded as
+#     priority are not mapped to Fast automatically (no historical priority rates).
+#   - Regional processing (data residency): +10% for models released on or after
+#     2026-03-05; not modelled because usage records do not report the endpoint.
+# The GPT-5.x Fast multipliers for long context were not shown separately; the same
+# factor is applied, consistent with every table that was shown.
+# No published start dates: history_assumed.
+
+[defaults]
+provider = "openai"
+source_url = "https://developers.openai.com/api/docs/pricing"
+verified_at = "2026-11-08"
+history_assumed = true
+
+[[rule]]
+id = "openai/gpt-6-astra"
+models = ["gpt-6-astra"]
+rates = { input = 10.0, output = 50.0, cache_read = 1.0, cache_write_short = 12.5, cache_write_long = 25.0 }
+tier = [
+  { above_prompt_tokens = 272000, rates = { input = 20.0, output = 75.0, cache_read = 2.0, cache_write_short = 25.0, cache_write_long = 50.0 } },
+]
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, fast = { factor = 2.0 }, ultrafast = { factor = 6.0 } }
+
+[[rule]]
+id = "openai/gpt-6.1-sol"
+models = ["gpt-6.1-sol"]
+rates = { input = 2.0, output = 10.0, cache_read = 0.10, cache_write_short = 2.5, cache_write_long = 5.0 }
+tier = [
+  { above_prompt_tokens = 272000, rates = { input = 4.0, output = 15.0, cache_read = 0.20, cache_write_short = 5.0, cache_write_long = 10.0 } },
+]
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, fast = { factor = 2.0 }, ultrafast = { factor = 6.0 } }
+
+[[rule]]
+id = "openai/gpt-6.1-terra"
+models = ["gpt-6.1-terra"]
+rates = { input = 1.0, output = 5.0, cache_read = 0.05, cache_write_short = 1.25, cache_write_long = 2.5 }
+tier = [
+  { above_prompt_tokens = 272000, rates = { input = 2.0, output = 7.5, cache_read = 0.10, cache_write_short = 2.5, cache_write_long = 5.0 } },
+]
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, fast = { factor = 2.0 } }
+
+[[rule]]
+id = "openai/gpt-6-luna"
+models = ["gpt-6-luna"]
+rates = { input = 0.10, output = 0.50, cache_read = 0.01, cache_write_short = 0.125, cache_write_long = 0.25 }
+tier = [
+  { above_prompt_tokens = 272000, rates = { input = 0.20, output = 0.75, cache_read = 0.02, cache_write_short = 0.25, cache_write_long = 0.50 } },
+]
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, fast = { factor = 2.0 } }
+
+[[rule]]
+id = "openai/gpt-6-sol"
+models = ["gpt-6-sol"]
+rates = { input = 2.0, output = 10.0, cache_read = 0.20, cache_write_short = 2.5, cache_write_long = 5.0 }
+tier = [
+  { above_prompt_tokens = 272000, rates = { input = 4.0, output = 15.0, cache_read = 0.40, cache_write_short = 5.0, cache_write_long = 10.0 } },
+]
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, fast = { factor = 2.0 } }
+
+# Promotional price "available until November 30, 2026". The post-promotion price is
+# not published, so events from 2026-12-01 are unpriced until the catalogue is updated.
+[[rule]]
+id = "openai/gpt-5.6-sol-promo"
+models = ["gpt-5.6-sol"]
+until = "2026-12-01"
+rates = { input = 4.0, output = 20.0, cache_read = 0.40, cache_write_short = 5.0, cache_write_long = 10.0 }
+tier = [
+  { above_prompt_tokens = 272000, rates = { input = 8.0, output = 30.0, cache_read = 0.80, cache_write_short = 10.0, cache_write_long = 20.0 } },
+]
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, fast = { factor = 2.0 } }
+
+[[rule]]
+id = "openai/gpt-5.6-terra"
+models = ["gpt-5.6-terra"]
+rates = { input = 2.0, output = 12.0, cache_read = 0.20, cache_write_short = 2.5, cache_write_long = 5.0 }
+tier = [
+  { above_prompt_tokens = 272000, rates = { input = 4.0, output = 18.0, cache_read = 0.40, cache_write_short = 5.0, cache_write_long = 10.0 } },
+]
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, fast = { factor = 2.0 } }
+
+[[rule]]
+id = "openai/gpt-5.6-luna"
+models = ["gpt-5.6-luna"]
+rates = { input = 0.20, output = 1.20, cache_read = 0.02, cache_write_short = 0.25, cache_write_long = 0.50 }
+tier = [
+  { above_prompt_tokens = 272000, rates = { input = 0.40, output = 1.80, cache_read = 0.04, cache_write_short = 0.50, cache_write_long = 1.0 } },
+]
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, fast = { factor = 2.0 } }
+
+# No cache-write prices are published for GPT-5.5 and earlier.
+[[rule]]
+id = "openai/gpt-5.5"
+models = ["gpt-5.5"]
+rates = { input = 5.0, output = 30.0, cache_read = 0.50 }
+tier = [
+  { above_prompt_tokens = 272000, rates = { input = 10.0, output = 45.0, cache_read = 1.0 } },
+]
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, fast = { factor = 2.5 } }
+
+[[rule]]
+id = "openai/gpt-5.x-pro"
+models = ["gpt-5.5-pro", "gpt-5.4-pro"]
+rates = { input = 30.0, output = 180.0 }
+tier = [
+  { above_prompt_tokens = 272000, rates = { input = 60.0, output = 270.0 } },
+]
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 } }
+
+# Batch cached input is displayed as $0.13 on the page: 0.25 x 0.5 = 0.125 (rounded).
+[[rule]]
+id = "openai/gpt-5.4"
+models = ["gpt-5.4"]
+rates = { input = 2.5, output = 15.0, cache_read = 0.25 }
+tier = [
+  { above_prompt_tokens = 272000, rates = { input = 5.0, output = 22.5, cache_read = 0.50 } },
+]
+modifiers = { batch = { factor = 0.5 }, flex = { factor = 0.5 }, fast = { factor = 2.0 } }
+
+# Specialized models: only Standard (and Fast for Codex) are published; no long context.
+[[rule]]
+id = "openai/gpt-5.3-codex"
+models = ["gpt-5.3-codex"]
+rates = { input = 1.75, output = 14.0, cache_read = 0.175 }
+modifiers = { fast = { factor = 2.0 } }
+
+[[rule]]
+id = "openai/chat-latest"
+models = ["chat-latest"]
+rates = { input = 5.0, output = 30.0, cache_read = 0.50 }
