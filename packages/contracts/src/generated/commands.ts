@@ -2,8 +2,14 @@
 import type { AppInfo } from "./AppInfo";
 import type { AppInfoRequest } from "./AppInfoRequest";
 import type { ListSourcesRequest } from "./ListSourcesRequest";
+import type { Overview } from "./Overview";
+import type { OverviewRequest } from "./OverviewRequest";
 import type { RescanAccepted } from "./RescanAccepted";
 import type { RescanRequest } from "./RescanRequest";
+import type { SessionDetail } from "./SessionDetail";
+import type { SessionList } from "./SessionList";
+import type { SessionRequest } from "./SessionRequest";
+import type { SessionsRequest } from "./SessionsRequest";
 import type { SetSourceEnabledRequest } from "./SetSourceEnabledRequest";
 import type { SourceList } from "./SourceList";
 import type { SourceSummary } from "./SourceSummary";
@@ -14,6 +20,9 @@ export interface CommandMap {
   list_sources: { request: ListSourcesRequest; response: SourceList };
   set_source_enabled: { request: SetSourceEnabledRequest; response: SourceSummary };
   request_rescan: { request: RescanRequest; response: RescanAccepted };
+  get_overview: { request: OverviewRequest; response: Overview };
+  list_sessions: { request: SessionsRequest; response: SessionList };
+  get_session: { request: SessionRequest; response: SessionDetail };
 }
 
 export type CommandName = keyof CommandMap;
@@ -23,4 +32,7 @@ export const COMMAND_NAMES = [
   "list_sources",
   "set_source_enabled",
   "request_rescan",
+  "get_overview",
+  "list_sessions",
+  "get_session",
 ] as const satisfies readonly CommandName[];

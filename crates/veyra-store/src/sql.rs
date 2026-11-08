@@ -1,8 +1,38 @@
 //! SQL fragments and value conversions shared by writes, rollups and reads.
 
+use std::sync::LazyLock;
+
 use rusqlite::types::Value;
 
 use crate::StoreError;
+
+/// The additive sums of a group of events (alias `e`, costs `c`), in
+/// [`ROLLUP_SUM_COLUMNS`] order. Shared by the rollup rebuild and the session reads, so a
+/// session's totals are computed exactly like a bucket's.
+pub static EVENT_SUMS_SELECT: LazyLock<String> = LazyLock::new(|| {
+    let total = EVENT_TOTAL_TOKENS;
+    let by_accuracy = |class: &str| {
+        format!("COALESCE(SUM(CASE WHEN e.acc_tokens = '{class}' THEN {total} ELSE 0 END), 0)")
+    };
+    format!(
+        "COUNT(*), SUM(e.request_count), SUM(e.input_uncached), SUM(e.cache_read), \
+         SUM(e.cache_write_short), SUM(e.cache_write_long), SUM(e.cache_write_unspecified), \
+         SUM(e.output_total), SUM(e.reasoning), SUM(e.tool_tokens), SUM(e.reported_cost_nusd), \
+         COALESCE(SUM(c.input_nusd), 0), COALESCE(SUM(c.cache_read_nusd), 0), \
+         COALESCE(SUM(c.cache_write_nusd), 0), COALESCE(SUM(c.output_nusd), 0), \
+         COALESCE(SUM(c.total_nusd), 0), SUM(c.cache_read_saving_nusd), \
+         SUM(c.cache_write_overhead_nusd), COALESCE(SUM(c.status = 'priced'), 0), \
+         COALESCE(SUM(c.status = 'partial'), 0), COALESCE(SUM(c.status = 'unpriced-model'), 0), \
+         COALESCE(SUM({total}), 0), \
+         COALESCE(SUM(CASE WHEN c.status IN ('priced', 'partial') THEN {total} ELSE 0 END), 0), \
+         {exact}, {provider}, {partial}, {estimated}, {unsupported}",
+        exact = by_accuracy("exact"),
+        provider = by_accuracy("provider-reported"),
+        partial = by_accuracy("partial"),
+        estimated = by_accuracy("estimated"),
+        unsupported = by_accuracy("unsupported"),
+    )
+});
 
 /// Every stored column of `usage_events` except `id` and `dedup_key`, in binding order.
 pub const EVENT_COLUMNS: [&str; 36] = [

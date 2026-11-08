@@ -7,6 +7,9 @@
     "allow-get-app-info",
     "allow-list-sources",
     "allow-set-source-enabled",
-    "allow-request-rescan"
+    "allow-request-rescan",
+    "allow-get-overview",
+    "allow-list-sessions",
+    "allow-get-session"
   ]
 }

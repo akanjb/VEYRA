@@ -30,6 +30,11 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
     std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     let store = Arc::new(Store::open(&dir.join(DATABASE)).map_err(|e| e.to_string())?);
     let registry = Arc::new(Registry::bundled().map_err(|e| e.to_string())?);
+    let model_names = registry
+        .models()
+        .iter()
+        .map(|m| (m.id.as_str().to_owned(), m.name.clone()))
+        .collect();
     let connectors = veyra_connectors::all();
     let descriptors = connectors.iter().map(|c| c.descriptor().clone()).collect();
     let emitter = app.clone();
@@ -50,8 +55,10 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
     };
     let ingest = veyra_ingest::spawn(worker).map_err(|e| format!("cannot start ingestion: {e}"))?;
     Ok(DataServices {
-        sources: store,
+        sources: Arc::clone(&store) as _,
+        analytics: store,
         connectors: descriptors,
+        model_names,
         ingest: Box::new(ingest),
     })
 }

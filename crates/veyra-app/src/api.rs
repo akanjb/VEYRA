@@ -1,15 +1,20 @@
 //! The application facade: one method per use case, named after its command.
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock};
 
-use veyra_domain::source::{ConnectorDescriptor, IngestControl, SourceRecord, SourceRepository};
+use veyra_analytics::port::{ActivityReader, BaseSumsReader, LabelReader};
+use veyra_analytics::sessions::SessionReader;
+use veyra_domain::source::{ConnectorDescriptor, IngestControl, SourceRepository};
 use veyra_domain::time::UtcMillis;
 
 use crate::dto::{
-    AppInfo, AppInfoRequest, BuildProfile, ListSourcesRequest, RescanAccepted, RescanRequest,
+    AppInfo, AppInfoRequest, BuildProfile, ListSourcesRequest, Overview, OverviewRequest,
+    RescanAccepted, RescanRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
     SetSourceEnabledRequest, SourceList, SourceSummary,
 };
 use crate::error::ApiError;
+use crate::{scope, views};
 
 /// Static facts about the build, supplied by the composition root.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,11 +24,25 @@ pub struct AppMetadata {
     pub build_profile: BuildProfile,
 }
 
+/// Every analytics read port, as one object (implemented by the store).
+pub trait AnalyticsReader:
+    BaseSumsReader + ActivityReader + SessionReader + LabelReader + Send + Sync
+{
+}
+
+impl<T> AnalyticsReader for T where
+    T: BaseSumsReader + ActivityReader + SessionReader + LabelReader + Send + Sync
+{
+}
+
 /// The database and ingestion ports, attached once they have started.
 pub struct DataServices {
     pub sources: Arc<dyn SourceRepository>,
+    pub analytics: Arc<dyn AnalyticsReader>,
     /// Descriptors of every connector in this build.
     pub connectors: Vec<ConnectorDescriptor>,
+    /// Display names of known models, by canonical id (from the registry).
+    pub model_names: BTreeMap<String, String>,
     pub ingest: Box<dyn IngestControl>,
 }
 
@@ -38,31 +57,8 @@ impl std::fmt::Debug for DataServices {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DataServices")
             .field("connectors", &self.connectors.len())
+            .field("model_names", &self.model_names.len())
             .finish_non_exhaustive()
-    }
-}
-
-impl DataServices {
-    fn summary(&self, record: &SourceRecord) -> SourceSummary {
-        let descriptor = self
-            .connectors
-            .iter()
-            .find(|d| d.id.as_str() == record.connector_id);
-        SourceSummary {
-            id: record.id,
-            connector_id: record.connector_id.clone(),
-            display_name: descriptor.map_or_else(
-                || record.connector_id.clone(),
-                |d| d.display_name.to_owned(),
-            ),
-            root: record.root.clone(),
-            enabled: record.enabled,
-            documented_format: descriptor.is_some_and(|d| d.documented_format),
-            consented_at: record.consented_at.map(|t| t.0),
-            last_scan_at: record.last_scan_at.map(|t| t.0),
-            last_success_at: record.last_success_at.map(|t| t.0),
-            last_error: record.last_error.clone(),
-        }
     }
 }
 
@@ -117,16 +113,12 @@ impl Api {
         })
     }
 
-    /// Lists every usage source found on this device, enabled or not.
+    /// Lists every usage source found on this device, enabled or not, with its health.
     ///
     /// # Errors
     /// [`ApiError::Busy`] while starting; [`ApiError::Internal`] on database failure.
     pub fn list_sources(&self, _request: ListSourcesRequest) -> Result<SourceList, ApiError> {
-        let data = self.data()?;
-        let records = data.sources.sources().map_err(|e| ApiError::internal(&e))?;
-        Ok(SourceList {
-            sources: records.iter().map(|r| data.summary(r)).collect(),
-        })
+        views::sources::list(self.data()?, now())
     }
 
     /// Enables (recording consent) or disables a source, then lets ingestion react: an
@@ -148,7 +140,11 @@ impl Api {
                 message: format!("source {} does not exist", request.source_id),
             })?;
         data.ingest.sources_changed();
-        Ok(data.summary(&record))
+        Ok(views::sources::list(data, now())?
+            .sources
+            .into_iter()
+            .find(|s| s.id == record.id)
+            .unwrap_or_else(|| views::sources::summary(data, &record, None, 0)))
     }
 
     /// Queues a scan of every enabled source; changes arrive as `data-changed` events.
@@ -159,10 +155,48 @@ impl Api {
         self.data()?.ingest.request_scan();
         Ok(RescanAccepted {})
     }
+
+    /// The Overview page for a scope: headline numbers with comparisons, accuracy, the
+    /// daily trend by application, model and project rankings, calendar and hours.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn get_overview(&self, request: OverviewRequest) -> Result<Overview, ApiError> {
+        let OverviewRequest { scope: requested } = request;
+        let resolved = scope::resolve(&requested)?;
+        views::overview::overview(self.data()?, &resolved)
+    }
+
+    /// One page of sessions with activity in the scope, in the requested order.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope or page; [`ApiError::Busy`] while
+    /// starting; [`ApiError::Internal`] on database failure.
+    pub fn list_sessions(&self, request: SessionsRequest) -> Result<SessionList, ApiError> {
+        let SessionsRequest {
+            scope: requested,
+            sort,
+            page,
+            page_size,
+        } = request;
+        let resolved = scope::resolve(&requested)?;
+        views::sessions::list(self.data()?, &resolved, sort, page, page_size)
+    }
+
+    /// A whole session: totals, the request timeline with tool names, and its subagents.
+    ///
+    /// # Errors
+    /// [`ApiError::NotFound`] for an unknown session; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn get_session(&self, request: SessionRequest) -> Result<SessionDetail, ApiError> {
+        views::sessions::detail(self.data()?, request.id)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -173,7 +207,9 @@ mod tests {
     use super::{Api, AppMetadata, DataServices};
     use crate::ApiError;
     use crate::dto::{
-        AppInfoRequest, BuildProfile, ListSourcesRequest, RescanRequest, SetSourceEnabledRequest,
+        AppInfoRequest, BuildProfile, Comparison, ListSourcesRequest, OverviewRequest,
+        RescanRequest, Scope, ScopeFilters, SessionRequest, SessionSort, SessionsRequest,
+        SetSourceEnabledRequest,
     };
 
     fn api() -> Api {
@@ -212,14 +248,26 @@ mod tests {
         assert!(
             api.attach(Ok(DataServices {
                 sources: Arc::clone(&store) as _,
+                analytics: Arc::clone(&store) as _,
                 connectors: veyra_connectors::all()
                     .iter()
                     .map(|c| c.descriptor().clone())
                     .collect(),
+                model_names: BTreeMap::new(),
                 ingest: Box::new(FakeIngest(Arc::clone(&calls))),
             }))
         );
         (api, store, calls, dir)
+    }
+
+    fn day_scope(tz: &str) -> Scope {
+        Scope {
+            time_zone: tz.to_owned(),
+            start: "2026-11-08".to_owned(),
+            end: "2026-11-08".to_owned(),
+            comparison: Comparison::Previous,
+            filters: ScopeFilters::default(),
+        }
     }
 
     #[test]
@@ -268,6 +316,7 @@ mod tests {
         assert!(!listed[0].enabled);
         assert!(!listed[0].documented_format);
         assert_eq!(listed[0].consented_at, None);
+        assert_eq!((listed[0].files_active, listed[0].events), (0, 0));
 
         let enabled = api
             .set_source_enabled(SetSourceEnabledRequest {
@@ -289,6 +338,43 @@ mod tests {
 
         api.request_rescan(RescanRequest {}).unwrap();
         assert_eq!(calls.scans.load(Ordering::Relaxed), 1);
+        drop((api, store));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn analytics_commands_validate_and_handle_an_empty_database() {
+        let (api, store, _calls, dir) = attached("empty");
+        let overview = api
+            .get_overview(OverviewRequest {
+                scope: day_scope("UTC"),
+            })
+            .unwrap();
+        assert_eq!(overview.kpis.sessions.value, Some(0.0));
+        assert_eq!(overview.daily.len(), 1);
+        assert_eq!(overview.calendar.len(), 365);
+        assert_eq!(overview.hours.len(), 7 * 24);
+        assert_eq!(overview.models.len(), 0);
+
+        assert!(matches!(
+            api.get_overview(OverviewRequest {
+                scope: day_scope("Nowhere/Invalid"),
+            }),
+            Err(ApiError::Validation { .. })
+        ));
+        assert!(matches!(
+            api.list_sessions(SessionsRequest {
+                scope: day_scope("UTC"),
+                sort: SessionSort::LastActive,
+                page: 0,
+                page_size: 0,
+            }),
+            Err(ApiError::Validation { .. })
+        ));
+        assert!(matches!(
+            api.get_session(SessionRequest { id: 42 }),
+            Err(ApiError::NotFound { .. })
+        ));
         drop((api, store));
         let _ = std::fs::remove_dir_all(dir);
     }

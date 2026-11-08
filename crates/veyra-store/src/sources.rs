@@ -3,9 +3,10 @@
 use std::collections::{HashMap, HashSet};
 
 use rusqlite::{OptionalExtension, Row, params};
-use veyra_domain::source::{PortError, SourceRecord, SourceRepository};
+use veyra_domain::source::{PortError, SourceHealth, SourceRecord, SourceRepository};
 use veyra_domain::time::UtcMillis;
 
+use crate::sql::count_from;
 use crate::{Store, StoreError};
 
 impl SourceRepository for Store {
@@ -20,6 +21,10 @@ impl SourceRepository for Store {
         now: UtcMillis,
     ) -> Result<Option<SourceRecord>, PortError> {
         Ok(Self::set_source_enabled(self, id, enabled, now)?)
+    }
+
+    fn health(&self, since: UtcMillis) -> Result<Vec<SourceHealth>, PortError> {
+        Ok(self.source_health(since)?)
     }
 }
 
@@ -89,6 +94,63 @@ impl Store {
             params![connector_id, root],
             source_from,
         )?)
+    }
+
+    /// Ingestion health of every source: file counts, last read, and the issues found by
+    /// runs started at or after `since`.
+    ///
+    /// # Errors
+    /// Returns [`StoreError`] on database failure.
+    pub fn source_health(&self, since: UtcMillis) -> Result<Vec<SourceHealth>, StoreError> {
+        self.with_reader(|connection| {
+            let mut health: Vec<SourceHealth> = connection
+                .prepare_cached(
+                    "SELECT s.id, \
+                     COALESCE(SUM(f.state = 'active'), 0), COALESCE(SUM(f.state = 'missing'), 0), \
+                     MAX(f.last_ingested_at) \
+                     FROM sources s LEFT JOIN source_files f ON f.source_id = s.id \
+                     GROUP BY s.id ORDER BY s.id",
+                )?
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, i64>(2)?,
+                        row.get::<_, Option<i64>>(3)?,
+                    ))
+                })?
+                .map(|row| {
+                    let (source_id, active, missing, last) = row?;
+                    Ok(SourceHealth {
+                        source_id,
+                        files_active: count_from(Some(active), "file count")?.unwrap_or(0),
+                        files_missing: count_from(Some(missing), "file count")?.unwrap_or(0),
+                        last_ingested_at: last.map(UtcMillis),
+                        recent_issues: Vec::new(),
+                    })
+                })
+                .collect::<Result<_, StoreError>>()?;
+            let mut statement = connection.prepare_cached(
+                "SELECT source_id, kind, SUM(occurrences) FROM ingest_issues \
+                 WHERE run_id IN (SELECT id FROM ingest_runs WHERE started_at >= ?1) \
+                 GROUP BY source_id, kind ORDER BY source_id, kind",
+            )?;
+            let rows = statement.query_map([since.0], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })?;
+            for row in rows {
+                let (source_id, kind, occurrences) = row?;
+                if let Some(entry) = health.iter_mut().find(|h| h.source_id == source_id) {
+                    let occurrences = count_from(Some(occurrences), "issue count")?.unwrap_or(0);
+                    entry.recent_issues.push((kind, occurrences));
+                }
+            }
+            Ok(health)
+        })
     }
 
     /// Every known source.

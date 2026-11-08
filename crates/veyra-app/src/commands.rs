@@ -16,6 +16,9 @@ macro_rules! for_each_command {
             list_sources($crate::dto::ListSourcesRequest) -> $crate::dto::SourceList;
             set_source_enabled($crate::dto::SetSourceEnabledRequest) -> $crate::dto::SourceSummary;
             request_rescan($crate::dto::RescanRequest) -> $crate::dto::RescanAccepted;
+            get_overview($crate::dto::OverviewRequest) -> $crate::dto::Overview;
+            list_sessions($crate::dto::SessionsRequest) -> $crate::dto::SessionList;
+            get_session($crate::dto::SessionRequest) -> $crate::dto::SessionDetail;
         }
     };
 }

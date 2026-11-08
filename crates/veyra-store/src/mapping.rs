@@ -31,7 +31,7 @@ fn corrupt(what: impl std::fmt::Display) -> StoreError {
     StoreError::Corrupt(what.to_string())
 }
 
-fn accuracy(row: &Row<'_>, index: usize) -> Result<Accuracy, StoreError> {
+pub(crate) fn accuracy(row: &Row<'_>, index: usize) -> Result<Accuracy, StoreError> {
     let value: String = row.get(index)?;
     Accuracy::parse(&value).ok_or_else(|| corrupt(format!("accuracy `{value}`")))
 }

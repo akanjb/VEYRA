@@ -1,0 +1,253 @@
+//! Contract tests (M3): the Overview and Sessions commands return exactly what the
+//! analytics engine computes for the same scope, on data ingested from the Claude Code
+//! fixtures through the real pipeline.
+
+#![allow(
+    clippy::unwrap_used,
+    reason = "integration tests: a failure aborts the test"
+)]
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+
+use jiff::tz::TimeZone;
+use veyra_analytics::dimension::Filters;
+use veyra_analytics::engine::evaluate;
+use veyra_analytics::metrics::{MetricId, MetricValue};
+use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
+use veyra_app::dto::{
+    Comparison, OverviewRequest, Scope, ScopeFilters, SessionRequest, SessionSort, SessionsRequest,
+};
+use veyra_app::{Api, AppMetadata, DataServices};
+use veyra_domain::source::{DiscoveryEnv, IngestControl};
+use veyra_ingest::{DEFAULT_CHUNK_BYTES, IngestContext, discover, scan_all};
+use veyra_registry::Registry;
+use veyra_store::Store;
+
+struct NoIngest;
+
+impl IngestControl for NoIngest {
+    fn request_scan(&self) {}
+    fn sources_changed(&self) {}
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+/// A database holding the ingested fixtures, removed on drop.
+struct Ingested {
+    dir: PathBuf,
+    store: Arc<Store>,
+}
+
+impl Drop for Ingested {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+fn ingested(name: &str) -> Ingested {
+    let dir = std::env::temp_dir().join(format!("veyra-contract-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    copy_tree(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/claude-code/v2.1/projects"),
+        &dir.join("home/.claude/projects"),
+    );
+    let store = Arc::new(Store::open(&dir.join("veyra.db")).unwrap());
+    let registry = Registry::bundled().unwrap();
+    let connectors = veyra_connectors::all();
+    let env = DiscoveryEnv {
+        home: Some(dir.join("home")),
+        location_overrides: BTreeMap::new(),
+    };
+    for source in discover(&store, &connectors, &env).unwrap() {
+        store
+            .set_source_enabled(source.id, true, veyra_ingest::now())
+            .unwrap();
+    }
+    let cancel = AtomicBool::new(false);
+    let report = scan_all(
+        &IngestContext {
+            store: &store,
+            registry: &registry,
+            connectors: &connectors,
+            cancel: &cancel,
+            chunk_bytes: DEFAULT_CHUNK_BYTES,
+            throttle: None,
+        },
+        "manual",
+    )
+    .unwrap();
+    assert_eq!(report.inserted, 4, "the fixtures hold four requests");
+    Ingested { dir, store }
+}
+
+fn api(store: &Arc<Store>) -> Api {
+    let api = Api::new(AppMetadata {
+        product_name: "Veyra".to_owned(),
+        version: "0.0.0".to_owned(),
+        build_profile: veyra_app::dto::BuildProfile::Debug,
+    });
+    let registry = Registry::bundled().unwrap();
+    assert!(
+        api.attach(Ok(DataServices {
+            sources: Arc::clone(store) as _,
+            analytics: Arc::clone(store) as _,
+            connectors: veyra_connectors::all()
+                .iter()
+                .map(|c| c.descriptor().clone())
+                .collect(),
+            model_names: registry
+                .models()
+                .iter()
+                .map(|m| (m.id.as_str().to_owned(), m.name.clone()))
+                .collect(),
+            ingest: Box::new(NoIngest),
+        }))
+    );
+    api
+}
+
+/// The fixture day, 2026-11-08, in UTC.
+fn scope() -> Scope {
+    Scope {
+        time_zone: "UTC".to_owned(),
+        start: "2026-11-08".to_owned(),
+        end: "2026-11-08".to_owned(),
+        comparison: Comparison::Previous,
+        filters: ScopeFilters::default(),
+    }
+}
+
+fn engine_value(store: &Store, metric: MetricId) -> Option<f64> {
+    let first = "2026-11-08".parse().unwrap();
+    let result = evaluate(
+        store,
+        &QuerySpec {
+            period: Period::local_days(first, 1, &TimeZone::UTC).unwrap(),
+            comparison: None,
+            filters: Filters::new(),
+            group_by: vec![],
+            grain: TimeGrain::Total,
+            time_zone: TimeZone::UTC,
+        },
+    )
+    .unwrap();
+    metric.compute(&result.totals).map(MetricValue::as_f64)
+}
+
+#[test]
+fn overview_numbers_equal_the_metric_engine() {
+    let data = ingested("overview");
+    let overview = api(&data.store)
+        .get_overview(OverviewRequest { scope: scope() })
+        .unwrap();
+    let k = &overview.kpis;
+    for (kpi, metric) in [
+        (k.tokens, MetricId::TotalTokens),
+        (k.cost_nano_usd, MetricId::ApiEquivalentCost),
+        (k.requests, MetricId::Requests),
+        (k.cache_hit_ratio, MetricId::CacheHitRatio),
+    ] {
+        assert_eq!(kpi.value, engine_value(&data.store, metric), "{metric:?}");
+        assert!(kpi.value.is_some(), "{metric:?} is reported");
+    }
+    // Nothing was recorded the day before: not reported, never shown as zero.
+    assert_eq!(k.tokens.previous, None);
+    assert_eq!(k.tokens.change, None);
+    assert_eq!(
+        k.sessions.value,
+        Some(2.0),
+        "a main session and its subagent"
+    );
+    assert!(k.active_ms.value.unwrap() > 0.0);
+
+    // The daily trend, the model ranking and the calendar add up to the headline.
+    let tokens = k.tokens.value.unwrap();
+    let daily: u64 = overview
+        .daily
+        .iter()
+        .flat_map(|d| d.values.iter().map(|v| v.tokens))
+        .sum();
+    let ranked: u64 = overview.models.iter().map(|m| m.measures.tokens).sum();
+    let calendar: u64 = overview.calendar.iter().map(|d| d.tokens).sum();
+    let hours: u64 = overview.hours.iter().map(|h| h.tokens).sum();
+    #[allow(clippy::cast_precision_loss, reason = "comparing with an f64 KPI")]
+    for (part, name) in [
+        (daily, "daily"),
+        (ranked, "models"),
+        (calendar, "calendar"),
+        (hours, "hours"),
+    ] {
+        assert_eq!(part as f64, tokens, "{name}");
+    }
+    assert_eq!(overview.apps, ["claude-code"]);
+    let labels: Vec<&str> = overview.models.iter().map(|m| m.label.as_str()).collect();
+    assert_eq!(labels.len(), 2);
+    assert!(
+        overview
+            .models
+            .iter()
+            .all(|m| m.provider.as_deref() == Some("anthropic"))
+    );
+    assert_eq!(overview.composition.exact, 1.0);
+    assert_eq!(overview.projects.len(), 1);
+    assert!(overview.projects[0].label.contains("work/demo"));
+}
+
+#[test]
+fn sessions_and_their_timelines_match_the_overview() {
+    let data = ingested("sessions");
+    let api = api(&data.store);
+    let list = api
+        .list_sessions(SessionsRequest {
+            scope: scope(),
+            sort: SessionSort::Tokens,
+            page: 0,
+            page_size: 50,
+        })
+        .unwrap();
+    assert_eq!(list.total, 2);
+    let main = list.rows.iter().find(|r| !r.is_subagent).unwrap();
+    let sub = list.rows.iter().find(|r| r.is_subagent).unwrap();
+    assert_eq!(sub.parent_id, Some(main.id));
+    assert_eq!(main.events, 3);
+    // req_C reported an inconsistent cache-write split: priced with an assumption.
+    assert!(main.cost_assumptions);
+    assert!(!sub.cost_assumptions);
+    assert_eq!(main.unpriced_requests + sub.unpriced_requests, 0);
+
+    let overview = api
+        .get_overview(OverviewRequest { scope: scope() })
+        .unwrap();
+    let listed: u64 = list.rows.iter().map(|r| r.measures.tokens).sum();
+    #[allow(clippy::cast_precision_loss, reason = "comparing with an f64 KPI")]
+    let listed = listed as f64;
+    assert_eq!(Some(listed), overview.kpis.tokens.value);
+
+    let detail = api.get_session(SessionRequest { id: main.id }).unwrap();
+    assert_eq!(detail.session.measures, main.measures);
+    assert_eq!(detail.events.len(), 3);
+    assert_eq!(detail.subagents.len(), 1);
+    let tools: Vec<&str> = detail
+        .events
+        .iter()
+        .flat_map(|e| e.tools.iter().map(|t| t.name.as_str()))
+        .collect();
+    assert!(tools.contains(&"Bash"), "{tools:?}");
+    let events_total: u64 = detail.events.iter().map(|e| e.tokens.total).sum();
+    assert_eq!(events_total, main.measures.tokens);
+}

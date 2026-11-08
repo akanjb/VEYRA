@@ -336,6 +336,29 @@ fn deleted_logs_keep_their_history() {
 }
 
 #[test]
+fn source_health_reports_files_and_the_latest_issues() {
+    let fixture = Fixture::new().enabled();
+    fixture.scan();
+    let health = fixture.store.source_health(UtcMillis(0)).unwrap();
+    assert_eq!(health.len(), 1);
+    assert_eq!((health[0].files_active, health[0].files_missing), (2, 0));
+    assert!(health[0].last_ingested_at.is_some());
+    assert!(
+        health[0]
+            .recent_issues
+            .iter()
+            .any(|(kind, n)| kind == "malformed-json" && *n >= 1),
+        "{:?}",
+        health[0].recent_issues
+    );
+
+    std::fs::remove_file(fixture.projects().join(SUBAGENT)).unwrap();
+    fixture.scan();
+    let health = fixture.store.source_health(UtcMillis(0)).unwrap();
+    assert_eq!((health[0].files_active, health[0].files_missing), (1, 1));
+}
+
+#[test]
 fn a_disabled_source_is_not_read_again() {
     let fixture = Fixture::new().enabled();
     fixture.scan();

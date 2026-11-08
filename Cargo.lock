@@ -3823,12 +3823,16 @@ dependencies = [
 name = "veyra-app"
 version = "0.1.0"
 dependencies = [
+ "jiff",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
  "ts-rs",
+ "veyra-analytics",
  "veyra-connectors",
  "veyra-domain",
+ "veyra-ingest",
+ "veyra-registry",
  "veyra-store",
 ]
 

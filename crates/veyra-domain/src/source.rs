@@ -142,6 +142,27 @@ pub trait SourceRepository: Send + Sync {
         enabled: bool,
         now: UtcMillis,
     ) -> Result<Option<SourceRecord>, PortError>;
+
+    /// Ingestion health of every registered source, with issues found since `since`.
+    ///
+    /// # Errors
+    /// Returns [`PortError`] when persistence fails.
+    fn health(&self, since: UtcMillis) -> Result<Vec<SourceHealth>, PortError>;
+}
+
+/// How ingestion of one source is going.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SourceHealth {
+    pub source_id: i64,
+    /// Files being read.
+    pub files_active: u64,
+    /// Files that disappeared; their events are kept.
+    pub files_missing: u64,
+    /// When a file of this source was last read.
+    pub last_ingested_at: Option<UtcMillis>,
+    /// Problems found by runs started in the requested window, per kind:
+    /// `(kind, occurrences)`.
+    pub recent_issues: Vec<(String, u64)>,
 }
 
 /// Control of background ingestion (implemented by the ingest worker).

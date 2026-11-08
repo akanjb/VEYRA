@@ -48,8 +48,20 @@ fn invoke(window: &WebviewWindow<MockRuntime>, cmd: &str) -> Result<Value, Strin
 
 /// A well-formed request body for each command.
 fn valid_request(cmd: &str) -> Value {
+    let scope = json!({
+        "timeZone": "UTC",
+        "start": "2026-11-01",
+        "end": "2026-11-08",
+        "comparison": "previous",
+        "filters": { "providers": [], "models": [], "apps": [], "interfaces": [], "projects": [] }
+    });
     match cmd {
         "set_source_enabled" => json!({ "sourceId": 1, "enabled": false }),
+        "get_overview" => json!({ "scope": scope }),
+        "list_sessions" => {
+            json!({ "scope": scope, "sort": "lastActive", "page": 0, "pageSize": 50 })
+        }
+        "get_session" => json!({ "id": 1 }),
         _ => json!({}),
     }
 }

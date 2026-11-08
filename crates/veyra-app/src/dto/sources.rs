@@ -36,6 +36,30 @@ pub struct SourceSummary {
     pub last_success_at: Option<i64>,
     /// Why the last scan failed, if it did.
     pub last_error: Option<String>,
+    /// Log files being read.
+    #[ts(type = "number")]
+    pub files_active: u64,
+    /// Log files that disappeared; their usage is kept.
+    #[ts(type = "number")]
+    pub files_missing: u64,
+    /// When a file of this source was last read.
+    #[ts(type = "number | null")]
+    pub last_ingested_at: Option<i64>,
+    /// Requests stored from this source's application, all time.
+    #[ts(type = "number")]
+    pub events: u64,
+    /// Problems found in the last 7 days, per kind (never content).
+    pub recent_issues: Vec<IssueCount>,
+}
+
+/// How often one kind of problem occurred.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueCount {
+    /// Stable identifier, e.g. `malformed-json`.
+    pub kind: String,
+    #[ts(type = "number")]
+    pub occurrences: u64,
 }
 
 /// Request for [`crate::Api::set_source_enabled`]. Enabling records the user's consent.

@@ -37,3 +37,37 @@ pub trait BaseSumsReader {
     /// Returns [`ReadError`] when the underlying store fails.
     fn read_base_sums(&self, query: &BaseSumsQuery) -> Result<Vec<BaseSumsRow>, ReadError>;
 }
+
+/// Events in `[from, until)` matching the filters, for activity metrics.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EventTimesQuery {
+    pub from: UtcMillis,
+    pub until: UtcMillis,
+    pub filters: Filters,
+}
+
+/// Event timestamps per session (implemented by the data layer).
+pub trait ActivityReader {
+    /// `(session id, occurred_at)` of matching events, ordered by session and then time.
+    /// Events without a session are omitted.
+    ///
+    /// # Errors
+    /// Returns [`ReadError`] when the underlying store fails.
+    fn event_times(&self, query: &EventTimesQuery) -> Result<Vec<(i64, UtcMillis)>, ReadError>;
+}
+
+/// A project as stored: its id (the analytics dimension value) and normalised path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectLabel {
+    pub id: i64,
+    pub path: String,
+}
+
+/// Human-readable labels for dimension values stored as ids.
+pub trait LabelReader {
+    /// Every known project.
+    ///
+    /// # Errors
+    /// Returns [`ReadError`] when the underlying store fails.
+    fn projects(&self) -> Result<Vec<ProjectLabel>, ReadError>;
+}

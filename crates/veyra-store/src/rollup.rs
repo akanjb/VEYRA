@@ -14,43 +14,25 @@ use std::sync::LazyLock;
 use rusqlite::Transaction;
 
 use crate::StoreError;
-use crate::sql::{DIMENSIONS, EVENT_TOTAL_TOKENS, ROLLUP_SUM_COLUMNS, rollup_sums_select};
+use crate::sql::{DIMENSIONS, EVENT_SUMS_SELECT, ROLLUP_SUM_COLUMNS, rollup_sums_select};
 
 /// The affected buckets of the current batch.
 const AFFECTED: &str = "(SELECT bucket_start FROM temp.rollup_affected)";
 
 /// Aggregates the affected buckets' events into dimension rows (numbered by `slot`).
 static REBUILD_FULL_SQL: LazyLock<String> = LazyLock::new(|| {
-    let total = EVENT_TOTAL_TOKENS;
-    let by_accuracy = |class: &str| {
-        format!("COALESCE(SUM(CASE WHEN e.acc_tokens = '{class}' THEN {total} ELSE 0 END), 0)")
-    };
     format!(
         "INSERT INTO rollup_15m (bucket_start, slot, provider_id, model_id, app_id, interface, \
          gateway_id, project_id, device_id, {sums}) \
          SELECT e.bucket_start, ROW_NUMBER() OVER (PARTITION BY e.bucket_start), e.provider_id, \
-         e.model_id, e.app_id, e.interface, e.gateway_id, e.project_id, e.device_id, COUNT(*), \
-         SUM(e.request_count), SUM(e.input_uncached), SUM(e.cache_read), \
-         SUM(e.cache_write_short), SUM(e.cache_write_long), SUM(e.cache_write_unspecified), \
-         SUM(e.output_total), SUM(e.reasoning), SUM(e.tool_tokens), SUM(e.reported_cost_nusd), \
-         COALESCE(SUM(c.input_nusd), 0), COALESCE(SUM(c.cache_read_nusd), 0), \
-         COALESCE(SUM(c.cache_write_nusd), 0), COALESCE(SUM(c.output_nusd), 0), \
-         COALESCE(SUM(c.total_nusd), 0), SUM(c.cache_read_saving_nusd), \
-         SUM(c.cache_write_overhead_nusd), COALESCE(SUM(c.status = 'priced'), 0), \
-         COALESCE(SUM(c.status = 'partial'), 0), COALESCE(SUM(c.status = 'unpriced-model'), 0), \
-         COALESCE(SUM({total}), 0), \
-         COALESCE(SUM(CASE WHEN c.status IN ('priced', 'partial') THEN {total} ELSE 0 END), 0), \
-         {exact}, {provider}, {partial}, {estimated}, {unsupported} \
+         e.model_id, e.app_id, e.interface, e.gateway_id, e.project_id, e.device_id, \
+         {event_sums} \
          FROM usage_events e LEFT JOIN event_costs c ON c.event_id = e.id \
          WHERE e.bucket_start IN {AFFECTED} \
          GROUP BY e.bucket_start, e.provider_id, e.model_id, e.app_id, e.interface, \
          e.gateway_id, e.project_id, e.device_id",
         sums = ROLLUP_SUM_COLUMNS.join(", "),
-        exact = by_accuracy("exact"),
-        provider = by_accuracy("provider-reported"),
-        partial = by_accuracy("partial"),
-        estimated = by_accuracy("estimated"),
-        unsupported = by_accuracy("unsupported"),
+        event_sums = *EVENT_SUMS_SELECT,
     )
 });
 

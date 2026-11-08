@@ -146,7 +146,7 @@ fn plan(query: &BaseSumsQuery) -> Plan {
 }
 
 /// `(column IN (…) OR column IS NULL)` for the allowed values; binds into `values`.
-fn filter_clause(
+pub(crate) fn filter_clause(
     column: &str,
     integer: bool,
     allowed: &BTreeSet<DimensionValue>,
@@ -203,7 +203,7 @@ fn map_row(
 }
 
 /// Reads the rollup sums, which start at column `start`.
-fn sums_from(row: &Row<'_>, start: usize) -> Result<BaseSums, StoreError> {
+pub(crate) fn sums_from(row: &Row<'_>, start: usize) -> Result<BaseSums, StoreError> {
     let at = |column: &str| start + rollup_sum_index(column);
     let opt = |column: &str| -> Result<Option<u64>, StoreError> {
         count_from(row.get::<_, Option<i64>>(at(column))?, column)

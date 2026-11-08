@@ -555,3 +555,188 @@ mod ingestion {
             .unwrap();
     }
 }
+
+mod session_reads {
+    use veyra_analytics::activity::{DEFAULT_IDLE_THRESHOLD_MS, activity};
+    use veyra_analytics::dimension::{Dimension, Filters};
+    use veyra_analytics::port::{ActivityReader, EventTimesQuery, LabelReader};
+    use veyra_analytics::sessions::{SessionQuery, SessionReader, SessionSort};
+    use veyra_domain::identity::ModelId;
+    use veyra_domain::time::UtcMillis;
+    use veyra_domain::tooling::{ToolCall, ToolOutcome};
+    use veyra_store::IngestBatch;
+
+    use super::support::{NOV_8, TempDb, bundled_catalog, event, priced, tokens};
+    use super::{all_time, now};
+
+    const MIN: i64 = 60_000;
+
+    /// Session s1 (three requests, one with tools), its subagent s1:a (one request on
+    /// another model) and session s2 (one request), all on 2026-11-08.
+    fn seeded() -> TempDb {
+        let db = TempDb::new();
+        let catalog = bundled_catalog();
+        let mut events = Vec::new();
+        for (i, (minute, input)) in [(0, 100), (2, 200), (40, 300)].into_iter().enumerate() {
+            let mut priced_event = priced(
+                event(&format!("s1-{i}"), NOV_8 + minute * MIN, tokens(input, 10)),
+                &catalog,
+            );
+            if i == 1 {
+                priced_event.tool_calls = vec![
+                    ToolCall {
+                        id: "toolu_1".to_owned(),
+                        name: "Bash".to_owned(),
+                    },
+                    ToolCall {
+                        id: "toolu_2".to_owned(),
+                        name: "mcp__github__search".to_owned(),
+                    },
+                ];
+            }
+            events.push(priced_event);
+        }
+        let mut sub = event("sub-0", NOV_8 + 3 * MIN, tokens(1_000, 50));
+        sub.context.session_key = Some("claude-code:s1:a".to_owned());
+        sub.context.parent_session_key = Some("claude-code:s1".to_owned());
+        sub.context.is_subagent = true;
+        sub.attribution.model = Some(ModelId::new("claude-opus-5-5").unwrap());
+        sub.attribution.raw_model = Some("claude-opus-5-5".to_owned());
+        events.push(priced(sub, &catalog));
+        let mut other = event("s2-0", NOV_8 + 60 * MIN, tokens(5_000, 500));
+        other.context.session_key = Some("claude-code:s2".to_owned());
+        other.context.project_key = Some("/work/other".to_owned());
+        events.push(priced(other, &catalog));
+        db.store
+            .commit(
+                &IngestBatch {
+                    events,
+                    tool_outcomes: vec![ToolOutcome {
+                        tool_call_id: "toolu_1".to_owned(),
+                        is_error: true,
+                    }],
+                    checkpoint: None,
+                },
+                now(),
+            )
+            .unwrap();
+        db
+    }
+
+    fn day_query(sort: SessionSort) -> SessionQuery {
+        SessionQuery {
+            from: UtcMillis(NOV_8),
+            until: UtcMillis(NOV_8 + 24 * 60 * MIN),
+            filters: Filters::new(),
+            sort,
+            limit: 50,
+            offset: 0,
+        }
+    }
+
+    #[test]
+    fn lists_sessions_with_totals_that_add_up_to_the_rollups() {
+        let db = seeded();
+        let page = db.store.sessions(&day_query(SessionSort::Tokens)).unwrap();
+        assert_eq!(page.total, 3);
+        let keys: Vec<&str> = page.sessions.iter().map(|s| s.key.as_str()).collect();
+        assert_eq!(
+            keys,
+            ["claude-code:s2", "claude-code:s1:a", "claude-code:s1"]
+        );
+
+        let s1 = &page.sessions[2];
+        assert_eq!(s1.sums.events, 3);
+        assert_eq!(s1.sums.tokens.input_uncached, Some(600));
+        assert_eq!((s1.first_at.0, s1.last_at.0), (NOV_8, NOV_8 + 40 * MIN));
+        assert_eq!(s1.project.as_deref(), Some("/work/veyra"));
+        assert_eq!(s1.models, ["claude-sonnet-5-5"]);
+        assert!(page.sessions[1].is_subagent);
+        assert_eq!(page.sessions[1].parent_id, Some(s1.id));
+
+        let mut summed = veyra_analytics::sums::BaseSums::default();
+        for session in &page.sessions {
+            summed.merge(&session.sums);
+        }
+        assert_eq!(
+            summed,
+            all_time(&db.store),
+            "sessions add up to the rollups"
+        );
+    }
+
+    #[test]
+    fn filters_sorts_and_pages() {
+        let db = seeded();
+        let mut query = day_query(SessionSort::LastActive);
+        query.filters = Filters::new().with(Dimension::Model, [Some("claude-opus-5-5".to_owned())]);
+        let page = db.store.sessions(&query).unwrap();
+        assert_eq!(page.total, 1);
+        assert_eq!(page.sessions[0].key, "claude-code:s1:a");
+
+        let mut query = day_query(SessionSort::LastActive);
+        query.limit = 1;
+        query.offset = 1;
+        let page = db.store.sessions(&query).unwrap();
+        assert_eq!(page.total, 3);
+        assert_eq!(page.sessions.len(), 1);
+        assert_eq!(page.sessions[0].key, "claude-code:s1", "second most recent");
+    }
+
+    #[test]
+    fn a_session_shows_its_timeline_tools_and_subagents() {
+        let db = seeded();
+        let id = db
+            .store
+            .sessions(&day_query(SessionSort::Events))
+            .unwrap()
+            .sessions[0]
+            .id;
+        let detail = db.store.session(id).unwrap().unwrap();
+        assert_eq!(detail.summary.key, "claude-code:s1");
+        assert_eq!(detail.events.len(), 3);
+        assert!(detail.events.windows(2).all(|w| w[0].at <= w[1].at));
+        let tools = &detail.events[1].tools;
+        assert_eq!(tools.len(), 2);
+        assert_eq!(
+            (tools[0].name.as_str(), tools[0].is_error),
+            ("Bash", Some(true))
+        );
+        assert_eq!(tools[1].mcp_server.as_deref(), Some("github"));
+        assert!(detail.events.iter().all(|e| e.cost.is_some()), "all priced");
+        assert_eq!(detail.subagents.len(), 1);
+        assert_eq!(detail.subagents[0].key, "claude-code:s1:a");
+        assert!(db.store.session(999_999).unwrap().is_none());
+    }
+
+    #[test]
+    fn event_times_feed_session_count_and_active_time() {
+        let db = seeded();
+        let times = db
+            .store
+            .event_times(&EventTimesQuery {
+                from: UtcMillis(NOV_8),
+                until: UtcMillis(NOV_8 + 24 * 60 * MIN),
+                filters: Filters::new(),
+            })
+            .unwrap();
+        assert_eq!(times.len(), 5);
+        let result = activity(&times, DEFAULT_IDLE_THRESHOLD_MS);
+        assert_eq!(result.sessions, 3);
+        // s1: 0→2 (2 min) and 2→40 (capped at 5 min); s1:a and s2 have one event each.
+        assert_eq!(result.active_ms, 7 * MIN);
+    }
+
+    #[test]
+    fn labels_projects() {
+        let db = seeded();
+        let paths: Vec<String> = db
+            .store
+            .projects()
+            .unwrap()
+            .into_iter()
+            .map(|p| p.path)
+            .collect();
+        assert_eq!(paths, ["/work/other", "/work/veyra"]);
+    }
+}

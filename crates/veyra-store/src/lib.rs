@@ -13,6 +13,7 @@ mod migrations;
 mod reader;
 mod reprice;
 mod rollup;
+mod session_reads;
 mod sources;
 mod sql;
 mod write;
