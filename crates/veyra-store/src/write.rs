@@ -9,7 +9,9 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::LazyLock;
 
 use rusqlite::types::Value;
-use rusqlite::{OptionalExtension, Transaction, params, params_from_iter};
+use rusqlite::{
+    CachedStatement, OptionalExtension, Statement, Transaction, params, params_from_iter,
+};
 use veyra_domain::event::{EventContext, UsageEvent};
 use veyra_domain::identity::{GatewayId, ModelId, ProviderId};
 use veyra_domain::pricing::EventCost;
@@ -113,9 +115,10 @@ pub fn commit(
     let mut buckets = BTreeSet::new();
     let mut summary = WriteSummary::default();
 
+    let mut statements = EventStatements::prepare(&transaction)?;
     for priced in events {
         let fp = fingerprint(&priced.event, &priced.cost);
-        let event_id = match existing(&transaction, priced)? {
+        let event_id = match existing(&mut statements.existing, priced)? {
             Some(e) if e.fingerprint == fp => {
                 summary.unchanged += 1;
                 e.id
@@ -126,8 +129,8 @@ pub fn commit(
             }
             Some(e) => {
                 let values = event_values(&transaction, priced, fp, &mut keys, now)?;
-                update_event(&transaction, e.id, values)?;
-                upsert_cost(&transaction, e.id, &priced.cost)?;
+                update_event(&mut statements.update, e.id, values)?;
+                bind_cost(&mut statements.cost, e.id, &priced.cost)?;
                 buckets.insert(e.bucket);
                 buckets.insert(priced.event.occurred_at.bucket_start().0);
                 summary.updated += 1;
@@ -135,16 +138,18 @@ pub fn commit(
             }
             None => {
                 let values = event_values(&transaction, priced, fp, &mut keys, now)?;
-                let id = insert_event(&transaction, priced.event.dedup_key.as_str(), values)?;
-                upsert_cost(&transaction, id, &priced.cost)?;
+                let key = priced.event.dedup_key.as_str();
+                let id = insert_event(&mut statements.insert, key, values)?;
+                bind_cost(&mut statements.cost, id, &priced.cost)?;
                 buckets.insert(priced.event.occurred_at.bucket_start().0);
                 summary.inserted += 1;
                 id
             }
         };
         // Tool calls accumulate across observations of the same request.
-        insert_tool_calls(&transaction, event_id, &priced.tool_calls)?;
+        insert_tool_calls(&mut statements.tool_call, event_id, &priced.tool_calls)?;
     }
+    drop(statements);
     apply_tool_outcomes(&transaction, tool_outcomes)?;
     if let Some(checkpoint) = checkpoint {
         upsert_checkpoint(&transaction, checkpoint, now)?;
@@ -155,15 +160,40 @@ pub fn commit(
     Ok(summary)
 }
 
+const EXISTING_SQL: &str = "SELECT id, fingerprint, bucket_start, precedence, occurred_at \
+     FROM usage_events WHERE dedup_key = ?1";
+
+const INSERT_TOOL_CALL_SQL: &str = "INSERT INTO tool_calls (event_id, tool_use_id, tool_name, mcp_server, mcp_tool) \
+     VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT (tool_use_id) DO NOTHING";
+
+/// Statements run for every event, prepared once per batch. Looking a statement up in
+/// the cache hashes its whole SQL text, which for these long statements cost more per
+/// event than running them.
+struct EventStatements<'t> {
+    existing: CachedStatement<'t>,
+    insert: CachedStatement<'t>,
+    update: CachedStatement<'t>,
+    cost: CachedStatement<'t>,
+    tool_call: CachedStatement<'t>,
+}
+
+impl<'t> EventStatements<'t> {
+    fn prepare(transaction: &'t Transaction<'_>) -> Result<Self, StoreError> {
+        Ok(Self {
+            existing: transaction.prepare_cached(EXISTING_SQL)?,
+            insert: transaction.prepare_cached(&INSERT_EVENT)?,
+            update: transaction.prepare_cached(&UPDATE_EVENT)?,
+            cost: transaction.prepare_cached(UPSERT_COST_SQL)?,
+            tool_call: transaction.prepare_cached(INSERT_TOOL_CALL_SQL)?,
+        })
+    }
+}
+
 fn existing(
-    transaction: &Transaction<'_>,
+    statement: &mut Statement<'_>,
     priced: &PricedEvent,
 ) -> Result<Option<Existing>, StoreError> {
-    Ok(transaction
-        .prepare_cached(
-            "SELECT id, fingerprint, bucket_start, precedence, occurred_at \
-             FROM usage_events WHERE dedup_key = ?1",
-        )?
+    Ok(statement
         .query_row([priced.event.dedup_key.as_str()], |row| {
             Ok(Existing {
                 id: row.get(0)?,
@@ -184,17 +214,10 @@ fn is_superseded(new: &PricedEvent, stored: &Existing) -> bool {
 }
 
 fn insert_tool_calls(
-    transaction: &Transaction<'_>,
+    insert: &mut Statement<'_>,
     event_id: i64,
     calls: &[ToolCall],
 ) -> Result<(), StoreError> {
-    if calls.is_empty() {
-        return Ok(());
-    }
-    let mut insert = transaction.prepare_cached(
-        "INSERT INTO tool_calls (event_id, tool_use_id, tool_name, mcp_server, mcp_tool) \
-         VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT (tool_use_id) DO NOTHING",
-    )?;
     for call in calls {
         let (server, tool) = mcp_parts(&call.name).unzip();
         insert.execute(params![event_id, call.id, call.name, server, tool])?;
@@ -274,66 +297,69 @@ static UPDATE_EVENT: LazyLock<String> = LazyLock::new(|| {
 });
 
 fn insert_event(
-    transaction: &Transaction<'_>,
+    statement: &mut Statement<'_>,
     dedup_key: &str,
     values: Vec<Value>,
 ) -> Result<i64, StoreError> {
     let all = std::iter::once(text(dedup_key)).chain(values);
-    transaction
-        .prepare_cached(&INSERT_EVENT)?
-        .execute(params_from_iter(all))?;
-    Ok(transaction.last_insert_rowid())
+    Ok(statement.insert(params_from_iter(all))?)
 }
 
 fn update_event(
-    transaction: &Transaction<'_>,
+    statement: &mut Statement<'_>,
     id: i64,
     values: Vec<Value>,
 ) -> Result<(), StoreError> {
     let all = values
         .into_iter()
         .chain(std::iter::once(Value::Integer(id)));
-    transaction
-        .prepare_cached(&UPDATE_EVENT)?
-        .execute(params_from_iter(all))?;
+    statement.execute(params_from_iter(all))?;
     Ok(())
 }
 
+const UPSERT_COST_SQL: &str = "INSERT INTO event_costs (event_id, catalog_version, rule_id, \
+     status, assumptions, input_nusd, cache_read_nusd, cache_write_nusd, output_nusd, \
+     total_nusd, cache_read_saving_nusd, cache_write_overhead_nusd, rate_verified_at) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) \
+     ON CONFLICT (event_id) DO UPDATE SET catalog_version = excluded.catalog_version, \
+     rule_id = excluded.rule_id, status = excluded.status, assumptions = excluded.assumptions, \
+     input_nusd = excluded.input_nusd, cache_read_nusd = excluded.cache_read_nusd, \
+     cache_write_nusd = excluded.cache_write_nusd, output_nusd = excluded.output_nusd, \
+     total_nusd = excluded.total_nusd, cache_read_saving_nusd = excluded.cache_read_saving_nusd, \
+     cache_write_overhead_nusd = excluded.cache_write_overhead_nusd, \
+     rate_verified_at = excluded.rate_verified_at";
+
+/// Writes an event's cost (re-pricing uses this outside the per-event loop).
 pub(crate) fn upsert_cost(
     transaction: &Transaction<'_>,
     event_id: i64,
     cost: &EventCost,
 ) -> Result<(), StoreError> {
+    let mut statement = transaction.prepare_cached(UPSERT_COST_SQL)?;
+    bind_cost(&mut statement, event_id, cost)
+}
+
+fn bind_cost(
+    statement: &mut Statement<'_>,
+    event_id: i64,
+    cost: &EventCost,
+) -> Result<(), StoreError> {
     let b = &cost.breakdown;
-    transaction
-        .prepare_cached(
-            "INSERT INTO event_costs (event_id, catalog_version, rule_id, status, assumptions, \
-             input_nusd, cache_read_nusd, cache_write_nusd, output_nusd, total_nusd, \
-             cache_read_saving_nusd, cache_write_overhead_nusd, rate_verified_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) \
-             ON CONFLICT (event_id) DO UPDATE SET catalog_version = excluded.catalog_version, \
-             rule_id = excluded.rule_id, status = excluded.status, assumptions = excluded.assumptions, \
-             input_nusd = excluded.input_nusd, cache_read_nusd = excluded.cache_read_nusd, \
-             cache_write_nusd = excluded.cache_write_nusd, output_nusd = excluded.output_nusd, \
-             total_nusd = excluded.total_nusd, cache_read_saving_nusd = excluded.cache_read_saving_nusd, \
-             cache_write_overhead_nusd = excluded.cache_write_overhead_nusd, \
-             rate_verified_at = excluded.rate_verified_at",
-        )?
-        .execute(params![
-            event_id,
-            cost.catalog_version,
-            cost.rule_id,
-            cost.status.as_str(),
-            i64::from(cost.assumptions.bits()),
-            b.input.0,
-            b.cache_read.0,
-            b.cache_write.0,
-            b.output.0,
-            b.total().0,
-            b.cache_read_saving.map(|m| m.0),
-            b.cache_write_overhead.map(|m| m.0),
-            cost.rate_verified_at.map(|d| d.to_string()),
-        ])?;
+    statement.execute(params![
+        event_id,
+        cost.catalog_version,
+        cost.rule_id,
+        cost.status.as_str(),
+        i64::from(cost.assumptions.bits()),
+        b.input.0,
+        b.cache_read.0,
+        b.cache_write.0,
+        b.output.0,
+        b.total().0,
+        b.cache_read_saving.map(|m| m.0),
+        b.cache_write_overhead.map(|m| m.0),
+        cost.rate_verified_at.map(|d| d.to_string()),
+    ])?;
     Ok(())
 }
 
