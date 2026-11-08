@@ -82,8 +82,10 @@ fn changed_events_update_and_moved_events_rebuild_both_buckets() {
         )
         .unwrap();
 
-    // Same request, corrected later: more tokens and a different time (another bucket).
-    let corrected = priced(event("req-1", NOV_8 + HOUR, tokens(300, 30)), &catalog);
+    // Same request, corrected by a more complete observation: more tokens and a different
+    // time (another bucket). A correction must carry higher precedence.
+    let mut corrected = priced(event("req-1", NOV_8 + HOUR, tokens(300, 30)), &catalog);
+    corrected.precedence = 1;
     let summary = db.store.write_events(&[corrected], now()).unwrap();
     assert_eq!((summary.updated, summary.buckets_rebuilt), (1, 2));
 
@@ -442,4 +444,114 @@ fn every_rollup_level_agrees() {
     ));
     assert_eq!(one, one_full);
     assert_eq!(one, projects[0].sums);
+}
+
+mod ingestion {
+    use std::collections::HashSet;
+
+    use veyra_domain::source::ParseIssue;
+    use veyra_domain::tooling::{ToolCall, ToolOutcome};
+    use veyra_store::{FileCheckpoint, IngestBatch, RunStats};
+
+    use super::support::{NOV_8, TempDb, bundled_catalog, event, priced, tokens};
+    use super::{all_time, now};
+
+    fn observation(precedence: i64, at: i64, output: u64) -> veyra_store::PricedEvent {
+        let mut p = priced(event("req-x", at, tokens(100, output)), &bundled_catalog());
+        p.precedence = precedence;
+        p
+    }
+
+    #[test]
+    fn the_most_complete_observation_wins_in_any_order() {
+        let partial = observation(1, NOV_8 + 1_000, 5);
+        let final_ = observation(2, NOV_8 + 2_000, 50);
+        for order in [[&partial, &final_], [&final_, &partial]] {
+            let db = TempDb::new();
+            for obs in order {
+                db.store.write_events(&[(*obs).clone()], now()).unwrap();
+            }
+            assert_eq!(all_time(&db.store).tokens.output_total, Some(50));
+        }
+        // Equal precedence: the earlier observation is kept, whatever the order.
+        let early = observation(2, NOV_8 + 1_000, 7);
+        let late = observation(2, NOV_8 + 9_000, 9);
+        for order in [[&early, &late], [&late, &early]] {
+            let db = TempDb::new();
+            for obs in order {
+                db.store.write_events(&[(*obs).clone()], now()).unwrap();
+            }
+            assert_eq!(all_time(&db.store).tokens.output_total, Some(7));
+        }
+    }
+
+    #[test]
+    fn checkpoints_tool_calls_and_outcomes_commit_together() {
+        let db = TempDb::new();
+        let source = db
+            .store
+            .register_source("claude-code", "/root", now())
+            .unwrap();
+        assert!(!source.enabled, "sources start disabled until consent");
+        let mut first = priced(event("req-1", NOV_8, tokens(1, 1)), &bundled_catalog());
+        first.tool_calls = vec![ToolCall {
+            id: "toolu_1".to_owned(),
+            name: "mcp__github__create_issue".to_owned(),
+        }];
+        db.store
+            .commit(
+                &IngestBatch {
+                    events: vec![first],
+                    tool_outcomes: vec![ToolOutcome {
+                        tool_call_id: "toolu_1".to_owned(),
+                        is_error: true,
+                    }],
+                    checkpoint: Some(FileCheckpoint {
+                        source_id: source.id,
+                        path: "p/s.jsonl".to_owned(),
+                        size: 120,
+                        modified_at: Some(now()),
+                        offset: 120,
+                        head_hash: 42,
+                        head_len: 120,
+                        parser_version: 1,
+                    }),
+                },
+                now(),
+            )
+            .unwrap();
+        let checkpoints = db.store.checkpoints(source.id).unwrap();
+        assert_eq!(checkpoints["p/s.jsonl"].offset, 120);
+
+        let enabled = db
+            .store
+            .set_source_enabled(source.id, true, now())
+            .unwrap()
+            .unwrap();
+        assert!(enabled.enabled && enabled.consented_at.is_some());
+
+        assert_eq!(
+            db.store
+                .mark_missing_files(source.id, &HashSet::new())
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            all_time(&db.store).events,
+            1,
+            "events survive missing source files"
+        );
+
+        let run = db.store.start_run("test", now()).unwrap();
+        let issue = ParseIssue {
+            kind: "malformed-json",
+            offset: 7,
+        };
+        db.store
+            .record_issues(run, source.id, "p/s.jsonl", &[issue, issue])
+            .unwrap();
+        db.store
+            .finish_run(run, RunStats::default(), "ok", now())
+            .unwrap();
+    }
 }

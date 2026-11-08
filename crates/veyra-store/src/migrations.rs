@@ -9,7 +9,10 @@ use crate::StoreError;
 
 /// Migration SQL, in order. Index `i` upgrades version `i` to `i + 1`. Never edit a
 /// released migration; add a new one.
-const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_initial.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0001_initial.sql"),
+    include_str!("../migrations/0002_ingestion.sql"),
+];
 
 /// The schema version this build creates and understands.
 #[expect(clippy::cast_possible_truncation, reason = "a handful of migrations")]
@@ -59,6 +62,38 @@ mod tests {
             )
             .unwrap();
         assert_eq!(tables, 4);
+    }
+
+    #[test]
+    fn upgrades_a_version_one_database_in_place() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        connection.execute_batch(super::MIGRATIONS[0]).unwrap();
+        connection.pragma_update(None, "user_version", 1).unwrap();
+        connection
+            .execute("INSERT INTO sessions (key) VALUES ('claude-code:kept')", [])
+            .unwrap();
+
+        assert_eq!(migrate(&mut connection).unwrap(), LATEST_SCHEMA_VERSION);
+        let kept: i64 = connection
+            .query_row("SELECT count(*) FROM sessions", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(kept, 1, "existing data survives the upgrade");
+        let default: String = connection
+            .query_row(
+                "SELECT dflt_value FROM pragma_table_info('usage_events') WHERE name = 'precedence'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(default, "0", "existing events get the lowest precedence");
+        let dropped: i64 = connection
+            .query_row(
+                "SELECT count(*) FROM sqlite_schema WHERE name = 'usage_events_occurred_at'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(dropped, 0);
     }
 
     #[test]

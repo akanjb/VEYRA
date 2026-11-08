@@ -13,6 +13,7 @@ mod migrations;
 mod reader;
 mod reprice;
 mod rollup;
+mod sources;
 mod sql;
 mod write;
 
@@ -25,7 +26,9 @@ use rusqlite::Connection;
 pub use error::StoreError;
 pub use migrations::LATEST_SCHEMA_VERSION;
 pub use reprice::StoredEvent;
-pub use write::{PricedEvent, WriteSummary};
+pub use sources::{RunStats, StoredCheckpoint};
+pub use veyra_domain::source::SourceRecord;
+pub use write::{FileCheckpoint, IngestBatch, PricedEvent, WriteSummary};
 
 /// Number of read-only connections serving analytics.
 const READERS: usize = 2;
@@ -66,7 +69,7 @@ impl Store {
         self.data_version.load(Ordering::Acquire)
     }
 
-    /// Writes a batch of priced events idempotently. See [`write::write_events`].
+    /// Writes a batch of priced events idempotently (no checkpoint).
     ///
     /// # Errors
     /// Returns [`StoreError`] for invalid events or database failures; nothing from the
@@ -76,7 +79,41 @@ impl Store {
         events: &[PricedEvent],
         now: veyra_domain::time::UtcMillis,
     ) -> Result<WriteSummary, StoreError> {
-        let summary = write::write_events(&mut *self.lock_writer()?, events, now)?;
+        self.commit_parts(events, &[], None, now)
+    }
+
+    /// Commits events, tool outcomes and a file checkpoint in one transaction.
+    ///
+    /// # Errors
+    /// Returns [`StoreError`] for invalid events or database failures; nothing from the
+    /// batch is written in that case.
+    pub fn commit(
+        &self,
+        batch: &IngestBatch,
+        now: veyra_domain::time::UtcMillis,
+    ) -> Result<WriteSummary, StoreError> {
+        self.commit_parts(
+            &batch.events,
+            &batch.tool_outcomes,
+            batch.checkpoint.as_ref(),
+            now,
+        )
+    }
+
+    fn commit_parts(
+        &self,
+        events: &[PricedEvent],
+        tool_outcomes: &[veyra_domain::tooling::ToolOutcome],
+        checkpoint: Option<&FileCheckpoint>,
+        now: veyra_domain::time::UtcMillis,
+    ) -> Result<WriteSummary, StoreError> {
+        let summary = write::commit(
+            &mut *self.lock_writer()?,
+            events,
+            tool_outcomes,
+            checkpoint,
+            now,
+        )?;
         if summary.inserted + summary.updated > 0 {
             self.data_version.fetch_add(1, Ordering::AcqRel);
         }

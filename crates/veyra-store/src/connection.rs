@@ -9,6 +9,10 @@ use crate::StoreError;
 
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Writer page cache in KiB (negative, per SQLite): 16 MiB instead of the default ~2 MiB,
+/// so the hot index pages of a backfill stay in memory.
+const WRITER_CACHE_KIB: i64 = -16_384;
+
 pub fn open_writer(path: &Path) -> Result<Connection, StoreError> {
     let connection = Connection::open_with_flags(
         path,
@@ -21,6 +25,7 @@ pub fn open_writer(path: &Path) -> Result<Connection, StoreError> {
     connection.pragma_update(None, "synchronous", "NORMAL")?;
     connection.pragma_update(None, "foreign_keys", "ON")?;
     connection.pragma_update(None, "temp_store", "MEMORY")?;
+    connection.pragma_update(None, "cache_size", WRITER_CACHE_KIB)?;
     Ok(connection)
 }
 

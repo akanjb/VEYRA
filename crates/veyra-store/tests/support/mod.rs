@@ -100,7 +100,7 @@ pub fn tokens(input: u64, output: u64) -> TokenCounts {
 
 pub fn priced(event: UsageEvent, catalog: &PriceCatalog) -> PricedEvent {
     let cost = price_event(&event, catalog);
-    PricedEvent { event, cost }
+    PricedEvent::new(event, cost)
 }
 
 pub fn bundled_catalog() -> PriceCatalog {

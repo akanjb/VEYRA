@@ -175,7 +175,7 @@ pub fn ingest(
     for index in 0..count {
         let event = synthetic_event(index, count, order, &mut rng)?;
         let cost = price_event(&event, catalog);
-        batch.push(PricedEvent { event, cost });
+        batch.push(PricedEvent::new(event, cost));
         if batch.len() == BATCH || index + 1 == count {
             let summary = store
                 .write_events(&batch, END)

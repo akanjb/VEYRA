@@ -5,7 +5,8 @@
 //! touched (including the old bucket of a moved event) is rebuilt in the same
 //! transaction, so rollups always equal the raw events.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::sync::LazyLock;
 
 use rusqlite::types::Value;
 use rusqlite::{OptionalExtension, Transaction, params, params_from_iter};
@@ -13,16 +14,59 @@ use veyra_domain::event::{EventContext, UsageEvent};
 use veyra_domain::identity::{GatewayId, ModelId, ProviderId};
 use veyra_domain::pricing::EventCost;
 use veyra_domain::time::UtcMillis;
+use veyra_domain::tooling::{ToolCall, ToolOutcome, mcp_parts};
 
 use crate::fingerprint::fingerprint;
 use crate::sql::{EVENT_COLUMNS, opt_count, opt_int, opt_text, text};
 use crate::{StoreError, rollup};
 
-/// An event together with its API-equivalent cost.
+/// An event together with its API-equivalent cost, as written to the store.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PricedEvent {
     pub event: UsageEvent,
     pub cost: EventCost,
+    /// How complete this observation is (see `RawUsage::precedence`). A lower value never
+    /// replaces a higher one; on a tie the earlier `occurred_at` is kept.
+    pub precedence: i64,
+    /// Tool invocations requested in this event (metadata only).
+    pub tool_calls: Vec<ToolCall>,
+}
+
+impl PricedEvent {
+    /// An event without tool calls, at default precedence.
+    #[must_use]
+    pub fn new(event: UsageEvent, cost: EventCost) -> Self {
+        Self {
+            event,
+            cost,
+            precedence: 0,
+            tool_calls: Vec::new(),
+        }
+    }
+}
+
+/// A file's read position, committed atomically with the events read from it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileCheckpoint {
+    pub source_id: i64,
+    /// Path relative to the source root.
+    pub path: String,
+    pub size: u64,
+    pub modified_at: Option<UtcMillis>,
+    /// Byte offset after the last complete line read.
+    pub offset: u64,
+    /// Fingerprint of the file's first `head_len` bytes.
+    pub head_hash: i64,
+    pub head_len: u32,
+    pub parser_version: u32,
+}
+
+/// Everything one ingest step writes, committed in a single transaction.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct IngestBatch {
+    pub events: Vec<PricedEvent>,
+    pub tool_outcomes: Vec<ToolOutcome>,
+    pub checkpoint: Option<FileCheckpoint>,
 }
 
 /// What a batch write changed.
@@ -31,13 +75,27 @@ pub struct WriteSummary {
     pub inserted: usize,
     pub updated: usize,
     pub unchanged: usize,
+    /// Observations ignored because a more complete one is already stored.
+    pub superseded: usize,
     pub buckets_rebuilt: usize,
 }
 
-/// Writes a batch in one transaction; invalid events reject the whole batch.
-pub fn write_events(
+/// The stored state of an event, for deciding how a new observation applies.
+struct Existing {
+    id: i64,
+    fingerprint: i64,
+    bucket: i64,
+    precedence: i64,
+    occurred_at: i64,
+}
+
+/// Writes events, tool outcomes and an optional checkpoint in one transaction.
+/// Invalid events reject the whole batch.
+pub fn commit(
     connection: &mut rusqlite::Connection,
     events: &[PricedEvent],
+    tool_outcomes: &[ToolOutcome],
+    checkpoint: Option<&FileCheckpoint>,
     now: UtcMillis,
 ) -> Result<WriteSummary, StoreError> {
     for priced in events {
@@ -57,36 +115,39 @@ pub fn write_events(
 
     for priced in events {
         let fp = fingerprint(&priced.event, &priced.cost);
-        let bucket = priced.event.occurred_at.bucket_start().0;
-        let existing: Option<(i64, i64, i64)> = transaction
-            .prepare_cached(
-                "SELECT id, fingerprint, bucket_start FROM usage_events WHERE dedup_key = ?1",
-            )?
-            .query_row([priced.event.dedup_key.as_str()], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-            })
-            .optional()?;
-
-        let event_id = match existing {
-            Some((_, stored_fp, _)) if stored_fp == fp => {
+        let event_id = match existing(&transaction, priced)? {
+            Some(e) if e.fingerprint == fp => {
                 summary.unchanged += 1;
-                continue;
+                e.id
             }
-            Some((id, _, old_bucket)) => {
+            Some(e) if is_superseded(priced, &e) => {
+                summary.superseded += 1;
+                e.id
+            }
+            Some(e) => {
                 let values = event_values(&transaction, priced, fp, &mut keys, now)?;
-                update_event(&transaction, id, values)?;
-                buckets.insert(old_bucket);
+                update_event(&transaction, e.id, values)?;
+                upsert_cost(&transaction, e.id, &priced.cost)?;
+                buckets.insert(e.bucket);
+                buckets.insert(priced.event.occurred_at.bucket_start().0);
                 summary.updated += 1;
-                id
+                e.id
             }
             None => {
                 let values = event_values(&transaction, priced, fp, &mut keys, now)?;
+                let id = insert_event(&transaction, priced.event.dedup_key.as_str(), values)?;
+                upsert_cost(&transaction, id, &priced.cost)?;
+                buckets.insert(priced.event.occurred_at.bucket_start().0);
                 summary.inserted += 1;
-                insert_event(&transaction, priced.event.dedup_key.as_str(), values)?
+                id
             }
         };
-        upsert_cost(&transaction, event_id, &priced.cost)?;
-        buckets.insert(bucket);
+        // Tool calls accumulate across observations of the same request.
+        insert_tool_calls(&transaction, event_id, &priced.tool_calls)?;
+    }
+    apply_tool_outcomes(&transaction, tool_outcomes)?;
+    if let Some(checkpoint) = checkpoint {
+        upsert_checkpoint(&transaction, checkpoint, now)?;
     }
 
     summary.buckets_rebuilt = rollup::rebuild(&transaction, &buckets)?;
@@ -94,22 +155,132 @@ pub fn write_events(
     Ok(summary)
 }
 
+fn existing(
+    transaction: &Transaction<'_>,
+    priced: &PricedEvent,
+) -> Result<Option<Existing>, StoreError> {
+    Ok(transaction
+        .prepare_cached(
+            "SELECT id, fingerprint, bucket_start, precedence, occurred_at \
+             FROM usage_events WHERE dedup_key = ?1",
+        )?
+        .query_row([priced.event.dedup_key.as_str()], |row| {
+            Ok(Existing {
+                id: row.get(0)?,
+                fingerprint: row.get(1)?,
+                bucket: row.get(2)?,
+                precedence: row.get(3)?,
+                occurred_at: row.get(4)?,
+            })
+        })
+        .optional()?)
+}
+
+/// Whether the stored observation is more complete than the new one, making the result
+/// independent of the order in which observations are read.
+fn is_superseded(new: &PricedEvent, stored: &Existing) -> bool {
+    new.precedence < stored.precedence
+        || (new.precedence == stored.precedence && new.event.occurred_at.0 > stored.occurred_at)
+}
+
+fn insert_tool_calls(
+    transaction: &Transaction<'_>,
+    event_id: i64,
+    calls: &[ToolCall],
+) -> Result<(), StoreError> {
+    if calls.is_empty() {
+        return Ok(());
+    }
+    let mut insert = transaction.prepare_cached(
+        "INSERT INTO tool_calls (event_id, tool_use_id, tool_name, mcp_server, mcp_tool) \
+         VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT (tool_use_id) DO NOTHING",
+    )?;
+    for call in calls {
+        let (server, tool) = mcp_parts(&call.name).unzip();
+        insert.execute(params![event_id, call.id, call.name, server, tool])?;
+    }
+    Ok(())
+}
+
+fn apply_tool_outcomes(
+    transaction: &Transaction<'_>,
+    outcomes: &[ToolOutcome],
+) -> Result<(), StoreError> {
+    let mut update =
+        transaction.prepare_cached("UPDATE tool_calls SET is_error = ?2 WHERE tool_use_id = ?1")?;
+    for outcome in outcomes {
+        update.execute(params![outcome.tool_call_id, i64::from(outcome.is_error)])?;
+    }
+    Ok(())
+}
+
+fn upsert_checkpoint(
+    transaction: &Transaction<'_>,
+    checkpoint: &FileCheckpoint,
+    now: UtcMillis,
+) -> Result<(), StoreError> {
+    let size = i64::try_from(checkpoint.size).map_err(|_| StoreError::OutOfRange("file size"))?;
+    let offset =
+        i64::try_from(checkpoint.offset).map_err(|_| StoreError::OutOfRange("file offset"))?;
+    transaction
+        .prepare_cached(
+            "INSERT INTO source_files (source_id, path, size, modified_at, byte_offset, head_hash, \
+             head_len, parser_version, state, last_ingested_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'active', ?9) \
+             ON CONFLICT (source_id, path) DO UPDATE SET size = excluded.size, \
+             modified_at = excluded.modified_at, byte_offset = excluded.byte_offset, \
+             head_hash = excluded.head_hash, head_len = excluded.head_len, \
+             parser_version = excluded.parser_version, state = 'active', \
+             last_ingested_at = excluded.last_ingested_at",
+        )?
+        .execute(params![
+            checkpoint.source_id,
+            checkpoint.path,
+            size,
+            checkpoint.modified_at.map(|m| m.0),
+            offset,
+            checkpoint.head_hash,
+            checkpoint.head_len,
+            checkpoint.parser_version,
+            now.0,
+        ])?;
+    Ok(())
+}
+
+/// Inserts one event: the dedup key, then [`EVENT_COLUMNS`] (built once).
+static INSERT_EVENT: LazyLock<String> = LazyLock::new(|| {
+    let placeholders = (1..=EVENT_COLUMNS.len() + 1)
+        .map(|i| format!("?{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "INSERT INTO usage_events (dedup_key, {}) VALUES ({placeholders})",
+        EVENT_COLUMNS.join(", ")
+    )
+});
+
+/// Updates one event's [`EVENT_COLUMNS`]; the id is the last parameter (built once).
+static UPDATE_EVENT: LazyLock<String> = LazyLock::new(|| {
+    let assignments = EVENT_COLUMNS
+        .iter()
+        .enumerate()
+        .map(|(i, column)| format!("{column} = ?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "UPDATE usage_events SET {assignments} WHERE id = ?{}",
+        EVENT_COLUMNS.len() + 1
+    )
+});
+
 fn insert_event(
     transaction: &Transaction<'_>,
     dedup_key: &str,
     values: Vec<Value>,
 ) -> Result<i64, StoreError> {
-    let placeholders = (1..=EVENT_COLUMNS.len() + 1)
-        .map(|i| format!("?{i}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let sql = format!(
-        "INSERT INTO usage_events (dedup_key, {}) VALUES ({placeholders})",
-        EVENT_COLUMNS.join(", ")
-    );
     let all = std::iter::once(text(dedup_key)).chain(values);
     transaction
-        .prepare_cached(&sql)?
+        .prepare_cached(&INSERT_EVENT)?
         .execute(params_from_iter(all))?;
     Ok(transaction.last_insert_rowid())
 }
@@ -119,21 +290,11 @@ fn update_event(
     id: i64,
     values: Vec<Value>,
 ) -> Result<(), StoreError> {
-    let assignments = EVENT_COLUMNS
-        .iter()
-        .enumerate()
-        .map(|(i, column)| format!("{column} = ?{}", i + 1))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let sql = format!(
-        "UPDATE usage_events SET {assignments} WHERE id = ?{}",
-        EVENT_COLUMNS.len() + 1
-    );
     let all = values
         .into_iter()
         .chain(std::iter::once(Value::Integer(id)));
     transaction
-        .prepare_cached(&sql)?
+        .prepare_cached(&UPDATE_EVENT)?
         .execute(params_from_iter(all))?;
     Ok(())
 }
@@ -186,7 +347,11 @@ struct ContextIds {
 
 /// Natural key → id, per table, for the duration of one batch.
 #[derive(Debug, Default)]
-struct KeyCache(HashMap<(&'static str, String), i64>);
+struct KeyCache {
+    ids: HashMap<&'static str, HashMap<String, i64>>,
+    /// Session links already applied in this batch: (session, parent, is subagent).
+    linked: HashSet<(i64, Option<i64>, bool)>,
+}
 
 impl KeyCache {
     fn resolve(
@@ -195,7 +360,7 @@ impl KeyCache {
         table: &'static str,
         key: &str,
     ) -> Result<i64, StoreError> {
-        if let Some(id) = self.0.get(&(table, key.to_owned())) {
+        if let Some(id) = self.ids.get(table).and_then(|ids| ids.get(key)) {
             return Ok(*id);
         }
         transaction
@@ -206,7 +371,10 @@ impl KeyCache {
         let id: i64 = transaction
             .prepare_cached(&format!("SELECT id FROM {table} WHERE key = ?1"))?
             .query_row([key], |row| row.get(0))?;
-        self.0.insert((table, key.to_owned()), id);
+        self.ids
+            .entry(table)
+            .or_default()
+            .insert(key.to_owned(), id);
         Ok(id)
     }
 }
@@ -227,7 +395,10 @@ fn resolve_context(
             .as_deref()
             .map(|key| keys.resolve(transaction, "sessions", key))
             .transpose()?;
-        if parent.is_some() || context.is_subagent {
+        // Once per session per batch: repeating the same update would change nothing.
+        if (parent.is_some() || context.is_subagent)
+            && keys.linked.insert((session, parent, context.is_subagent))
+        {
             transaction
                 .prepare_cached(
                     "UPDATE sessions SET parent_session_id = COALESCE(parent_session_id, ?2), \
@@ -300,5 +471,6 @@ fn event_values(
         text(acc.requests.as_str()),
         text(acc.cost.as_str()),
         Value::Integer(now.0),
+        Value::Integer(priced.precedence),
     ])
 }
