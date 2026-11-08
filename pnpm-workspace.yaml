@@ -1,0 +1,15 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Supply-chain policy (ADR-017): never install a version published less than
+# 7 days ago (value in minutes). Dependency lifecycle scripts are not run unless
+# explicitly allow-listed.
+minimumReleaseAge: 10080
+
+auditConfig:
+  ignoreGhsas:
+    # minimatch ReDoS-style DoS (moderate). Reachable only through dev-time lint
+    # tooling (eslint, typescript-eslint) with globs from our own config; not shipped.
+    # Revisit when eslint/typescript-eslint depend on minimatch >= 11.0.1.
+    - GHSA-g3hv-75wg-m249

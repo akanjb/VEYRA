@@ -1,0 +1,6 @@
+#!/bin/sh
+# Fast local gate; CI runs the full suite. Install with `pnpm hooks:install`.
+set -e
+pnpm -s format:check
+pnpm -s lint
+pnpm -s contracts:check

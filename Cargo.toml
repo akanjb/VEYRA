@@ -1,0 +1,39 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "src-tauri", "tools/contracts-gen"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "Apache-2.0 OR MIT"
+authors = ["The Veyra contributors"]
+publish = false
+
+# Exact pins: every version was published at least a week before adoption
+# (supply-chain policy, ADR-017). Cargo.lock is committed.
+[workspace.dependencies]
+veyra-app = { path = "crates/veyra-app" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+tauri = "=2.12.5"
+tauri-build = "=2.7.4"
+thiserror = "=2.0.21"
+ts-rs = "=12.0.1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+unwrap_used = "warn"
+expect_used = "warn"
+dbg_macro = "warn"
+print_stdout = "warn"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true

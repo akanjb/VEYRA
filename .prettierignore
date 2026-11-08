@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+target/
+**/dist/
+src-tauri/gen/
+src-tauri/icons/
+packages/contracts/src/generated/
+docs/
+*.md

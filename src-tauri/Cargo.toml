@@ -1,0 +1,28 @@
+[package]
+name = "veyra-desktop"
+description = "Veyra desktop shell: composition root, Tauri commands and capabilities."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[lib]
+name = "veyra_desktop"
+
+[build-dependencies]
+tauri-build.workspace = true
+# The command catalogue feeds the Tauri app-manifest allow-list at build time.
+veyra-app.workspace = true
+
+[dependencies]
+tauri.workspace = true
+veyra-app.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tauri = { workspace = true, features = ["test"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,42 @@
+# cargo-deny policy (supply chain, ADR-017). Run: `cargo deny check`.
+
+[graph]
+all-features = true
+
+[advisories]
+# Fail on any RustSec advisory (vulnerability, unmaintained, unsound, yanked).
+version = 2
+yanked = "deny"
+ignore = [
+  # proc-macro-error: unmaintained (not a vulnerability). Build-time only, pulled in by
+  # Tauri's Linux GTK3 bindings (glib-macros 0.18). Remove when Tauri drops gtk-rs 0.18.
+  { id = "RUSTSEC-2024-0370", reason = "transitive via tauri on Linux; unmaintained, not vulnerable" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+# Permissive licences only. MPL-2.0 is file-level copyleft; it is accepted for
+# unmodified third-party dependencies (Tauri's HTML/CSS tooling uses it).
+allow = [
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-3-Clause",
+  "Zlib",
+  "CC0-1.0",
+  "0BSD",
+  "Unicode-3.0",
+  "MPL-2.0",
+]
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
