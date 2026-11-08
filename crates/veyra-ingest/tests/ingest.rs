@@ -455,10 +455,12 @@ fn the_worker_picks_up_changes_without_being_asked() {
     handle.shutdown();
 }
 
-/// Throughput budget (ADR-023): at least 40,000 events per second end to end on one
-/// large log, measured on a standard GitHub-hosted runner (which reaches about
-/// 39,000-49,000 per attempt; developer machines about 50,000-60,000). The best of three runs counts,
-/// so a transient stall does not fail the budget; a systematic slowdown still does.
+/// Throughput budget (ADR-023): at least 35,000 events per second end to end on one
+/// large log, on a standard GitHub-hosted runner. Runners measure 39,000-49,000 per
+/// attempt and differ by up to about 20% between runs (developer machines: about
+/// 50,000-60,000). The budget sits about 15% below the slowest best-of-three result
+/// measured (41,400), so it fails on real regressions rather than on slow hardware.
+/// The best of three runs counts, so a transient stall does not fail it either.
 /// Run with `cargo test -p veyra-ingest --release -- --ignored throughput --nocapture`.
 #[test]
 #[ignore = "performance budget; run in release mode"]
@@ -502,7 +504,7 @@ fn throughput() {
         best = best.max(rate);
     }
     assert!(
-        best >= 40_000.0,
-        "best ingest rate {best:.0} events/s is below 40,000"
+        best >= 35_000.0,
+        "best ingest rate {best:.0} events/s is below 35,000"
     );
 }

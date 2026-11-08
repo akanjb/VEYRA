@@ -123,7 +123,7 @@ flowchart LR
 > - **Safety:** canary fixtures, plus a real-data check in which the source logs contain canaries and the database holds none. A share-mode test renames and deletes a file while it is open. A concurrent writer appends half-lines during scans.
 > - **Throughput (budget amended 2026-11-08):**
 >   - End to end, ingestion runs at about 50,000–60,000 events/s on the build machine, from overlapped parsing and committing, and at 39,000–49,000 events/s per attempt on GitHub-hosted runners (best of three: 41,400–48,900).
->   - The CI budget is therefore **≥ 40,000 events/s, best of three runs**, just below the slowest best-of-three result measured (41,400 events/s); the margin is thin, so a weekly failure most likely means a slow runner, not a regression. The original ≥ 50k target holds on developer hardware only.
+>   - The CI budget is therefore **≥ 35,000 events/s, best of three runs**: about 15% below the slowest best-of-three result measured (41,400 events/s), matching the runner-to-runner variance of up to 20%, so a failure signals a real regression rather than slow hardware. A 40,000 budget was tried first and cleared the slowest runner by only 3.5%. The original ≥ 50k target holds on developer hardware only.
 >   - Real backfill: 1.3 GB of logs in 8.9 s, dominated by reading the logs rather than the store; rescans take 0.2 s.
 >   - Store write-path tuning: migration 0003, and statements prepared once per batch.
 > - **Deferred:** process-priority lowering and jittered backoff were not needed to meet the budgets. Failures are recorded per source, and the periodic scan retries.
@@ -166,7 +166,7 @@ flowchart LR
 - **Safety:**
   - A canary-string fixture confirms that no prompt or response text reaches the database or logs.
   - While Veyra ingests, a test writer process appends to and rotates JSONL files on Windows with no sharing violations (AC-7 foundation).
-- **Throughput:** backfill reaches ≥ 50k events/s on developer hardware (≥ 40k on GitHub-hosted CI runners; see the implementation notes), with idle CPU ≈ 0% after backfill.
+- **Throughput:** backfill reaches ≥ 50k events/s on developer hardware (≥ 35k on GitHub-hosted CI runners; see the implementation notes), with idle CPU ≈ 0% after backfill.
 - **Retention:** totals are unchanged after the source files are deleted.
 
 ## M3 — Dashboard shell and design system (L)
