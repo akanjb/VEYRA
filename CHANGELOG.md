@@ -5,6 +5,24 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Dashboard shell and first pages (M3).**
+  - Commands `get_overview`, `list_sessions` and `get_session`, served by the analytics engine. Activity metrics: sessions, and active time as the union of request gaps capped at 5 minutes.
+  - Design tokens for light and dark themes, a validated colour-blind-safe data palette, and bundled Inter and JetBrains Mono.
+  - App shell:
+    - grouped sidebar and header status;
+    - a query bar with period stepping and comparison;
+    - a filters sheet with named chips;
+    - a command palette and keyboard shortcuts;
+    - an error boundary;
+    - live refresh on `data-changed`.
+  - The URL holds all filter state, so Back and Forward restore any view.
+  - Chart primitives on Apache ECharts, each with an accessible table twin: stacked trend, ranking bars, treemap, calendar and hour heatmaps, and session timeline.
+  - Overview: KPI tiles with definitions, deltas and accuracy badges; daily usage by application; model mix; projects; activity calendar; hours of the week.
+  - Sessions: a paged, sortable explorer, and a session detail with timeline, tool calls and subagents.
+  - Sources & Health, and the first-run privacy promise and consent flow.
+  - A synthetic fixture client for development and UI tests (never in production builds).
+  - Playwright and axe UI tests (journeys, keyboard use, WCAG 2.2 A/AA in both themes), and a `UI` CI job.
+  - ADR-024.
 - **Claude Code ingestion (M2).**
   - Connector contract (`SourceConnector`) and the Claude Code connector: main and subagent logs, order-independent deduplication, tool-call metadata and outcomes.
   - Ingestion engine: consent-gated discovery, root-scoped read-only file access with a credential deny-list, transactional checkpoints, truncation and replacement handling, a debounced watcher, periodic and manual scans, and overlapped parsing and committing.
@@ -14,6 +32,9 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
   - Connector documentation and ADR-023.
 
 ### Changed
+- **Display names and definitions come from the core.** KPI definitions come from the metric registry. Provider, model and application names come from the registry and connector descriptors, through one `DisplayNames` value.
+- **One clock and one test kit.** `UtcMillis::now()` replaces duplicated clocks. A new `veyra-testkit` crate holds the shared test fixtures and temporary directories.
+- **IPC.** The dashboard window may listen to (and stop listening to) application events; emitting events and every other core plugin stay denied (amends ADR-020).
 - **Store.**
   - A larger writer page cache.
   - Per-event statements are prepared once per batch.

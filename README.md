@@ -6,7 +6,7 @@
 
 Veyra is a local-first desktop application that consolidates AI usage from model providers, coding agents, IDEs, desktop apps and CLIs into one accurate, privacy-preserving analytics product. Everything runs on your own machine.
 
-![Status](https://img.shields.io/badge/status-early%20development%20(M2)-orange)
+![Status](https://img.shields.io/badge/status-early%20development%20(M3)-orange)
 ![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Stack](https://img.shields.io/badge/stack-Tauri%202%20%C2%B7%20Rust%20%C2%B7%20React%2019%20%C2%B7%20SQLite-6f42c1)
@@ -27,10 +27,11 @@ Veyra is a local-first desktop application that consolidates AI usage from model
 ---
 
 > [!IMPORTANT]
-> **Project status: Milestones M0 (Foundations), M1 (Data core) and M2 (Claude Code ingestion) complete.**
+> **Project status: Milestones M0 (Foundations), M1 (Data core), M2 (Claude Code ingestion) and M3 (Dashboard shell) complete.**
 > - **Built:** the secure desktop shell, generated contracts, the domain model, the verified pricing engine and price catalogue, the SQLite store and the analytics engine.
-> - **New in M2:** consent-gated, incremental ingestion of Claude Code logs. It was verified on 1.3 GB of real logs with no content stored.
-> - **Next:** the dashboard shell with a Sources page (M3), and further connectors (M4).
+> - **M2:** consent-gated, incremental ingestion of Claude Code logs, verified on 1.3 GB of real logs with no content stored.
+> - **New in M3:** the dashboard. It has three pages (Overview, Sessions with a session timeline, and Sources & Health), a first-run consent flow, light and dark themes, a command palette and full keyboard use, and accessibility checks in CI.
+> - **Next:** further connectors (M4), then the analytics pages (M5).
 >
 > This README marks every capability as **Available** or **Planned**.
 
@@ -98,7 +99,9 @@ Veyra answers the questions no single tool can:
 | Incremental collection from local tool data: consent first, checkpoints, file watcher, periodic and manual scans | **Available** |
 | Connector: Claude Code (CLI, desktop Code tab, IDE extensions) | **Available** |
 | Connectors: Codex CLI, Gemini CLI, OpenCode, Copilot CLI | Planned (M4) |
-| Dashboard: Overview, Usage, Cost, Cache, Models & Providers, Projects, Sessions, Activity | Planned (M3–M5) |
+| Dashboard shell: light and dark themes, URL-held filters, command palette, keyboard shortcuts, live refresh | **Available** |
+| Pages: Overview, Sessions (explorer and timeline), Sources & Health with first-run consent | **Available** |
+| Pages: Usage, Cost, Cache, Models & Providers, Projects, Activity | Planned (M5) |
 | Tools & Agents, Quotas & Limits, deterministic Optimization recommendations | Planned (M7) |
 | Opt-in local OpenTelemetry receiver | Planned (M7) |
 | CSV / JSON / XLSX exports with redaction; storage and retention controls | Planned (M6) |
@@ -248,11 +251,11 @@ flowchart TB
 
 ### Backend (Rust core)
 
-**Crate dependency graph.** Solid edges exist today; the dashed edge arrives in M3. Ports belong to their consumer:
-- The analytics crate defines the read port, and the store implements it.
+**Crate dependency graph.** Ports belong to their consumer:
+- The analytics crate defines its read ports (sums, activity times, sessions, labels), and the store implements them.
 - The domain defines `SourceRepository` and `IngestControl`, implemented by the store and the ingest worker.
 
-The application layer therefore depends on the domain only.
+The application layer therefore depends on the domain and the analytics engine only. The composition root (`src-tauri`) connects the store, the registry's display names and the ingest worker to it. `veyra-testkit` (synthetic fixtures, temporary directories) is a test-only dependency and is not shown.
 
 ```mermaid
 flowchart LR
@@ -270,8 +273,11 @@ flowchart LR
   desktop --> app
   desktop --> ing
   desktop --> con
+  desktop --> reg
+  desktop --> sto
   gen --> app
   app --> dom
+  app --> ana
   ing --> sto
   ing --> reg
   ing -->|implements IngestControl| dom
@@ -282,34 +288,37 @@ flowchart LR
   sto -->|implements read port| ana
   perf --> sto
   perf --> reg
-  app -.-> ana
 ```
 
-**IPC request flow (implemented).** Every command takes one typed `request` and returns a typed response or a typed `ApiError`.
+**IPC request flow (implemented).** Every command takes one typed `request` and returns a typed response or a typed `ApiError`. The Overview, for example:
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant C as React component
-  participant H as Hook (useAppInfo)
+  participant P as Overview page
+  participant Q as useCommand (TanStack Query)
   participant AC as ApiClient (shared/api)
   participant T as Tauri IPC
   participant ACL as Capability check
-  participant CH as Command handler (generated)
   participant API as veyra_app::Api
+  participant E as Analytics engine
+  participant DB as SQLite (read connection)
 
-  C->>H: render
-  H->>AC: call("get_app_info", {})
-  AC->>T: invoke("get_app_info", { request: {} })
-  T->>ACL: is "allow-get-app-info" granted to window "main"?
+  P->>Q: scope from the URL (period, time zone, filters)
+  Q->>AC: call("get_overview", { scope })
+  AC->>T: invoke("get_overview", { request })
+  T->>ACL: is "allow-get-overview" granted to window "main"?
   ACL-->>T: granted
-  T->>CH: deserialise AppInfoRequest
-  CH->>API: api.get_app_info(request)
-  API-->>CH: Ok(AppInfo) or Err(ApiError)
-  CH-->>T: serialise
-  T-->>AC: AppInfo, or rejection
-  AC-->>H: typed AppInfo, or ApiCallError / TransportError
-  H-->>C: state: ready | error
+  T->>API: get_overview(OverviewRequest)
+  API->>API: validate and resolve the scope (local days, previous period)
+  API->>E: KPIs, daily trend, model and project rankings, calendar, hours
+  E->>DB: rollup sums and event times
+  DB-->>E: sums
+  E-->>API: metric values (None when not reported)
+  API-->>T: Overview DTO with names, definitions and accuracy
+  T-->>AC: typed Overview, or ApiError
+  AC-->>Q: cached by command and request
+  Q-->>P: data (the previous view stays while the next one loads)
 ```
 
 **Source lifecycle (implemented, M2).** Nothing under a source root is opened before consent ([ADR-023](docs/adr/0023-incremental-ingestion.md)).
@@ -362,26 +371,29 @@ sequenceDiagram
 
 ```mermaid
 flowchart TB
-  main[main.tsx<br/>bootstrap] --> app[app/<br/>shell · router · providers]
+  main[main.tsx<br/>bootstrap · theme · client] --> app[app/<br/>router · shell · palette · shortcuts]
   app --> mods
   subgraph mods [modules/ · one folder per product page]
-    ov[overview]
-    us[usage]
-    co[cost]
-    more[sessions · projects · …]
+    ov[overview<br/>KPIs · trend · rankings · activity]
+    se[sessions<br/>explorer · detail]
+    so[sources<br/>health · consent · welcome]
   end
   subgraph shared [shared/ · module-agnostic building blocks]
-    api[api<br/>ApiClient · transports]
-    fil[filters<br/>URL state]
-    ch[charts]
-    tb[data-table]
-    ui[ui<br/>design system]
-    fmt[format]
+    api[api<br/>ApiClient · queries · live refresh]
+    fix[api/fixtures<br/>synthetic client, dev and tests only]
+    fil[filters<br/>URL state · dates]
+    ch[charts<br/>ECharts primitives · table twins]
+    ui[ui<br/>primitives · overlays · KPI tiles]
+    fmt[format<br/>numbers · money · time]
   end
+  tokens[[styles/tokens.css<br/>design tokens, light and dark]]
   mods --> shared
   app --> shared
+  ui --> tokens
+  ch --> tokens
   api -->|only place allowed| tauri[["@tauri-apps/api"]]
   api --> contracts[["@veyra/contracts<br/>generated types"]]
+  fix -.->|same ApiClient| api
 ```
 
 Lint-enforced rules (`veyra/module-boundaries`):
@@ -390,19 +402,34 @@ Lint-enforced rules (`veyra/module-boundaries`):
 - A module never imports another module.
 - Only `shared/api` may import Tauri packages. The rest of the UI is transport-agnostic, so the same dashboard can later run over localhost HTTP or against an organisation hub.
 
-**Data flow (target design).**
+**Data flow (implemented).** The core computes, names and defines every number; the dashboard selects and displays. Unknown values arrive as `null` and are shown as "—".
 
 ```mermaid
 flowchart LR
   URL[(URL search params<br/>single source of filter state)] --> R[Route]
-  R --> Q[TanStack Query hook<br/>key = command + filters]
+  R --> Q[TanStack Query hook<br/>key = command + request]
   Q --> AC[ApiClient]
   AC --> CORE[Rust core]
-  CORE --> DTO[Typed DTO]
+  CORE --> DTO[Typed DTO<br/>values · names · definitions · accuracy]
   DTO --> VM[View model<br/>pure mapping, unit-tested]
   VM --> V[Presentational components<br/>charts · tables · KPI tiles]
   CORE -.->|data-changed event| Q
 ```
+
+**First run (implemented, UC-01).** The privacy promise comes before any data is read.
+
+```mermaid
+flowchart LR
+  start([First launch]) --> det{Sources detected?}
+  det -->|yes| welcome[Welcome<br/>privacy promise · detected sources]
+  det -->|no| hint[Welcome<br/>how to add a source]
+  welcome -->|switch on| consent[Consent recorded<br/>first scan starts]
+  welcome -->|Not now| empty[Dashboard<br/>unknown values shown as —]
+  consent --> live[Dashboard fills in<br/>on data-changed]
+  empty -->|Sources & Health| welcome
+```
+
+**Accessibility.** Every chart has an accessible name and a table twin. Every action is reachable by keyboard: `Ctrl K` opens the command palette, `g` followed by a letter opens a page, and `?` lists every shortcut. The data palette is validated for contrast and colour-blind separation. Playwright and axe check each page against WCAG 2.2 A/AA in both themes in CI.
 
 ### Command catalogue and generated contracts
 
@@ -411,9 +438,8 @@ One declaration drives three outputs, so the Rust core, the IPC permissions and 
 The catalogue today:
 - **Commands:**
   - `get_app_info`
-  - `list_sources`
-  - `set_source_enabled`
-  - `request_rescan`
+  - `list_sources`, `set_source_enabled`, `request_rescan`
+  - `get_overview`, `list_sessions`, `get_session`
 - **Events** (core to dashboard, declared in `for_each_event!`): `data-changed`.
 
 ```mermaid
@@ -623,9 +649,10 @@ flowchart LR
 | UI | **React 19.3** + **TypeScript 6.0** (strict) | Mature ecosystem; strict typing end to end |
 | Build | **Vite 8.3** | Fast, Tauri-native |
 | Contracts | **ts-rs 12** + command catalogue macro | Rust is the single source of truth for every IPC type |
-| Charts | **Apache ECharts 6** (planned) | One library for calendar, heatmap, treemap, sankey and large datasets |
-| Data fetching / routing | **TanStack Query** and **TanStack Router** (planned) | Cached server state; the URL as the single source of filter state |
-| Quality | ESLint 10 + typescript-eslint (strict, type-aware), Prettier, rustfmt, clippy, Vitest | Enforced in CI and pre-commit |
+| Charts | **Apache ECharts 6** (tree-shaken) | One library for calendar, heatmap, treemap, sankey and large datasets |
+| Data fetching / routing | **TanStack Query 5** and **TanStack Router 1** | Cached results refreshed by core events; the URL as the single source of filter state |
+| Design system | **Tailwind CSS 4** over design tokens, **Radix** primitives, lucide icons, Inter and JetBrains Mono (bundled) | Accessible behaviour without imposed styling; one token file for both themes |
+| Quality | ESLint 10 + typescript-eslint (strict, type-aware), Prettier, rustfmt, clippy, Vitest, Playwright + axe | Enforced in CI and pre-commit |
 | Supply chain | pnpm 12 (release-age gate), cargo-deny, pnpm audit | Defence against compromised dependencies |
 
 Every choice and its rejected alternatives are recorded in the [architecture decision records](docs/adr/README.md).
@@ -636,12 +663,17 @@ Every choice and its rejected alternatives are recorded in the [architecture dec
 veyra/
 ├── apps/
 │   └── desktop/                 # React + TypeScript dashboard (Vite)
+│       ├── e2e/                 # Playwright + axe UI tests on the fixture client
 │       └── src/
-│           ├── app/             # bootstrap, shell, providers
-│           ├── modules/         # one folder per product page (from M3)
+│           ├── app/             # router, shell (sidebar, header, query bar, palette), theme
+│           ├── modules/         # one folder per page: overview, sessions, sources
 │           ├── shared/          # module-agnostic building blocks
-│           │   └── api/         # ApiClient, Tauri transport, typed errors
-│           └── styles/
+│           │   ├── api/         # ApiClient, Tauri transport, queries, synthetic fixture client
+│           │   ├── charts/      # ECharts primitives and their table twins
+│           │   ├── filters/     # URL filter state, dates
+│           │   ├── format/      # numbers, money, durations, measures
+│           │   └── ui/          # design-system primitives, overlays, KPI tiles
+│           └── styles/          # design tokens (light, dark) and base styles
 ├── packages/
 │   └── contracts/               # GENERATED TypeScript contracts (never edit)
 ├── crates/
@@ -651,7 +683,8 @@ veyra/
 │   ├── veyra-store/             # SQLite: migrations, idempotent writes, rollups, sources, checkpoints
 │   ├── veyra-connectors/        # pure source parsers, one module per tool (Claude Code)
 │   ├── veyra-ingest/            # discovery, scoped reads, checkpoints, pipeline, watcher worker
-│   └── veyra-app/               # application layer: Api, DTOs, command and event catalogues
+│   ├── veyra-app/               # application layer: Api, page views, DTOs, display names, catalogues
+│   └── veyra-testkit/           # test-only: synthetic fixture paths, temporary directories
 ├── src-tauri/                   # Tauri shell: composition root, commands, capabilities
 │   ├── capabilities/            # IPC permission grants
 │   └── tests/                   # IPC access-control integration tests
@@ -662,11 +695,12 @@ veyra/
 │   ├── contracts-gen/           # generates packages/contracts from Rust
 │   └── perf/                    # synthetic dataset + performance budget check
 ├── tooling/
-│   └── eslint/                  # custom module-boundaries lint rule + tests
+│   ├── eslint/                  # custom module-boundaries lint rule + tests
+│   └── palette/                 # data-palette validator (contrast, separation, colour blindness)
 ├── docs/
 │   ├── planning/                # research, PRD, architecture, UX, risks, roadmap
 │   ├── connectors/              # one page per connector: paths, fields, mapping rules
-│   └── adr/                     # architecture decision records 0001–0023
+│   └── adr/                     # architecture decision records 0001–0024
 ├── .github/workflows/           # CI and security pipelines
 └── .githooks/                   # pre-commit checks
 ```
@@ -719,6 +753,9 @@ pnpm build
 | `pnpm format` / `pnpm format:check` | Prettier and rustfmt |
 | `pnpm contracts:generate` | Regenerate TypeScript contracts after changing Rust DTOs or commands |
 | `pnpm contracts:check` | Fail if the generated contracts are out of date |
+| `pnpm palette:check` | Validate the chart data palette in both themes (also part of `pnpm test`) |
+| `pnpm --filter @veyra/desktop dev` | Run the dashboard alone in a browser on synthetic data (add `?fresh` to the URL for a first run) |
+| `pnpm --filter @veyra/desktop test:ui` | Playwright + axe UI tests (set `PLAYWRIGHT_CHANNEL=msedge` or `chrome` to use an installed browser) |
 | `cargo run --release -p veyra-ingest --example scan_root -- <dir> <new-db>` | Ingest a local Claude Code `projects` directory into a scratch database and print counts only |
 
 ### Adding a command
@@ -746,7 +783,10 @@ The compiler, the IPC access tests and the contract drift check catch any missed
 | Parser | Each connector and format version: synthetic fixtures → expected records, field by field; only allow-listed files are read; no content leaves the parser | `cargo test` (`veyra-connectors`) |
 | Ingestion | Consent, idempotent rescans, appends, partial lines, truncation, replacement, deletion, oversize lines, cancellation, concurrent writers, shared access, canaries, the watcher | `cargo test` (`veyra-ingest`) |
 | Performance | Overview query budgets on 1M synthetic events; end-to-end ingest throughput | `veyra-perf`, ignored throughput test, `Performance` workflow |
-| End-to-end (M3+) | UI flows with IPC fixtures; smoke tests on real bundles for all three OSes | Playwright, WebdriverIO |
+| Page contract | Overview equals the metric engine for the same scope; parts add up to the headline; sessions sum to the Overview; one name per model across pages | `cargo test` (`veyra-app/tests/contract.rs`) |
+| View models | Pure mappings from DTOs to chart inputs, filter options, URL state, formatting, the data palette | Vitest |
+| UI | First-run consent (UC-01), keyboard-only session journey (UC-02), filter state with Back and Forward, WCAG 2.2 A/AA in both themes | Playwright + axe on the synthetic fixture client |
+| Bundle smoke (M8) | The built app on all three OSes | WebdriverIO (planned) |
 
 Test data is always synthetic. Real transcripts or credentials are never committed.
 
@@ -754,7 +794,8 @@ Test data is always synthetic. Real transcripts or credentials are never committ
 
 ```mermaid
 flowchart LR
-  PR[Push to main / pull request] --> WEB[Web job<br/>Prettier · ESLint · typecheck · Vitest]
+  PR[Push to main / pull request] --> WEB[Web job<br/>Prettier · ESLint · typecheck · Vitest · palette]
+  PR --> UI[UI job<br/>Playwright + axe · both themes]
   PR --> RUST[Rust jobs · Ubuntu 22.04 · Windows<br/>rustfmt · clippy · tests · contract drift · desktop build]
   MAN[Manual run<br/>Actions → CI → Run workflow] --> RUST
   MAN --> MAC[Rust job · macOS]
@@ -772,7 +813,7 @@ flowchart LR
 flowchart LR
   M0[M0 Foundations<br/>✅ complete]:::done --> M1[M1 Data core<br/>✅ complete]:::done
   M1 --> M2[M2 Claude Code<br/>end-to-end ingestion<br/>✅ complete]:::done
-  M2 --> M3[M3 Dashboard shell<br/>design system]
+  M2 --> M3[M3 Dashboard shell<br/>design system<br/>✅ complete]:::done
   M2 --> M4[M4 Codex · Gemini CLI<br/>OpenCode · Copilot CLI]
   M3 --> M5[M5 Analytics modules]
   M4 --> M5

@@ -1,6 +1,6 @@
 # 0020. IPC and webview security baseline
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0024](0024-dashboard-frontend.md) (the window may listen to application events)
 - **Date:** 2026-11-08
 
 ## Context
