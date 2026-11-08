@@ -476,7 +476,7 @@ erDiagram
   }
 ```
 
-**Ingestion tables (migration 0002, M2).** Sources record consent, and file checkpoints record how far each log has been read. Runs and issues are counted diagnostics; no content is stored. Tool calls keep ids, names and outcomes only.
+**Ingestion tables (migrations 0002–0003, M2).** Sources record consent, and file checkpoints record how far each log has been read. Runs and issues are counted diagnostics; no content is stored. Tool calls keep ids, names and outcomes only, keyed by their tool-use id.
 
 ```mermaid
 erDiagram
@@ -518,8 +518,8 @@ erDiagram
     int first_offset
   }
   TOOL_CALLS {
+    text tool_use_id PK
     int event_id FK
-    text tool_use_id UK
     text tool_name
     text mcp_server
     int is_error
@@ -564,22 +564,22 @@ flowchart LR
 
 Overview queries, measured with `veyra-perf` on one million synthetic events (a realistic year of sessions):
 
-| Overview query | p95, developer machine | p95, clean CI runner | Budget |
+| Overview query | p95, developer machine | p95, CI runners (4 runs) | Budget |
 |---|---|---|---|
-| 30-day daily trend by application, with comparison | 76 ms | 26 ms | 150 ms |
-| 30-day model ranking (top 8 + other) | 51 ms | 21 ms | 150 ms |
-| 12-month trend | 81 ms | 32 ms | 150 ms |
+| 30-day daily trend by application, with comparison | 76 ms | 26–52 ms | 150 ms |
+| 30-day model ranking (top 8 + other) | 51 ms | 21–42 ms | 150 ms |
+| 12-month trend | 81 ms | 32–68 ms | 150 ms |
 
 Ingestion:
 
-| Measurement | Result | Budget |
-|---|---|---|
-| End to end: one large Claude Code log, read → parse → price → commit | about 50,000–60,000 events/s (developer machine) | ≥ 50,000 events/s |
-| Store writes alone, one million synthetic events (CI) | 41,300 events/s | — |
-| Real backfill: 249 logs, 1.3 GB, 38,509 requests | 8.9 s | — |
-| Rescan with nothing new | 0.2 s, no writes | — |
+| Measurement | Developer machine | CI runners | Budget (CI) |
+|---|---|---|---|
+| End to end: one large Claude Code log, read → parse → price → commit | about 50,000–60,000 events/s | 43,000–49,000 events/s | ≥ 40,000 events/s, best of three |
+| Store writes alone, one million synthetic events | about 35,000 events/s | 35,000–43,000 events/s | — |
+| Real backfill: 249 logs, 1.3 GB, 38,509 requests | 8.9 s | — | — |
+| Rescan with nothing new | 0.2 s, no writes | — | — |
 
-The `Performance` workflow repeats the query and ingest budgets on a clean CI runner. After a backfill the worker blocks until the next change, so idle CPU is zero.
+GitHub-hosted runners vary by up to about 15% between runs, so the ingest budget is set below the slowest measured runner and takes the best of three attempts. The `Performance` workflow checks both the query and ingest budgets weekly and on demand. After a backfill the worker blocks until the next change, so idle CPU is zero.
 
 ## Privacy and security
 
