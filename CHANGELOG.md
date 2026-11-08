@@ -5,6 +5,23 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Claude Code ingestion (M2).**
+  - Connector contract (`SourceConnector`) and the Claude Code connector: main and subagent logs, order-independent deduplication, tool-call metadata and outcomes.
+  - Ingestion engine: consent-gated discovery, root-scoped read-only file access with a credential deny-list, transactional checkpoints, truncation and replacement handling, a debounced watcher, periodic and manual scans, and overlapped parsing and committing.
+  - Migration 0002: sources, file checkpoints, ingest runs and issues, tool calls, and observation precedence.
+  - Commands `list_sources`, `set_source_enabled` and `request_rescan`, and a typed `data-changed` event, generated into the TypeScript contracts.
+  - Synthetic fixtures with canary markers; end-to-end, share-mode and concurrent-writer tests; an ingest throughput budget in the `Performance` workflow.
+  - Connector documentation and ADR-023.
+
+### Changed
+- **Store.**
+  - A larger writer page cache.
+  - Statements are built once.
+  - Session links are applied once per batch.
+  - Dropped the unused `usage_events_occurred_at` index.
+- **Supply chain.** `cargo-deny` accepts the permissive ISC licence (used by the Linux file-watcher backend).
+
+### Added
 - **Data core (M1).**
   - Domain model: events, canonical tokens, accuracy classes, integer money and non-addable cost kinds.
   - Pricing engine with effective dates, prompt tiers, service tiers and recorded assumptions.

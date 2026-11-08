@@ -117,6 +117,14 @@ flowchart LR
 
 ## M2 — Claude Code end-to-end ingestion (L)
 
+> **Implementation notes (2026-11-08).** Delivered as `veyra-connectors`, `veyra-ingest`, migration 0002 and three source commands (ADR-023).
+> - **Spike:** results are in [`docs/connectors/claude-code.md`](../connectors/claude-code.md). Order-independent precedence replaces "last write wins".
+> - **Golden tests:** expressed as field-level assertions per request on the fixtures, which fail with clearer messages than byte-for-byte golden files.
+> - **Safety:** canary fixtures, plus a real-data check in which the source logs contain canaries and the database holds none. A share-mode test renames and deletes a file while it is open. A concurrent writer appends half-lines during scans.
+> - **Throughput:** about 50,000–60,000 events/s end to end on the build machine, from overlapped parsing and committing. The `Performance` workflow checks ≥ 50,000 events/s on a clean runner. Real backfill: 1.3 GB of logs in 8.9 s; rescans 0.2 s.
+> - **Deferred:** process-priority lowering and jittered backoff were not needed to meet the budgets. Failures are recorded per source, and the periodic scan retries.
+> - **Consent UI:** consent is exercised through the `set_source_enabled` command; the Sources page arrives in M3.
+
 **Goal.** Real Claude Code history ingested continuously, correctly and safely.
 
 **Tasks.**

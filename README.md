@@ -6,7 +6,7 @@
 
 Veyra is a local-first desktop application that consolidates AI usage from model providers, coding agents, IDEs, desktop apps and CLIs into one accurate, privacy-preserving analytics product. Everything runs on your own machine.
 
-![Status](https://img.shields.io/badge/status-early%20development%20(M1)-orange)
+![Status](https://img.shields.io/badge/status-early%20development%20(M2)-orange)
 ![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Stack](https://img.shields.io/badge/stack-Tauri%202%20%C2%B7%20Rust%20%C2%B7%20React%2019%20%C2%B7%20SQLite-6f42c1)
@@ -27,9 +27,10 @@ Veyra is a local-first desktop application that consolidates AI usage from model
 ---
 
 > [!IMPORTANT]
-> **Project status: Milestones M0 (Foundations) and M1 (Data core) complete.**
-> - **Built:** the secure desktop shell, generated contracts, the domain model, the verified pricing engine and price catalogue, the SQLite store and the analytics engine. All are tested and performance-checked at one million events.
-> - **Next:** collecting usage from real tools (M2) and the dashboard (M3).
+> **Project status: Milestones M0 (Foundations), M1 (Data core) and M2 (Claude Code ingestion) complete.**
+> - **Built:** the secure desktop shell, generated contracts, the domain model, the verified pricing engine and price catalogue, the SQLite store and the analytics engine.
+> - **New in M2:** consent-gated, incremental ingestion of Claude Code logs. It was verified on 1.3 GB of real logs with no content stored.
+> - **Next:** the dashboard shell with a Sources page (M3), and further connectors (M4).
 >
 > This README marks every capability as **Available** or **Planned**.
 
@@ -94,8 +95,9 @@ Veyra answers the questions no single tool can:
 | Pricing engine with effective-dated prices, prompt-length tiers, service tiers and recorded assumptions | **Available** |
 | Price catalogue for Anthropic, OpenAI and Google, verified on the official pages (2026-11-08) | **Available** |
 | Analytics engine: one metric registry, exact local days and weeks in any time zone, comparisons, top-N | **Available** |
-| Incremental collection from local tool data (watchers, checkpoints) | Planned (M2) |
-| Connectors: Claude Code (CLI, desktop Code tab, IDE), Codex CLI, Gemini CLI, OpenCode, Copilot CLI | Planned (M2–M4) |
+| Incremental collection from local tool data: consent first, checkpoints, file watcher, periodic and manual scans | **Available** |
+| Connector: Claude Code (CLI, desktop Code tab, IDE extensions) | **Available** |
+| Connectors: Codex CLI, Gemini CLI, OpenCode, Copilot CLI | Planned (M4) |
 | Dashboard: Overview, Usage, Cost, Cache, Models & Providers, Projects, Sessions, Activity | Planned (M3–M5) |
 | Tools & Agents, Quotas & Limits, deterministic Optimization recommendations | Planned (M7) |
 | Opt-in local OpenTelemetry receiver | Planned (M7) |
@@ -136,7 +138,7 @@ The tiers below come from the research in [`docs/planning/00-research.md`](docs/
 
 | Source | Interface | Data | Accuracy | Tier |
 |---|---|---|---|---|
-| Claude Code (CLI, desktop Code tab, IDE extension) | CLI / Desktop / IDE | Local JSONL session logs | Exact | MVP |
+| Claude Code (CLI, desktop Code tab, IDE extension) | CLI / Desktop / IDE | Local JSONL session logs | Exact | MVP · **Available** ([details](docs/connectors/claude-code.md)) |
 | Codex CLI | CLI | Local JSONL rollouts | Exact | MVP |
 | Gemini CLI | CLI | Local JSONL sessions | Exact | MVP |
 | OpenCode | CLI | Local SQLite | Exact | MVP |
@@ -164,8 +166,8 @@ flowchart LR
   UI -. optional, opt-in .-> HUB[(Organisation hub<br/>self-hosted)]
 ```
 
-1. **Discover.** Veyra detects supported tools at their documented locations and asks for consent before reading anything.
-2. **Collect.** Connectors read new data incrementally from byte-offset checkpoints. They never lock, modify or delete source files.
+1. **Discover.** Veyra detects supported tools at their documented locations and registers them as disabled sources. It reads nothing until you enable a source.
+2. **Collect.** Veyra reads only the new bytes of each log, from checkpoints committed together with the data, and connectors parse them. Source files are never locked, modified or deleted.
 3. **Normalise.** One normaliser converts vendor-specific token semantics into canonical fields and separates provider, model, application, interface and gateway.
 4. **Price.** Each event is priced using the rate that was in effect at that event's timestamp. Unknown models show "no price", never $0.
 5. **Analyse.** SQL returns only additive sums. Every ratio, average and saving is derived in one Rust metric engine.
@@ -246,7 +248,11 @@ flowchart TB
 
 ### Backend (Rust core)
 
-**Crate dependency graph.** Solid boxes exist today; dashed boxes arrive in later milestones. Ports belong to their consumer: the analytics crate defines the read port and the store implements it.
+**Crate dependency graph.** Solid edges exist today; the dashed edge arrives in M3. Ports belong to their consumer:
+- The analytics crate defines the read port, and the store implements it.
+- The domain defines `SourceRepository` and `IngestControl`, implemented by the store and the ingest worker.
+
+The application layer therefore depends on the domain only.
 
 ```mermaid
 flowchart LR
@@ -254,29 +260,29 @@ flowchart LR
   app[veyra-app<br/>use cases · DTOs · catalogue]
   gen[veyra-contracts-gen<br/>tools/contracts-gen]
   perf[veyra-perf<br/>tools/perf · budgets]
-  dom[veyra-domain<br/>events · tokens · money · pricing engine]
+  dom[veyra-domain<br/>events · pricing engine · ports]
   reg[veyra-registry<br/>providers · models · prices]
   ana[veyra-analytics<br/>metrics · queries · engine]
-  sto[veyra-store<br/>SQLite · rollups · reads]
-  con[veyra-connectors]:::planned
-  ing[veyra-ingest]:::planned
+  sto[veyra-store<br/>SQLite · rollups · sources]
+  con[veyra-connectors<br/>pure source parsers]
+  ing[veyra-ingest<br/>worker · watcher · checkpoints]
 
   desktop --> app
+  desktop --> ing
+  desktop --> con
   gen --> app
-  perf --> sto
-  perf --> reg
+  app --> dom
+  ing --> sto
+  ing --> reg
+  ing -->|implements IngestControl| dom
+  con --> dom
   reg --> dom
   ana --> dom
-  sto --> dom
+  sto -->|implements SourceRepository| dom
   sto -->|implements read port| ana
-  app -.-> ing
+  perf --> sto
+  perf --> reg
   app -.-> ana
-  desktop -.-> sto
-  desktop -.-> con
-  ing -.-> dom
-  con -.-> dom
-
-  classDef planned stroke-dasharray: 5 5,opacity:0.7
 ```
 
 **IPC request flow (implemented).** Every command takes one typed `request` and returns a typed response or a typed `ApiError`.
@@ -306,27 +312,50 @@ sequenceDiagram
   H-->>C: state: ready | error
 ```
 
-**Ingestion pipeline (planned, M2).** It is crash-safe: events, costs, rollups and checkpoints commit in one transaction.
+**Source lifecycle (implemented, M2).** Nothing under a source root is opened before consent ([ADR-023](docs/adr/0023-incremental-ingestion.md)).
+
+```mermaid
+stateDiagram-v2
+  [*] --> Discovered: documented root exists
+  Discovered --> Enabled: user consents (time recorded)
+  Enabled --> Disabled: user disables
+  Disabled --> Enabled: user re-enables
+  Enabled --> Enabled: scan at startup, on change, every 15 min, on request
+  note right of Discovered
+    Registered but never read
+  end note
+  note right of Disabled
+    Not read or watched. Stored history is kept
+  end note
+```
+
+**Ingestion pipeline (implemented, M2).** It is crash-safe: events, costs, rollups, tool calls and the file checkpoint commit in one transaction. The file watcher is only a hint to scan sooner. Correctness comes from comparing each file with its checkpoint.
 
 ```mermaid
 sequenceDiagram
+  autonumber
   participant W as File watcher (hint)
-  participant S as Scheduler
+  participant K as Ingest worker
+  participant R as Reader thread
+  participant FS as ScopedFs (read-only)
   participant C as Connector
-  participant N as Normaliser
-  participant P as Pricing engine
   participant DB as SQLite writer
   participant UI as Dashboard
-  W->>S: path changed (debounced)
-  S->>S: coalesce · bounded concurrency · low priority
-  S->>C: plan(location, checkpoints)
-  C->>C: stream from byte offset (read-only, shared access)
-  C-->>N: parsed records + per-line errors
-  N->>N: canonical tokens · provider/model/app/interface · dedup key
-  N->>P: price at event timestamp
-  P-->>DB: events + costs + rollup deltas + checkpoint (one transaction)
-  DB-->>UI: data.changed {range, dimensions}
-  UI->>UI: invalidate affected queries only
+  W->>K: .jsonl changed (debounced, about 2 s)
+  K->>DB: enabled sources and file checkpoints
+  K->>K: per file: skip, continue from offset, or restart
+  K->>R: start at the checkpoint offset
+  loop each 8 MiB chunk, in file order
+    R->>FS: read bytes (shared access, inside the root only)
+    FS-->>R: complete lines only
+    R->>C: parse lines
+    C-->>R: raw records and issues (no content)
+    R->>R: normalise via registry, price at event time
+    R-->>K: priced events and the new checkpoint
+    K->>DB: events, costs, rollups, tool calls, checkpoint (one transaction)
+  end
+  Note over R,K: the reader prepares the next chunk while the worker commits
+  K-->>UI: data-changed {inserted, updated}
 ```
 
 ### Frontend (dashboard)
@@ -372,21 +401,31 @@ flowchart LR
   CORE --> DTO[Typed DTO]
   DTO --> VM[View model<br/>pure mapping, unit-tested]
   VM --> V[Presentational components<br/>charts · tables · KPI tiles]
-  CORE -.->|data.changed event| Q
+  CORE -.->|data-changed event| Q
 ```
 
 ### Command catalogue and generated contracts
 
 One declaration drives three outputs, so the Rust core, the IPC permissions and the TypeScript types cannot drift apart. See [ADR-010](docs/adr/0010-generated-contracts.md).
 
+The catalogue today:
+- **Commands:**
+  - `get_app_info`
+  - `list_sources`
+  - `set_source_enabled`
+  - `request_rescan`
+- **Events** (core to dashboard, declared in `for_each_event!`): `data-changed`.
+
 ```mermaid
 flowchart LR
-  CAT["for_each_command!<br/>crates/veyra-app/src/commands.rs<br/><code>get_app_info(AppInfoRequest) -> AppInfo;</code>"]
+  CAT["for_each_command!<br/>crates/veyra-app/src/commands.rs<br/><code>list_sources(ListSourcesRequest) -> SourceList;</code>"]
+  EVT["for_each_event!<br/><code>data-changed => DataChanged</code>"]
   CAT --> H[Tauri command handlers<br/>src-tauri/src/commands.rs]
   CAT --> PERM[IPC permission allow-list<br/>src-tauri/build.rs]
   CAT --> GEN[contracts generator<br/>tools/contracts-gen]
+  EVT --> GEN
   DTO[DTOs with ts-rs derives<br/>crates/veyra-app/src/dto] --> GEN
-  GEN --> TS[packages/contracts/src/generated<br/>CommandMap · DTO types · ApiError]
+  GEN --> TS[packages/contracts/src/generated<br/>CommandMap · EventMap · DTO types · ApiError]
   TS --> CLIENT[Typed ApiClient<br/>apps/desktop/src/shared/api]
   CHECK[pnpm contracts:check<br/>CI + pre-commit] -. fails on drift .-> TS
 ```
@@ -437,6 +476,56 @@ erDiagram
   }
 ```
 
+**Ingestion tables (migration 0002, M2).** Sources record consent, and file checkpoints record how far each log has been read. Runs and issues are counted diagnostics; no content is stored. Tool calls keep ids, names and outcomes only.
+
+```mermaid
+erDiagram
+  SOURCES ||--o{ SOURCE_FILES : "tracks"
+  SOURCES ||--o{ INGEST_ISSUES : "reports"
+  INGEST_RUNS ||--o{ INGEST_ISSUES : "collects"
+  USAGE_EVENTS ||--o{ TOOL_CALLS : "requested"
+
+  SOURCES {
+    int id PK
+    text connector_id
+    text root
+    int enabled
+    int consented_at
+    int last_success_at
+    text last_error
+  }
+  SOURCE_FILES {
+    int source_id FK
+    text path
+    int byte_offset
+    int head_hash
+    int parser_version
+    text state
+  }
+  INGEST_RUNS {
+    int id PK
+    text trigger
+    int events_inserted
+    int issues
+    text outcome
+  }
+  INGEST_ISSUES {
+    int run_id FK
+    int source_id FK
+    text path
+    text kind
+    int occurrences
+    int first_offset
+  }
+  TOOL_CALLS {
+    int event_id FK
+    text tool_use_id UK
+    text tool_name
+    text mcp_server
+    int is_error
+  }
+```
+
 **Rollups.** Events are aggregated into three levels of 15-minute UTC buckets, all clustered by time and all rebuilt in the same transaction as each write. Every real-world UTC offset is a multiple of 15 minutes, so local days, hours and weeks stay exact in zones like Asia/Kolkata (+05:30). See [ADR-009](docs/adr/0009-fifteen-minute-utc-rollups.md) and [ADR-022](docs/adr/0022-data-core-implementation.md).
 
 ```mermaid
@@ -473,15 +562,24 @@ flowchart LR
 
 ### Performance
 
-Measured with `veyra-perf` on one million synthetic events (a realistic year of sessions), on a machine with free memory:
+Overview queries, measured with `veyra-perf` on one million synthetic events (a realistic year of sessions):
 
-| Overview query | p95 | Budget |
+| Overview query | p95, developer machine | p95, clean CI runner | Budget |
+|---|---|---|---|
+| 30-day daily trend by application, with comparison | 76 ms | 26 ms | 150 ms |
+| 30-day model ranking (top 8 + other) | 51 ms | 21 ms | 150 ms |
+| 12-month trend | 81 ms | 32 ms | 150 ms |
+
+Ingestion:
+
+| Measurement | Result | Budget |
 |---|---|---|
-| 30-day daily trend by application, with comparison | 76 ms | 150 ms |
-| 30-day model ranking (top 8 + other) | 51 ms | 150 ms |
-| 12-month trend | 81 ms | 150 ms |
+| End to end: one large Claude Code log, read → parse → price → commit | about 50,000–60,000 events/s (developer machine) | ≥ 50,000 events/s |
+| Store writes alone, one million synthetic events (CI) | 41,300 events/s | — |
+| Real backfill: 249 logs, 1.3 GB, 38,509 requests | 8.9 s | — |
+| Rescan with nothing new | 0.2 s, no writes | — |
 
-Ingest runs at about 35,000 events per second in session order. The `Performance` workflow repeats this check on a clean CI runner.
+The `Performance` workflow repeats the query and ingest budgets on a clean CI runner. After a backfill the worker blocks until the next change, so idle CPU is zero.
 
 ## Privacy and security
 
@@ -498,13 +596,18 @@ Ingest runs at about 35,000 events per second in session order. The `Performance
 ```mermaid
 flowchart LR
   page[Dashboard page] -->|invoke| ipc{Tauri IPC}
-  ipc -->|window = main<br/>and allow-get-app-info granted| ok[Command runs]
+  ipc -->|window = main<br/>and the command's allow permission granted| ok[Command runs]
   ipc -->|any other window| deny1[Rejected: not allowed]
   ipc -->|command not in catalogue| deny2[Rejected: not found]
   csp[["Strict CSP<br/>script-src self · style-src self<br/>connect-src ipc only"]] --- page
 ```
 
 - **IPC permissions.** IPC is limited to the commands declared in the catalogue, and only the `main` window may call them. This is verified by the integration tests in [`src-tauri/tests/ipc_access.rs`](src-tauri/tests/ipc_access.rs).
+- **Safe ingestion (M2, [ADR-023](docs/adr/0023-incremental-ingestion.md)).**
+  - **Consent and scope.** Sources stay disabled until you enable them. Reads are confined to the source root: no `..`, no absolute paths, no symbolic links. Credential and key files are refused by name, even inside a root.
+  - **Read-only, shared access.** Files are opened read-only and shared, so the tool can keep writing, renaming and deleting its logs. A test renames and deletes a file while Veyra holds it open.
+  - **No content is parsed.** Connectors deserialise only usage fields and tool *names*. Text is skipped without being buffered.
+  - **Canary checks.** Fixtures and a real-data check place canary strings wherever logs hold content. The database, its WAL and shared-memory files must contain none.
 - **Content Security Policy.** The production CSP allows no `unsafe-inline` and no `unsafe-eval`. This was verified on a built app through WebView2 DevTools.
 - **Plugins.** No shell plugin, no SQL plugin and no global Tauri object. The JavaScript prototype is frozen.
 - **No telemetry.** Network access happens only through features you explicitly enable.
@@ -545,11 +648,15 @@ veyra/
 │   ├── veyra-domain/            # pure domain: events, tokens, accuracy, money, pricing engine
 │   ├── veyra-registry/          # loads + validates registry/*.toml (single source of truth)
 │   ├── veyra-analytics/         # metric registry, query specs, time-zone-aware engine
-│   ├── veyra-store/             # SQLite: migrations, idempotent writes, rollups, reads
-│   └── veyra-app/               # application layer: Api, DTOs, command catalogue
+│   ├── veyra-store/             # SQLite: migrations, idempotent writes, rollups, sources, checkpoints
+│   ├── veyra-connectors/        # pure source parsers, one module per tool (Claude Code)
+│   ├── veyra-ingest/            # discovery, scoped reads, checkpoints, pipeline, watcher worker
+│   └── veyra-app/               # application layer: Api, DTOs, command and event catalogues
 ├── src-tauri/                   # Tauri shell: composition root, commands, capabilities
 │   ├── capabilities/            # IPC permission grants
 │   └── tests/                   # IPC access-control integration tests
+├── tests/
+│   └── fixtures/                # synthetic connector fixtures with canary markers
 ├── registry/                    # providers, models and official prices (TOML, reviewed by PR)
 ├── tools/
 │   ├── contracts-gen/           # generates packages/contracts from Rust
@@ -558,7 +665,8 @@ veyra/
 │   └── eslint/                  # custom module-boundaries lint rule + tests
 ├── docs/
 │   ├── planning/                # research, PRD, architecture, UX, risks, roadmap
-│   └── adr/                     # architecture decision records 0001–0022
+│   ├── connectors/              # one page per connector: paths, fields, mapping rules
+│   └── adr/                     # architecture decision records 0001–0023
 ├── .github/workflows/           # CI and security pipelines
 └── .githooks/                   # pre-commit checks
 ```
@@ -611,6 +719,7 @@ pnpm build
 | `pnpm format` / `pnpm format:check` | Prettier and rustfmt |
 | `pnpm contracts:generate` | Regenerate TypeScript contracts after changing Rust DTOs or commands |
 | `pnpm contracts:check` | Fail if the generated contracts are out of date |
+| `cargo run --release -p veyra-ingest --example scan_root -- <dir> <new-db>` | Ingest a local Claude Code `projects` directory into a scratch database and print counts only |
 
 ### Adding a command
 
@@ -634,8 +743,9 @@ The compiler, the IPC access tests and the contract drift check catch any missed
 | Storage | Idempotency, moved events, rollups equal raw events on random data, all rollup levels agree, re-pricing, backups | `cargo test` (`veyra-store`) |
 | Integration | IPC access control against a mock Tauri runtime, with the real configuration | `cargo test` (`src-tauri/tests`) |
 | Contract | Generated TypeScript matches Rust DTOs and the command catalogue | `pnpm contracts:check` |
-| Parser / golden (M2+) | Each connector and format version: fixtures → expected normalised events | `cargo test` |
-| Performance | Overview query and ingest budgets on 1M synthetic events | `veyra-perf`, `Performance` workflow |
+| Parser | Each connector and format version: synthetic fixtures → expected records, field by field; only allow-listed files are read; no content leaves the parser | `cargo test` (`veyra-connectors`) |
+| Ingestion | Consent, idempotent rescans, appends, partial lines, truncation, replacement, deletion, oversize lines, cancellation, concurrent writers, shared access, canaries, the watcher | `cargo test` (`veyra-ingest`) |
+| Performance | Overview query budgets on 1M synthetic events; end-to-end ingest throughput | `veyra-perf`, ignored throughput test, `Performance` workflow |
 | End-to-end (M3+) | UI flows with IPC fixtures; smoke tests on real bundles for all three OSes | Playwright, WebdriverIO |
 
 Test data is always synthetic. Real transcripts or credentials are never committed.
@@ -661,7 +771,7 @@ flowchart LR
 ```mermaid
 flowchart LR
   M0[M0 Foundations<br/>✅ complete]:::done --> M1[M1 Data core<br/>✅ complete]:::done
-  M1 --> M2[M2 Claude Code<br/>end-to-end ingestion]
+  M1 --> M2[M2 Claude Code<br/>end-to-end ingestion<br/>✅ complete]:::done
   M2 --> M3[M3 Dashboard shell<br/>design system]
   M2 --> M4[M4 Codex · Gemini CLI<br/>OpenCode · Copilot CLI]
   M3 --> M5[M5 Analytics modules]
@@ -695,7 +805,8 @@ The detailed, dependency-ordered plan with acceptance criteria is in [`docs/plan
 | [UX plan](docs/planning/03-ux.md) | Sitemap, page anatomy, chart choices, design system, accessibility |
 | [Feasibility and risks](docs/planning/04-feasibility-risks.md) | Feasibility, risk register, hidden costs, prioritisation |
 | [Roadmap](docs/planning/05-roadmap.md) | Milestones, tasks, acceptance criteria |
-| [Decision records](docs/adr/README.md) | ADR 0001–0022 |
+| [Connectors](docs/connectors/claude-code.md) | Per-source paths, fields used, mapping rules, precedence and diagnostics |
+| [Decision records](docs/adr/README.md) | ADR 0001–0023 |
 
 ## Author
 

@@ -36,6 +36,27 @@ Follow the development section of the [README](README.md), then run `pnpm hooks:
 4. Grant `allow-<command-name>` in `src-tauri/capabilities/main.json`.
 5. Run `pnpm contracts:generate` and commit the generated files.
 
+Events the core emits to the dashboard are declared the same way, in `for_each_event!`.
+
+## Adding a connector
+
+A connector is a pure parser; the ingest pipeline does all reading, checkpointing, pricing and storage (ADR-023). Use `crates/veyra-connectors/src/claude_code` as the model.
+
+1. Run a structure-only spike on real logs: field names, types and counts. Never print or store content.
+2. Create a module in `crates/veyra-connectors/src/` implementing `SourceConnector`:
+   - `default_roots`: documented locations and location variables only, never credentials (ADR-014);
+   - `is_source_file`: a strict allow-list of paths;
+   - `parse`: complete lines in, raw records out, with a precedence that makes duplicates order-independent.
+3. Register it in `veyra_connectors::all()`.
+4. Add synthetic fixtures under `tests/fixtures/<connector>/<format-version>/`, with `VEYRA-CANARY-…` markers wherever real logs hold content, and tests asserting every mapped field.
+5. Check it on your own logs with the counts-only diagnostic:
+
+   ```bash
+   cargo run --release -p veyra-ingest --example scan_root -- <projects-dir> <new-db-file>
+   ```
+
+6. Document it in `docs/connectors/<connector>.md`: paths, fields used, mapping rules, precedence and diagnostics.
+
 ## Updating prices
 
 Prices live in `registry/pricing/*.toml` and are the single source of truth for every cost Veyra shows (ADR-007).
