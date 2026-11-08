@@ -10,6 +10,7 @@ Veyra is a local-first desktop application that consolidates AI usage from model
 ![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Stack](https://img.shields.io/badge/stack-Tauri%202%20%C2%B7%20Rust%20%C2%B7%20React%2019%20%C2%B7%20SQLite-6f42c1)
+![Author](https://img.shields.io/badge/author-Nikunj%20Bansal-0a7ea4)
 
 [Overview](#overview) ·
 [Features](#features) ·
@@ -18,7 +19,8 @@ Veyra is a local-first desktop application that consolidates AI usage from model
 [Getting started](#getting-started) ·
 [Development](#development) ·
 [Roadmap](#roadmap) ·
-[Documentation](#documentation)
+[Documentation](#documentation) ·
+[Author](#author)
 
 </div>
 
@@ -50,6 +52,7 @@ Veyra is a local-first desktop application that consolidates AI usage from model
 - [Continuous integration](#continuous-integration)
 - [Roadmap](#roadmap)
 - [Documentation](#documentation)
+- [Author](#author)
 - [Contributing](#contributing)
 - [Security policy](#security-policy)
 - [License](#license)
@@ -449,7 +452,7 @@ flowchart LR
 - **Content Security Policy.** The production CSP allows no `unsafe-inline` and no `unsafe-eval`. This was verified on a built app through WebView2 DevTools.
 - **Plugins.** No shell plugin, no SQL plugin and no global Tauri object. The JavaScript prototype is frozen.
 - **No telemetry.** Network access happens only through features you explicitly enable.
-- **Supply chain.** Exact version pins, a 7-day minimum release age, dependency install scripts disabled, GitHub Actions pinned to commit SHAs, and cargo-deny, `pnpm audit`, dependency review and CodeQL in CI. See [ADR-017](docs/adr/0017-supply-chain-policy.md).
+- **Supply chain.** Exact version pins, a 7-day minimum release age, dependency install scripts disabled, GitHub Actions pinned to commit SHAs, and cargo-deny plus `pnpm audit` in CI. CodeQL and dependency review return when the repository becomes public ([ADR-021](docs/adr/0021-ci-scope-while-private.md)). See [ADR-017](docs/adr/0017-supply-chain-policy.md).
 
 ## Technology stack
 
@@ -464,7 +467,7 @@ flowchart LR
 | Charts | **Apache ECharts 6** (planned) | One library for calendar, heatmap, treemap, sankey and large datasets |
 | Data fetching / routing | **TanStack Query** and **TanStack Router** (planned) | Cached server state; the URL as the single source of filter state |
 | Quality | ESLint 10 + typescript-eslint (strict, type-aware), Prettier, rustfmt, clippy, Vitest | Enforced in CI and pre-commit |
-| Supply chain | pnpm 12 (release-age gate), cargo-deny, CodeQL | Defence against compromised dependencies |
+| Supply chain | pnpm 12 (release-age gate), cargo-deny, pnpm audit | Defence against compromised dependencies |
 
 Every choice and its rejected alternatives are recorded in the [architecture decision records](docs/adr/README.md).
 
@@ -493,7 +496,7 @@ veyra/
 │   └── eslint/                  # custom module-boundaries lint rule + tests
 ├── docs/
 │   ├── planning/                # research, PRD, architecture, UX, risks, roadmap
-│   └── adr/                     # architecture decision records 0001–0020
+│   └── adr/                     # architecture decision records 0001–0021
 ├── .github/workflows/           # CI and security pipelines
 └── .githooks/                   # pre-commit checks
 ```
@@ -577,13 +580,17 @@ Test data is always synthetic. Real transcripts or credentials are never committ
 
 ```mermaid
 flowchart LR
-  PR[Push / pull request] --> WEB[Web job<br/>Prettier · ESLint · typecheck · Vitest]
-  PR --> RUST[Rust jobs · Windows · macOS · Ubuntu 22.04<br/>rustfmt · clippy · tests · contract drift · desktop build]
-  PR --> SEC[Security<br/>cargo-deny · pnpm audit · dependency review · CodeQL]
+  PR[Push to main / pull request] --> WEB[Web job<br/>Prettier · ESLint · typecheck · Vitest]
+  PR --> RUST[Rust jobs · Ubuntu 22.04 · Windows<br/>rustfmt · clippy · tests · contract drift · desktop build]
+  MAN[Manual run<br/>Actions → CI → Run workflow] --> RUST
+  MAN --> MAC[Rust job · macOS]
+  PR --> SEC[Security<br/>cargo-deny · pnpm audit]
   SCHED[Weekly schedule] --> SEC
 ```
 
-All actions are pinned to full commit SHAs with read-only permissions by default.
+- All actions are pinned to full commit SHAs, with read-only permissions by default.
+- While the repository is private, macOS builds run only on manual dispatch, because macOS minutes are billed at 10×. CodeQL and dependency review are off, because they require GitHub Advanced Security on private repositories.
+- Both come back when the repository is made public. See [ADR-021](docs/adr/0021-ci-scope-while-private.md).
 
 ## Roadmap
 
@@ -624,7 +631,11 @@ The detailed, dependency-ordered plan with acceptance criteria is in [`docs/plan
 | [UX plan](docs/planning/03-ux.md) | Sitemap, page anatomy, chart choices, design system, accessibility |
 | [Feasibility and risks](docs/planning/04-feasibility-risks.md) | Feasibility, risk register, hidden costs, prioritisation |
 | [Roadmap](docs/planning/05-roadmap.md) | Milestones, tasks, acceptance criteria |
-| [Decision records](docs/adr/README.md) | ADR 0001–0020 |
+| [Decision records](docs/adr/README.md) | ADR 0001–0021 |
+
+## Author
+
+**Nikunj Bansal**: creator and maintainer of Veyra.
 
 ## Contributing
 

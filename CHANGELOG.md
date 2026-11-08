@@ -4,6 +4,12 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Changed
+- **CI scope while the repository is private (ADR-021).**
+  - macOS builds run only on manual dispatch.
+  - CodeQL and dependency review are disabled until the repository is public.
+- **README.** Credits the author.
+
 ### Added
 - **Foundations (M0).**
   - Monorepo: pnpm workspaces and a Cargo workspace.

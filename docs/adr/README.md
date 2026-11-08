@@ -26,3 +26,4 @@ Each record documents one significant decision: its context, the decision itself
 | [018](0018-unsigned-v1-distribution.md) | Unsigned v1 distribution with checksums | Accepted |
 | [019](0019-licence.md) | Licence: Apache-2.0 OR MIT | Accepted |
 | [020](0020-ipc-security-baseline.md) | IPC and webview security baseline | Accepted |
+| [021](0021-ci-scope-while-private.md) | CI scope while the repository is private | Accepted |

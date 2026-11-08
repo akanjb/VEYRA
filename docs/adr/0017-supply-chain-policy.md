@@ -13,7 +13,7 @@ In May 2026, 84 malicious versions of 42 `@tanstack/*` packages were published a
 2. **Release-age gate.** No version younger than **7 days** is installed (pnpm `minimumReleaseAge: 10080`). The same rule applies to crates, the toolchain and GitHub Actions, chosen by hand.
 3. **No install scripts.** Dependency lifecycle scripts do not run (pnpm default). Any exception must be allow-listed with a reason.
 4. **Pinned Actions.** GitHub Actions are pinned to full commit SHAs. Workflows use `permissions: contents: read` by default and `persist-credentials: false`, and never use `pull_request_target`.
-5. **CI checks.** CI runs cargo-deny (advisories, licences, sources), `pnpm audit`, dependency review and CodeQL.
+5. **CI checks.** CI runs cargo-deny (advisories, licences, sources) and `pnpm audit`. Dependency review and CodeQL are suspended while the repository is private (ADR-021).
 6. **Admission review.** Every new dependency goes through the admission checklist in `CONTRIBUTING.md`.
 
 **Recorded exceptions:**

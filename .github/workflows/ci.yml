@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Manual runs ("Run workflow" in the Actions tab) also build on macOS.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -40,7 +42,12 @@ jobs:
       fail-fast: false
       matrix:
         # Ubuntu 22.04 is the oldest supported Linux base (WebKitGTK 4.1, glibc).
-        os: [ubuntu-22.04, windows-latest, macos-latest]
+        # While the repository is private, macOS minutes are billed at 10x, so macOS
+        # runs only on manual dispatch (ADR-021).
+        os: >-
+          ${{ fromJSON(github.event_name == 'workflow_dispatch'
+            && '["ubuntu-22.04", "windows-latest", "macos-latest"]'
+            || '["ubuntu-22.04", "windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
