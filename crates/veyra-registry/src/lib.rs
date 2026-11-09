@@ -118,9 +118,22 @@ impl Registry {
     /// (case-insensitive).
     #[must_use]
     pub fn resolve_model(&self, reported: &str) -> Option<&Model> {
-        self.model_lookup
-            .get(&reported.trim().to_ascii_lowercase())
-            .map(|&index| &self.models[index])
+        let exact = reported.trim().to_ascii_lowercase();
+        let lookup = |name: &str| {
+            self.model_lookup
+                .get(name)
+                .map(|&index| &self.models[index])
+        };
+        lookup(&exact).or_else(|| {
+            // Gateways spell names their own way: `anthropic/claude-sonnet-4.5`
+            // (OpenRouter) or `claude-sonnet-4.5` (GitHub Copilot) for
+            // `claude-sonnet-4-5`. Names with dots of their own, such as `gpt-5.5`,
+            // match exactly above.
+            let unprefixed = exact
+                .rsplit_once('/')
+                .map_or(exact.as_str(), |(_, name)| name);
+            lookup(unprefixed).or_else(|| lookup(&unprefixed.replace('.', "-")))
+        })
     }
 
     /// The canonical model with this exact id.

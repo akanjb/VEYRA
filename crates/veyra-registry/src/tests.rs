@@ -91,6 +91,25 @@ fn resolves_models_by_id_and_alias_case_insensitively() {
 }
 
 #[test]
+fn resolves_the_names_gateways_use() {
+    let registry = registry();
+    let resolve = |s: &str| registry.resolve_model(s).map(|m| m.id.to_string());
+    // GitHub Copilot writes dots; OpenRouter adds the vendor.
+    assert_eq!(
+        resolve("claude-sonnet-4.5").as_deref(),
+        Some("claude-sonnet-4-5")
+    );
+    assert_eq!(
+        resolve("anthropic/claude-sonnet-4.5").as_deref(),
+        Some("claude-sonnet-4-5")
+    );
+    assert_eq!(resolve("openai/gpt-5.5").as_deref(), Some("gpt-5.5"));
+    // Names with dots of their own still match exactly.
+    assert_eq!(resolve("gpt-5.5").as_deref(), Some("gpt-5.5"));
+    assert_eq!(resolve("vendor/not-a-model"), None);
+}
+
+#[test]
 fn anthropic_prices_match_the_published_table() {
     // Sonnet 5.5: $2 input; $0.10 cache hit; $2.50 5-minute write; $4 1-hour write.
     let tokens = TokenCounts {
