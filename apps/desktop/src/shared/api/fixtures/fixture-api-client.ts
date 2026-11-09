@@ -4,6 +4,7 @@
  * user consents, rescans emit `data-changed`, and errors use the same typed union.
  */
 import type {
+  Capability,
   CommandName,
   EventMap,
   EventName,
@@ -16,6 +17,23 @@ import { ApiCallError } from "../api-errors";
 import { sessionRow, tokensOf, type Flat } from "./aggregate";
 import { FIXTURE_PROJECTS, fixtureLabel, generateSessions } from "./dataset";
 import { overview, sessions } from "./views";
+
+/** What the Claude Code connector reports (as its descriptor in the core says). */
+const CAPABILITIES: Capability[] = [
+  { label: "Tokens", support: "full", note: null },
+  { label: "Cache", support: "full", note: null },
+  {
+    label: "Reasoning",
+    support: "partial",
+    note: "Counted within output; not reported separately",
+  },
+  { label: "Tools", support: "full", note: null },
+  { label: "Sessions", support: "full", note: null },
+  { label: "Projects", support: "full", note: null },
+];
+
+/** The other tools of this build, none of which the fixture device has. */
+const NOT_FOUND = ["Codex", "Gemini CLI", "OpenCode", "GitHub Copilot CLI"];
 
 export interface FixtureOptions {
   /** Start like a first run: the source is detected but not yet enabled. */
@@ -58,6 +76,7 @@ class FixtureState {
       lastIngestedAt: this.enabled ? this.options.now - 12_000 : null,
       events,
       recentIssues: this.enabled ? [{ kind: "malformed-json", occurrences: 2 }] : [],
+      capabilities: CAPABILITIES,
     };
   }
 
@@ -127,7 +146,7 @@ export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient 
       os: "fixture",
       arch: "web",
     }),
-    list_sources: () => ({ sources: [state.source()] }),
+    list_sources: () => ({ sources: [state.source()], notFound: NOT_FOUND }),
     set_source_enabled: (r) => state.setEnabled(r.enabled),
     request_rescan: () => {
       setTimeout(() => {

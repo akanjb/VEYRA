@@ -5,6 +5,7 @@ import { useCommandMutation } from "@/shared/api";
 import { fmt } from "@/shared/format";
 import { Button, Stat, Switch, Tip } from "@/shared/ui";
 
+import { CapabilityMatrix } from "./capabilities";
 import { HealthDot, health } from "./health";
 import { issueLabel } from "./issues";
 
@@ -128,6 +129,7 @@ export function SourceCard({ source }: { source: SourceSummary }) {
         <Controls source={source} />
       </div>
       {source.enabled ? <Figures source={source} /> : null}
+      <CapabilityMatrix capabilities={source.capabilities} />
       <Problems source={source} />
     </section>
   );

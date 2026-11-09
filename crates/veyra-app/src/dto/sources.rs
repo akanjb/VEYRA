@@ -10,6 +10,28 @@ pub struct ListSourcesRequest {}
 #[serde(rename_all = "camelCase")]
 pub struct SourceList {
     pub sources: Vec<SourceSummary>,
+    /// Tools Veyra can read that were not found on this device, by name.
+    pub not_found: Vec<String>,
+}
+
+/// How completely a source reports one kind of information.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SupportLevel {
+    Full,
+    Partial,
+    Unsupported,
+}
+
+/// One row of a source's capability matrix.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct Capability {
+    /// What is reported, e.g. `Tokens`.
+    pub label: String,
+    pub support: SupportLevel,
+    /// The limitation, in plain words, when support is partial.
+    pub note: Option<String>,
 }
 
 /// A usage source and its ingestion health. Timestamps are UTC epoch milliseconds.
@@ -50,6 +72,8 @@ pub struct SourceSummary {
     pub events: u64,
     /// Problems found in the last 7 days, per kind (never content).
     pub recent_issues: Vec<IssueCount>,
+    /// What this source can report.
+    pub capabilities: Vec<Capability>,
 }
 
 /// How often one kind of problem occurred.

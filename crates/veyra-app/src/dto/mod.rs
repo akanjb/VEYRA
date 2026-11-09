@@ -18,6 +18,6 @@ pub use sessions::{
     TimelineEvent, TokenBreakdown, ToolCallSummary,
 };
 pub use sources::{
-    DataChanged, IssueCount, ListSourcesRequest, RescanAccepted, RescanRequest,
-    SetSourceEnabledRequest, SourceList, SourceSummary,
+    Capability, DataChanged, IssueCount, ListSourcesRequest, RescanAccepted, RescanRequest,
+    SetSourceEnabledRequest, SourceList, SourceSummary, SupportLevel,
 };

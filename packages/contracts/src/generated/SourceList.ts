@@ -4,4 +4,8 @@ import type { SourceSummary } from "./SourceSummary";
 /**
  * Every usage source found on this device.
  */
-export type SourceList = { sources: Array<SourceSummary>, };
+export type SourceList = { sources: Array<SourceSummary>, 
+/**
+ * Tools Veyra can read that were not found on this device, by name.
+ */
+notFound: Array<string>, };

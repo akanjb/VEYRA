@@ -301,9 +301,38 @@ mod tests {
             .register_source("claude-code", "/home/dev/.claude/projects", UtcMillis(5))
             .unwrap();
 
-        let listed = api.list_sources(ListSourcesRequest {}).unwrap().sources;
+        let list = api.list_sources(ListSourcesRequest {}).unwrap();
+        // Every other tool of this build is reported as not found.
+        assert_eq!(
+            list.not_found,
+            ["Codex", "Gemini CLI", "OpenCode", "GitHub Copilot CLI"]
+        );
+        let listed = list.sources;
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].display_name, "Claude Code");
+        let labels: Vec<&str> = listed[0]
+            .capabilities
+            .iter()
+            .map(|c| c.label.as_str())
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                "Tokens",
+                "Cache",
+                "Reasoning",
+                "Tools",
+                "Sessions",
+                "Projects"
+            ]
+        );
+        assert!(
+            listed[0]
+                .capabilities
+                .iter()
+                .all(|c| (c.note.is_some()) == (c.support == crate::dto::SupportLevel::Partial)),
+            "a partial capability always says why"
+        );
         assert!(!listed[0].enabled);
         assert!(!listed[0].documented_format);
         assert_eq!(listed[0].consented_at, None);

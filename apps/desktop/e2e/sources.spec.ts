@@ -28,6 +28,9 @@ for (const theme of THEMES) {
     await open(page, "/sources", { theme });
     await page.getByText(/problems? found in the last 7 days/).click();
     await expect(page.getByText("Lines that are not valid JSON")).toBeVisible();
+    // What the source can report, and the supported tools not found on this device.
+    await expect(page.getByText("Counted within output; not reported separately")).toBeVisible();
+    await expect(page.getByText("Codex, Gemini CLI, OpenCode, GitHub Copilot CLI")).toBeVisible();
     await expectAccessible(page);
   });
 }

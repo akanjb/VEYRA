@@ -23,6 +23,7 @@ function source(overrides: Partial<SourceSummary> = {}): SourceSummary {
     lastIngestedAt: NOW,
     events: 10,
     recentIssues: [],
+    capabilities: [],
     ...overrides,
   };
 }

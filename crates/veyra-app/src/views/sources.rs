@@ -6,12 +6,13 @@ use jiff::tz::TimeZone;
 use veyra_analytics::dimension::{Dimension, Filters};
 use veyra_analytics::engine::evaluate;
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
+use veyra_domain::connector::{Capabilities, Support};
 use veyra_domain::source::{ConnectorDescriptor, SourceHealth, SourceRecord};
 use veyra_domain::time::UtcMillis;
 
 use super::internal;
 use crate::DataServices;
-use crate::dto::{IssueCount, SourceList, SourceSummary};
+use crate::dto::{Capability, IssueCount, SourceList, SourceSummary, SupportLevel};
 use crate::error::ApiError;
 
 /// How far back "recent issues" reach.
@@ -24,6 +25,32 @@ fn descriptor<'a>(data: &'a DataServices, connector_id: &str) -> Option<&'a Conn
     data.connectors
         .iter()
         .find(|d| d.id.as_str() == connector_id)
+}
+
+/// The capability matrix shown for a connector, in display order.
+fn capabilities(capabilities: &Capabilities) -> Vec<Capability> {
+    [
+        ("Tokens", capabilities.tokens),
+        ("Cache", capabilities.cache),
+        ("Reasoning", capabilities.reasoning),
+        ("Tools", capabilities.tools),
+        ("Sessions", capabilities.sessions),
+        ("Projects", capabilities.projects),
+    ]
+    .into_iter()
+    .map(|(label, support)| {
+        let (support, note) = match support {
+            Support::Full => (SupportLevel::Full, None),
+            Support::Partial(note) => (SupportLevel::Partial, Some(note.to_owned())),
+            Support::None => (SupportLevel::Unsupported, None),
+        };
+        Capability {
+            label: label.to_owned(),
+            support,
+            note,
+        }
+    })
+    .collect()
 }
 
 /// Builds one source's summary.
@@ -58,6 +85,7 @@ pub(crate) fn summary(
             .into_iter()
             .map(|(kind, occurrences)| IssueCount { kind, occurrences })
             .collect(),
+        capabilities: descriptor.map_or_else(Vec::new, |d| capabilities(&d.capabilities)),
     }
 }
 
@@ -110,5 +138,11 @@ pub(crate) fn list(data: &DataServices, now: UtcMillis) -> Result<SourceList, Ap
             )
         })
         .collect();
-    Ok(SourceList { sources })
+    let not_found = data
+        .connectors
+        .iter()
+        .filter(|d| !records.iter().any(|r| r.connector_id == d.id.as_str()))
+        .map(|d| d.display_name.to_owned())
+        .collect();
+    Ok(SourceList { sources, not_found })
 }
