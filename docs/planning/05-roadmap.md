@@ -175,7 +175,7 @@ flowchart LR
 > - **Contract test:** the Overview equals the metric engine for the same specification, its parts add up to the headline, and sessions sum to the Overview total. Every page names a model the same way.
 > - **Single sources:** KPI definitions come from the metric registry; provider, model and application names from the registry and connector descriptors (`Labelled`). Empty periods show "—", never 0.
 > - **Palette:** validated by `tooling/palette/check-palette.js` inside `pnpm test` (contrast, CIEDE2000 separation and colour-blind simulation).
-> - **UI tests:** Playwright with axe on the synthetic fixture client, in a new `UI` CI job. They cover the first-run consent flow (UC-01), the keyboard-only session journey (UC-02), filter state with Back and Forward, and WCAG 2.2 A/AA checks of every page in both themes.
+> - **UI tests:** Playwright with axe on the synthetic fixture client, in a new `UI` CI job. They cover the first-run consent flow (UC-01), the keyboard-only session journey (UC-02), filter state with Back and Forward, and WCAG 2.2 A/AA checks of every page in both themes. A second project runs the production build under the production CSP; it found and drove fixes for blocked tooltip markers, an inlined font and injected scroll-lock styles, with the policy unchanged (ADR-024).
 > - **IPC:** the window may listen to application events (`core:event:allow-listen` and `allow-unlisten` only); emitting stays denied.
 > - **Deferred:**
 >   - Scatter and Waterfall primitives and Overview highlights move to M5 (Cost and Cache pages).

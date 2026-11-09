@@ -696,6 +696,7 @@ veyra/
 │   └── perf/                    # synthetic dataset + performance budget check
 ├── tooling/
 │   ├── eslint/                  # custom module-boundaries lint rule + tests
+│   ├── csp/                     # serves a build with the production CSP for UI tests
 │   └── palette/                 # data-palette validator (contrast, separation, colour blindness)
 ├── docs/
 │   ├── planning/                # research, PRD, architecture, UX, risks, roadmap
@@ -786,6 +787,7 @@ The compiler, the IPC access tests and the contract drift check catch any missed
 | Page contract | Overview equals the metric engine for the same scope; parts add up to the headline; sessions sum to the Overview; one name per model across pages | `cargo test` (`veyra-app/tests/contract.rs`) |
 | View models | Pure mappings from DTOs to chart inputs, filter options, URL state, formatting, the data palette | Vitest |
 | UI | First-run consent (UC-01), keyboard-only session journey (UC-02), filter state with Back and Forward, WCAG 2.2 A/AA in both themes | Playwright + axe on the synthetic fixture client |
+| Production CSP | The production build served with the policy of `tauri.conf.json` (and per-load style nonces, as in Tauri): every page, overlay and tooltip without a violation | Playwright, `tooling/csp` |
 | Bundle smoke (M8) | The built app on all three OSes | WebdriverIO (planned) |
 
 Test data is always synthetic. Real transcripts or credentials are never committed.
@@ -795,7 +797,7 @@ Test data is always synthetic. Real transcripts or credentials are never committ
 ```mermaid
 flowchart LR
   PR[Push to main / pull request] --> WEB[Web job<br/>Prettier · ESLint · typecheck · Vitest · palette]
-  PR --> UI[UI job<br/>Playwright + axe · both themes]
+  PR --> UI[UI job<br/>Playwright + axe · both themes<br/>production build under the production CSP]
   PR --> RUST[Rust jobs · Ubuntu 22.04 · Windows<br/>rustfmt · clippy · tests · contract drift · desktop build]
   MAN[Manual run<br/>Actions → CI → Run workflow] --> RUST
   MAN --> MAC[Rust job · macOS]

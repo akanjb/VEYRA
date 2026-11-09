@@ -22,6 +22,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
   - Sources & Health, and the first-run privacy promise and consent flow.
   - A synthetic fixture client for development and UI tests (never in production builds).
   - Playwright and axe UI tests (journeys, keyboard use, WCAG 2.2 A/AA in both themes), and a `UI` CI job.
+  - A production-CSP UI test: the fixture build served with the policy of `tauri.conf.json` must run every page, overlay and tooltip without a violation. Chart tooltips are now built as DOM nodes, fonts are never inlined as `data:` URLs, and runtime-injected styles adopt Tauri's per-load style nonce.
   - ADR-024.
 - **Claude Code ingestion (M2).**
   - Connector contract (`SourceConnector`) and the Claude Code connector: main and subagent logs, order-independent deduplication, tool-call metadata and outcomes.

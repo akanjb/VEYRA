@@ -41,7 +41,13 @@ M3 delivers the dashboard shell, the design system and three pages (Overview, Se
    - the first-run consent journey (UC-01);
    - the keyboard-only session investigation (UC-02);
    - URL filter state with Back and Forward;
-   - axe WCAG 2.2 A/AA checks of every page in both themes.
+   - axe WCAG 2.2 A/AA checks of every page in both themes;
+   - the production build under the production Content Security Policy (decision 8).
+
+8. **The production CSP stays strict; the code adapts to it.** Development mode relaxes the policy, so a second test project builds the dashboard in fixture mode and serves it with the policy of `tauri.conf.json`. It gives each page's `<style>` elements a fresh nonce, as Tauri does. Every page, overlay and tooltip must run without a single violation. This check found three problems, fixed without loosening the policy:
+   - **Chart tooltips** are built as DOM nodes (text through `textContent`, colours through the CSSOM). ECharts' HTML markers use inline `style` attributes, which the policy blocks; this also removes HTML escaping.
+   - **Fonts** are never inlined as `data:` URLs (`assetsInlineLimit: 0`), since fonts load from 'self' only.
+   - **Styles injected at runtime** (Radix's scroll lock) adopt Tauri's per-load style nonce from an empty `<style>` element in `index.html`, through `get-nonce`.
 
 7. **The window may listen to the application's events.** The `main` capability adds `core:event:allow-listen` and `core:event:allow-unlisten`, and nothing else from the core plugins. Emitting events and every other plugin stay denied; IPC tests assert both. This amends ADR-020.
 
@@ -60,6 +66,8 @@ M3 delivers the dashboard shell, the design system and three pages (Overview, Se
 - A visual check on Linux (WebKitGTK) is deferred to M8; the UI tests run in Chromium.
 - The moderated usability test (five participants) is a manual step before the internal alpha, not part of CI.
 - Contract changes now touch three places: the DTO, the fixture client and the page. `pnpm contracts:check`, the type checker and the UI tests catch drift between them.
+
+- The CSP test emulates Tauri's nonce handling. A change in how Tauri issues nonces would need the emulation updated; the real-bundle smoke test (M8) will cover it directly.
 
 ## Revisit when
 
