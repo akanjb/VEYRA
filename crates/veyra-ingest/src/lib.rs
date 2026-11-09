@@ -1,6 +1,7 @@
 //! Veyra background ingestion (ADR-023).
 //!
-//! Finds usage sources, reads their new bytes incrementally and read-only, hands them to
+//! Finds usage sources, reads them read-only (new bytes of append-only logs, whole files,
+//! or snapshots of live databases), hands them to
 //! connectors, normalises and prices the records, and commits them to the store together
 //! with each file's checkpoint. Nothing is read until the user enables a source.
 
@@ -9,7 +10,9 @@ mod error;
 mod fs;
 mod normalize;
 mod pipeline;
+mod snapshot;
 mod tail;
+mod whole;
 mod worker;
 
 pub use discovery::{discover, discovery_env};

@@ -15,5 +15,8 @@ serde.workspace = true
 serde_json.workspace = true
 veyra-domain.workspace = true
 
+[dev-dependencies]
+veyra-testkit.workspace = true
+
 [lints]
 workspace = true

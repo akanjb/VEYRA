@@ -6,7 +6,7 @@
 //! - The application, connector and parser version come from the connector.
 
 use veyra_domain::event::{Attribution, DedupKey, EventContext, EventError, SourceRef, UsageEvent};
-use veyra_domain::identity::{IdError, ProviderId};
+use veyra_domain::identity::{GatewayId, IdError, ProviderId};
 use veyra_domain::source::{ConnectorDescriptor, RawUsage};
 use veyra_registry::Registry;
 
@@ -36,6 +36,12 @@ pub fn normalize(
             .transpose()
             .map_err(NormalizeError::Id)?,
     };
+    let gateway = raw
+        .gateway
+        .as_deref()
+        .map(GatewayId::new)
+        .transpose()
+        .map_err(NormalizeError::Id)?;
     let event = UsageEvent {
         dedup_key: DedupKey::new(raw.natural_key.clone()).map_err(NormalizeError::Event)?,
         occurred_at: raw.occurred_at,
@@ -50,7 +56,7 @@ pub fn normalize(
             raw_model: raw.model.clone(),
             app: descriptor.app.clone(),
             interface: raw.interface,
-            gateway: None,
+            gateway,
         },
         context: EventContext {
             session_key: raw.session_key.clone(),
@@ -89,9 +95,10 @@ pub fn project_key(cwd: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use veyra_domain::accuracy::{Accuracy, AccuracyMap};
+    use veyra_domain::connector::{Capabilities, Support};
     use veyra_domain::event::{Granularity, ServiceTier};
     use veyra_domain::identity::{AppId, ConnectorId, Interface};
-    use veyra_domain::source::{ConnectorDescriptor, RawUsage, SourceFormat};
+    use veyra_domain::source::{ConnectorDescriptor, RawUsage};
     use veyra_domain::time::UtcMillis;
     use veyra_domain::tokens::TokenCounts;
     use veyra_registry::Registry;
@@ -104,8 +111,15 @@ mod tests {
             app: AppId::new("claude-code").unwrap(),
             display_name: "Claude Code",
             parser_version: 1,
-            format: SourceFormat::JsonLines,
             documented_format: false,
+            capabilities: Capabilities {
+                tokens: Support::Full,
+                cache: Support::Full,
+                reasoning: Support::None,
+                tools: Support::Full,
+                sessions: Support::Full,
+                projects: Support::Full,
+            },
         }
     }
 
@@ -116,6 +130,7 @@ mod tests {
             occurred_at: UtcMillis(0),
             model: Some(model.to_owned()),
             provider: Some("anthropic".to_owned()),
+            gateway: None,
             tokens: TokenCounts {
                 input_uncached: Some(1),
                 ..TokenCounts::default()

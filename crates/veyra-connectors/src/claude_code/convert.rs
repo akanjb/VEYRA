@@ -9,18 +9,17 @@
 //!   up to the total, the total is kept as unspecified TTL.
 //! - `<synthetic>` lines are client-generated placeholders, not API usage.
 
-use std::path::{Component, Path};
+use std::path::Path;
 
-use jiff::Timestamp;
 use veyra_domain::accuracy::{Accuracy, AccuracyMap};
 use veyra_domain::event::{Granularity, ServiceTier};
 use veyra_domain::identity::Interface;
 use veyra_domain::source::RawUsage;
-use veyra_domain::time::UtcMillis;
 use veyra_domain::tokens::TokenCounts;
 use veyra_domain::tooling::{ToolCall, ToolOutcome};
 
 use super::record::{Block, Content, Line, Usage};
+use crate::shared::{plain_components, utc_millis};
 
 const SYNTHETIC_MODEL: &str = "<synthetic>";
 
@@ -37,15 +36,8 @@ pub enum FileKind {
 
 impl FileKind {
     pub fn of(relative: &Path) -> Self {
-        let parts: Vec<&str> = relative
-            .components()
-            .filter_map(|c| match c {
-                Component::Normal(part) => part.to_str(),
-                _ => None,
-            })
-            .collect();
-        match parts.as_slice() {
-            [_, _, "subagents", file] => Self::Subagent {
+        match plain_components(relative).as_deref() {
+            Some([_, _, "subagents", file]) => Self::Subagent {
                 agent: file.trim_end_matches(".jsonl").to_owned(),
             },
             _ => Self::Main,
@@ -93,8 +85,7 @@ pub fn usage(line: &Line, file: &FileKind) -> Result<Option<RawUsage>, &'static 
     let occurred_at = line
         .timestamp
         .as_deref()
-        .and_then(|t| t.parse::<Timestamp>().ok())
-        .map(|t| UtcMillis(t.as_millisecond()))
+        .and_then(utc_millis)
         .ok_or("invalid-timestamp")?;
 
     let (tokens, reasoning_consistent) = canonical_tokens(usage);
@@ -112,6 +103,7 @@ pub fn usage(line: &Line, file: &FileKind) -> Result<Option<RawUsage>, &'static 
         occurred_at,
         model: message.model.clone(),
         provider: Some("anthropic".to_owned()),
+        gateway: None,
         tokens,
         requests: Some(1),
         reported_cost: None,

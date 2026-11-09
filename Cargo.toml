@@ -24,9 +24,10 @@ veyra-testkit = { path = "crates/veyra-testkit" }
 jiff = "=0.2.38"
 memchr = "=2.8.3"
 notify = "=8.2.1"
-rusqlite = { version = "=0.41.1", features = ["bundled"] }
+ruzstd = "=0.9.1"
+rusqlite = { version = "=0.41.1", features = ["backup", "bundled"] }
 serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = "=1.0.154"
+serde_json = { version = "=1.0.154", features = ["raw_value"] }
 tauri = "=2.12.5"
 tauri-build = "=2.7.4"
 thiserror = "=2.0.21"

@@ -15,6 +15,10 @@ pub enum IngestError {
     },
     #[error("access to {0} is not allowed")]
     Denied(PathBuf),
+    #[error("{0} is larger than Veyra reads in one piece")]
+    Oversize(PathBuf),
+    #[error("cannot snapshot the database {path}: {message}")]
+    Snapshot { path: PathBuf, message: String },
     #[error("source root {0} is not a directory")]
     MissingRoot(PathBuf),
     #[error("no connector named `{0}`")]
@@ -27,5 +31,19 @@ impl IngestError {
     pub(crate) fn io(path: impl Into<PathBuf>) -> impl FnOnce(std::io::Error) -> Self {
         let path = path.into();
         move |source| Self::Io { path, source }
+    }
+
+    /// The diagnostics kind of a failure confined to one file, which is counted and
+    /// skipped; `None` for failures that stop the scan.
+    #[must_use]
+    pub const fn file_issue(&self) -> Option<&'static str> {
+        match self {
+            Self::Io { .. } | Self::Denied(_) => Some("unreadable-file"),
+            Self::Oversize(_) => Some("oversize-file"),
+            Self::Snapshot { .. } => Some("unreadable-database"),
+            Self::Store(_) | Self::MissingRoot(_) | Self::UnknownConnector(_) | Self::Cancelled => {
+                None
+            }
+        }
     }
 }

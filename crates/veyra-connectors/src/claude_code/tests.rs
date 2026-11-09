@@ -8,15 +8,12 @@ use veyra_domain::identity::Interface;
 use veyra_domain::source::{DiscoveryEnv, FileContext, ParsedRecords, RawUsage, SourceConnector};
 use veyra_domain::time::UtcMillis;
 use veyra_domain::tooling::ToolOutcome;
+use veyra_testkit::claude_code_projects as projects;
 
 use super::ClaudeCode;
 use super::convert::STOP_BIT;
 
 const SESSION: &str = "11111111-1111-4111-8111-111111111111";
-
-fn projects() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/claude-code/v2.1/projects")
-}
 
 fn parse(relative: &str) -> ParsedRecords {
     let root = projects();
@@ -26,6 +23,7 @@ fn parse(relative: &str) -> ParsedRecords {
             root: &root,
             relative: Path::new(relative),
             base_offset: 0,
+            side_files: &[],
         },
         &data,
     )
@@ -254,6 +252,7 @@ fn chunked_reads_report_absolute_offsets() {
             root: &root,
             relative: Path::new(&relative),
             base_offset: split as u64,
+            side_files: &[],
         },
         &data[split..],
     );

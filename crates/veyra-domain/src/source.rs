@@ -8,19 +8,13 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::accuracy::AccuracyMap;
+use crate::connector::{Capabilities, Reading, SideFile};
 use crate::event::{Granularity, ServiceTier};
 use crate::identity::{AppId, ConnectorId, Interface};
 use crate::money::NanoUsd;
 use crate::time::UtcMillis;
 use crate::tokens::TokenCounts;
 use crate::tooling::{ToolCall, ToolOutcome};
-
-/// How a source stores its records.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SourceFormat {
-    /// Append-only JSON Lines files, read incrementally from a byte offset.
-    JsonLines,
-}
 
 /// Static facts about a connector.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,9 +25,10 @@ pub struct ConnectorDescriptor {
     pub display_name: &'static str,
     /// Bumped whenever parsing changes; files parsed by an older version are re-read.
     pub parser_version: u32,
-    pub format: SourceFormat,
     /// Whether the vendor documents the format (false means it may change without notice).
     pub documented_format: bool,
+    /// What this source can report, shown to the user.
+    pub capabilities: Capabilities,
 }
 
 /// Where connectors may look: the user's home directory and documented location
@@ -54,6 +49,9 @@ pub struct FileContext<'a> {
     pub relative: &'a Path,
     /// Byte offset of the first byte passed to the connector.
     pub base_offset: u64,
+    /// The side files the connector asked for (see [`SourceConnector::side_files`]) that
+    /// exist.
+    pub side_files: &'a [SideFile],
 }
 
 /// One usage observation, in canonical token semantics, before normalisation.
@@ -69,6 +67,8 @@ pub struct RawUsage {
     pub model: Option<String>,
     /// The provider, when the source states it explicitly.
     pub provider: Option<String>,
+    /// The service that routed the request to the provider, e.g. `github-copilot`.
+    pub gateway: Option<String>,
     pub tokens: TokenCounts,
     pub requests: Option<u32>,
     pub reported_cost: Option<NanoUsd>,
@@ -184,6 +184,16 @@ pub trait SourceConnector: Send + Sync {
     /// a strict allow-list: everything else under the root is ignored.
     fn is_source_file(&self, relative: &Path) -> bool;
 
-    /// Parses complete lines (each ending in `\n`) from one file.
+    /// How a source file (relative to the root) is read.
+    fn reading(&self, relative: &Path) -> Reading;
+
+    /// Small files, relative to the root, that the parser needs as context for a source
+    /// file. Missing ones are skipped.
+    fn side_files(&self, _relative: &Path) -> Vec<PathBuf> {
+        Vec::new()
+    }
+
+    /// Parses data read as [`reading`](Self::reading) declares: complete lines of an
+    /// append-only file, a whole file, or one JSON line per database row.
     fn parse(&self, context: &FileContext<'_>, data: &[u8]) -> ParsedRecords;
 }

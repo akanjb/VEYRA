@@ -6,6 +6,7 @@
 
 pub mod claude_code;
 mod lines;
+mod shared;
 
 use veyra_domain::source::SourceConnector;
 

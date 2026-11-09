@@ -9,19 +9,29 @@
 mod convert;
 mod record;
 
-use std::collections::HashMap;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
+use veyra_domain::connector::{Capabilities, Reading, Support};
 use veyra_domain::identity::{AppId, ConnectorId};
 use veyra_domain::source::{
-    ConnectorDescriptor, DiscoveryEnv, FileContext, ParseIssue, ParsedRecords, RawUsage,
-    SourceConnector, SourceFormat,
+    ConnectorDescriptor, DiscoveryEnv, FileContext, ParseIssue, ParsedRecords, SourceConnector,
 };
 
 use crate::lines;
+use crate::shared::{BestByKey, plain_components};
 
 /// Bump when parsing changes so files are re-read with the new rules.
 const PARSER_VERSION: u32 = 1;
+
+/// What Claude Code logs report.
+const CAPABILITIES: Capabilities = Capabilities {
+    tokens: Support::Full,
+    cache: Support::Full,
+    reasoning: Support::Partial("Counted within output; not reported separately"),
+    tools: Support::Full,
+    sessions: Support::Full,
+    projects: Support::Full,
+};
 
 /// The Claude Code connector.
 #[derive(Debug, Clone)]
@@ -40,8 +50,8 @@ impl ClaudeCode {
                 app: AppId::new("claude-code").unwrap_or_else(|_| unreachable!()),
                 display_name: "Claude Code",
                 parser_version: PARSER_VERSION,
-                format: SourceFormat::JsonLines,
                 documented_format: false,
+                capabilities: CAPABILITIES,
             },
         }
     }
@@ -51,16 +61,6 @@ impl Default for ClaudeCode {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Plain path components, or `None` if the path has any other kind of component.
-fn plain_components(path: &Path) -> Option<Vec<&str>> {
-    path.components()
-        .map(|component| match component {
-            Component::Normal(part) => part.to_str(),
-            _ => None,
-        })
-        .collect()
 }
 
 impl SourceConnector for ClaudeCode {
@@ -91,10 +91,14 @@ impl SourceConnector for ClaudeCode {
         }
     }
 
+    fn reading(&self, _relative: &Path) -> Reading {
+        Reading::AppendLines
+    }
+
     fn parse(&self, context: &FileContext<'_>, data: &[u8]) -> ParsedRecords {
         let file = convert::FileKind::of(context.relative);
         let mut out = ParsedRecords::default();
-        let mut best: HashMap<String, usize> = HashMap::new();
+        let mut best = BestByKey::default();
         // Exact prefilter: only these lines can carry usage or tool outcomes.
         let relevant = lines::AnyOf::new([b"\"usage\"", b"\"tool_result\""]);
 
@@ -112,37 +116,14 @@ impl SourceConnector for ClaudeCode {
             };
             out.tool_outcomes.extend(convert::tool_outcomes(&record));
             match convert::usage(&record, &file) {
-                Ok(Some(usage)) => merge(&mut out.usage, &mut best, usage),
+                Ok(Some(usage)) => best.add(usage),
                 Ok(None) => {}
                 Err(kind) => out.issues.push(ParseIssue { kind, offset }),
             }
         }
+        out.usage = best.into_records();
         out
     }
-}
-
-/// Keeps one record per request: the most complete observation, with tool calls from
-/// every line of the request combined (each streamed line carries one content block).
-fn merge(records: &mut Vec<RawUsage>, best: &mut HashMap<String, usize>, candidate: RawUsage) {
-    let Some(&index) = best.get(&candidate.natural_key) else {
-        best.insert(candidate.natural_key.clone(), records.len());
-        records.push(candidate);
-        return;
-    };
-    let current = &mut records[index];
-    let mut calls = std::mem::take(&mut current.tool_calls);
-    for call in &candidate.tool_calls {
-        if !calls.iter().any(|c| c.id == call.id) {
-            calls.push(call.clone());
-        }
-    }
-    let better = candidate.precedence > current.precedence
-        || (candidate.precedence == current.precedence
-            && candidate.occurred_at < current.occurred_at);
-    if better {
-        *current = candidate;
-    }
-    current.tool_calls = calls;
 }
 
 #[cfg(test)]

@@ -10,6 +10,9 @@ publish.workspace = true
 
 [dependencies]
 notify.workspace = true
+ruzstd.workspace = true
+rusqlite.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 veyra-domain.workspace = true
 veyra-registry.workspace = true

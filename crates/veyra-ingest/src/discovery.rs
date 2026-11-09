@@ -13,7 +13,14 @@ use crate::IngestError;
 
 /// Documented location variables connectors may consult (ADR-014). No other environment
 /// variable is read: in particular, never one that holds a credential.
-const LOCATION_VARIABLES: [&str; 3] = ["CLAUDE_CONFIG_DIR", "CODEX_HOME", "COPILOT_HOME"];
+const LOCATION_VARIABLES: [&str; 6] = [
+    "CLAUDE_CONFIG_DIR",
+    "CODEX_HOME",
+    "COPILOT_HOME",
+    "GEMINI_CLI_HOME",
+    "OPENCODE_DB",
+    "XDG_DATA_HOME",
+];
 
 /// The discovery environment of this process: the home directory and the documented
 /// location overrides that are set.

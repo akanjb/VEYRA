@@ -133,7 +133,12 @@ impl ScopedFs {
         found
     }
 
-    fn open(&self, relative: &str) -> Result<File, IngestError> {
+    /// The absolute path of an existing file below the root that is neither denied nor a
+    /// symbolic link: for readers that must open the file themselves (SQLite).
+    ///
+    /// # Errors
+    /// Returns [`IngestError`] for denied paths, symbolic links or I/O failures.
+    pub fn verified_path(&self, relative: &str) -> Result<PathBuf, IngestError> {
         let path = self.resolve(relative)?;
         if std::fs::symlink_metadata(&path)
             .map_err(IngestError::io(&path))?
@@ -142,6 +147,26 @@ impl ScopedFs {
         {
             return Err(IngestError::Denied(path));
         }
+        Ok(path)
+    }
+
+    /// Size and modification time of a file below the root; `None` when it does not
+    /// exist.
+    ///
+    /// # Errors
+    /// Returns [`IngestError`] for denied paths or I/O failures other than absence.
+    pub fn stat(&self, relative: &str) -> Result<Option<(u64, Option<UtcMillis>)>, IngestError> {
+        let path = self.resolve(relative)?;
+        match std::fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.is_file() => Ok(Some((metadata.len(), modified(&metadata)))),
+            Ok(_) => Err(IngestError::Denied(path)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(IngestError::io(path)(error)),
+        }
+    }
+
+    fn open(&self, relative: &str) -> Result<File, IngestError> {
+        let path = self.verified_path(relative)?;
         let mut options = OpenOptions::new();
         options.read(true);
         #[cfg(windows)]

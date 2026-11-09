@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, SyncSender};
 use std::time::Duration;
 
+use veyra_domain::connector::{Compression, DatabaseQuery, Reading, SIDE_FILE_MAX_BYTES, SideFile};
 use veyra_domain::pricing::price_event;
 use veyra_domain::source::{FileContext, ParseIssue, SourceConnector};
 use veyra_domain::time::UtcMillis;
@@ -22,7 +23,9 @@ use veyra_store::{
 use crate::IngestError;
 use crate::fs::{FoundFile, ScopedFs};
 use crate::normalize::normalize;
+use crate::snapshot::database_rows;
 use crate::tail::{self, HEAD_LEN, ReadPlan, Restart};
+use crate::whole::read_whole;
 
 /// Deepest directory level searched below a source root.
 const MAX_DEPTH: usize = 4;
@@ -190,26 +193,39 @@ pub fn scan_source(
             source_id: source.id,
             run_id,
             file,
+            side_files: side_files(&fs, connector.as_ref(), &file.relative),
         };
-        match reader.read(checkpoints.get(&file.relative), &mut report) {
-            Ok(()) => {}
-            Err(IngestError::Io { .. } | IngestError::Denied(_)) => {
-                report.issues += 1;
-                let issue = ParseIssue {
-                    kind: "unreadable-file",
-                    offset: 0,
-                };
-                context
-                    .store
-                    .record_issues(run_id, source.id, &file.relative, &[issue])?;
-            }
-            Err(other) => return Err(other),
+        if let Err(error) = reader.read(checkpoints.get(&file.relative), &mut report) {
+            let Some(kind) = error.file_issue() else {
+                return Err(error);
+            };
+            report.issues += 1;
+            let issue = ParseIssue { kind, offset: 0 };
+            context
+                .store
+                .record_issues(run_id, source.id, &file.relative, &[issue])?;
         }
     }
     Ok(report)
 }
 
-/// Reads one file from its checkpoint to its last complete line.
+/// The side files a connector asked for that exist and can be read (at most
+/// [`SIDE_FILE_MAX_BYTES`] each).
+fn side_files(fs: &ScopedFs, connector: &dyn SourceConnector, relative: &str) -> Vec<SideFile> {
+    connector
+        .side_files(Path::new(relative))
+        .into_iter()
+        .filter_map(|path| {
+            let bytes = fs.read_at(path.to_str()?, 0, SIDE_FILE_MAX_BYTES).ok()?;
+            Some(SideFile {
+                relative: path,
+                bytes,
+            })
+        })
+        .collect()
+}
+
+/// Reads one file, as its connector declares, from its checkpoint.
 struct FileReader<'r, 'c> {
     context: &'r IngestContext<'c>,
     fs: &'r ScopedFs,
@@ -217,6 +233,7 @@ struct FileReader<'r, 'c> {
     source_id: i64,
     run_id: i64,
     file: &'r FoundFile,
+    side_files: Vec<SideFile>,
 }
 
 /// What one run of complete lines produces, committed as one transaction.
@@ -227,15 +244,103 @@ struct Step {
 }
 
 impl FileReader<'_, '_> {
-    /// Reads from the checkpoint to the last complete line. A helper thread reads,
-    /// parses, normalises and prices the next chunk while this thread commits the
-    /// previous one; steps are committed strictly in file order.
     fn read(
         &self,
         checkpoint: Option<&StoredCheckpoint>,
         report: &mut ScanReport,
     ) -> Result<(), IngestError> {
-        let parser_version = self.connector.descriptor().parser_version;
+        match self.connector.reading(Path::new(&self.file.relative)) {
+            Reading::AppendLines => self.read_lines(checkpoint, report),
+            Reading::WholeFile(compression) => self.read_whole(compression, checkpoint, report),
+            Reading::Database(queries) => self.read_database(queries, checkpoint, report),
+        }
+    }
+
+    /// Re-reads the whole file when it changed since the last read.
+    fn read_whole(
+        &self,
+        compression: Compression,
+        checkpoint: Option<&StoredCheckpoint>,
+        report: &mut ScanReport,
+    ) -> Result<(), IngestError> {
+        let version = (self.file.len, self.file.modified);
+        if tail::unchanged(version, checkpoint, self.parser_version()) {
+            return Ok(());
+        }
+        let data = read_whole(self.fs, &self.file.relative, compression)?;
+        self.read_all(&data, version, checkpoint, report)
+    }
+
+    /// Re-reads the database through a snapshot when it or its write-ahead log changed.
+    fn read_database(
+        &self,
+        queries: &[DatabaseQuery],
+        checkpoint: Option<&StoredCheckpoint>,
+        report: &mut ScanReport,
+    ) -> Result<(), IngestError> {
+        // An empty log holds no changes (opening the database may leave one behind);
+        // emptying a log means writing its changes into the database file, which shows.
+        let wal = self
+            .fs
+            .stat(&format!("{}-wal", self.file.relative))?
+            .filter(|(len, _)| *len > 0);
+        let version = match wal {
+            Some((len, modified)) => (self.file.len + len, self.file.modified.max(modified)),
+            None => (self.file.len, self.file.modified),
+        };
+        if tail::unchanged(version, checkpoint, self.parser_version()) {
+            return Ok(());
+        }
+        let path = self.fs.verified_path(&self.file.relative)?;
+        let rows = database_rows(&path, queries)?;
+        self.read_all(&rows, version, checkpoint, report)
+    }
+
+    /// Parses complete content in one step, committed with a checkpoint recording the
+    /// content's `(size, modified)` version.
+    fn read_all(
+        &self,
+        data: &[u8],
+        (size, modified): (u64, Option<UtcMillis>),
+        checkpoint: Option<&StoredCheckpoint>,
+        report: &mut ScanReport,
+    ) -> Result<(), IngestError> {
+        if checkpoint.is_some() {
+            report.restarts += 1;
+        }
+        report.files_read += 1;
+        let mut step = Step {
+            batch: IngestBatch::default(),
+            issues: Vec::new(),
+            lines: 0,
+        };
+        self.parse(data, 0, &mut step);
+        step.batch.checkpoint = Some(FileCheckpoint {
+            source_id: self.source_id,
+            path: self.file.relative.clone(),
+            size,
+            modified_at: modified,
+            offset: size,
+            head_hash: tail::fingerprint(&[]),
+            head_len: 0,
+            parser_version: self.parser_version(),
+        });
+        self.commit(&step, report)
+    }
+
+    fn parser_version(&self) -> u32 {
+        self.connector.descriptor().parser_version
+    }
+
+    /// Reads an append-only file from the checkpoint to the last complete line. A helper thread reads,
+    /// parses, normalises and prices the next chunk while this thread commits the
+    /// previous one; steps are committed strictly in file order.
+    fn read_lines(
+        &self,
+        checkpoint: Option<&StoredCheckpoint>,
+        report: &mut ScanReport,
+    ) -> Result<(), IngestError> {
+        let parser_version = self.parser_version();
         let (plan, restart) = tail::plan(self.file, checkpoint, parser_version, |len| {
             self.head(len)
                 .ok()
@@ -339,7 +444,7 @@ impl FileReader<'_, '_> {
             offset: next,
             head_hash: head.0,
             head_len: head.1,
-            parser_version: self.connector.descriptor().parser_version,
+            parser_version: self.parser_version(),
         });
         *position = next;
         Ok(Some((step, at_end)))
@@ -369,6 +474,7 @@ impl FileReader<'_, '_> {
             root: self.fs.root(),
             relative: Path::new(&self.file.relative),
             base_offset,
+            side_files: &self.side_files,
         };
         let parsed = self.connector.parse(&file_context, lines);
         step.lines = parsed.lines;

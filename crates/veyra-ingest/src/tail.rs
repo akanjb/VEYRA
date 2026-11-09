@@ -1,12 +1,15 @@
-//! Incremental reading decisions for append-only files (FR-ING-04).
+//! Reading decisions (FR-ING-04).
 //!
-//! A checkpoint stores the offset after the last complete line and a fingerprint of the
+//! For append-only files, a checkpoint stores the offset after the last complete line and a fingerprint of the
 //! file's first bytes. The next read continues from the offset, unless the file shrank
 //! (truncated), its first bytes changed (replaced), or the parser changed; then it is
-//! re-read from the start. Re-reading is safe because ingestion is idempotent.
+//! re-read from the start. Files read in full, and databases, are re-read whenever their
+//! size or modification time changed. Re-reading is safe because ingestion is
+//! idempotent.
 
 use std::hash::Hasher;
 
+use veyra_domain::time::UtcMillis;
 use veyra_store::StoredCheckpoint;
 
 use crate::fs::FoundFile;
@@ -63,6 +66,19 @@ pub fn plan(
     (ReadPlan::From(checkpoint.offset), None)
 }
 
+/// Whether content read in full is unchanged since its checkpoint: same parser, and the
+/// same `(size, modified)` version.
+#[must_use]
+pub fn unchanged(
+    (size, modified): (u64, Option<UtcMillis>),
+    checkpoint: Option<&StoredCheckpoint>,
+    parser_version: u32,
+) -> bool {
+    checkpoint.is_some_and(|c| {
+        c.parser_version == parser_version && c.size == size && c.modified_at == modified
+    })
+}
+
 /// FNV-1a 64 of `bytes`, as a SQLite-storable integer.
 #[must_use]
 pub fn fingerprint(bytes: &[u8]) -> i64 {
@@ -93,8 +109,9 @@ pub fn complete_lines(buffer: &[u8]) -> (&[u8], usize) {
 
 #[cfg(test)]
 mod tests {
-    use super::{ReadPlan, Restart, complete_lines, fingerprint, plan};
+    use super::{ReadPlan, Restart, complete_lines, fingerprint, plan, unchanged};
     use crate::fs::FoundFile;
+    use veyra_domain::time::UtcMillis;
     use veyra_store::StoredCheckpoint;
 
     fn file(len: u64) -> FoundFile {
@@ -143,6 +160,28 @@ mod tests {
             plan(&file(50), Some(&checkpoint(50)), 2, same_head),
             (ReadPlan::From(0), Some(Restart::ParserChanged))
         );
+    }
+
+    #[test]
+    fn whole_files_are_reread_only_when_their_version_changes() {
+        let stored = StoredCheckpoint {
+            modified_at: Some(UtcMillis(5)),
+            ..checkpoint(40)
+        };
+        assert!(unchanged((40, Some(UtcMillis(5))), Some(&stored), 1));
+        assert!(
+            !unchanged((40, Some(UtcMillis(6))), Some(&stored), 1),
+            "touched"
+        );
+        assert!(
+            !unchanged((41, Some(UtcMillis(5))), Some(&stored), 1),
+            "resized"
+        );
+        assert!(
+            !unchanged((40, Some(UtcMillis(5))), Some(&stored), 2),
+            "new parser"
+        );
+        assert!(!unchanged((40, Some(UtcMillis(5))), None, 1), "never read");
     }
 
     #[test]
