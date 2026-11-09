@@ -18,6 +18,13 @@ pub fn plain_components(path: &Path) -> Option<Vec<&str>> {
         .collect()
 }
 
+/// Whether a file name ends with `suffix` (such as `.jsonl`), ignoring ASCII case.
+pub fn has_suffix(name: &str, suffix: &str) -> bool {
+    name.len() > suffix.len()
+        && name.is_char_boundary(name.len() - suffix.len())
+        && name[name.len() - suffix.len()..].eq_ignore_ascii_case(suffix)
+}
+
 /// An RFC 3339 timestamp (e.g. `2026-01-02T03:04:05.000Z`) as UTC milliseconds.
 pub fn utc_millis(text: &str) -> Option<UtcMillis> {
     text.parse::<Timestamp>()

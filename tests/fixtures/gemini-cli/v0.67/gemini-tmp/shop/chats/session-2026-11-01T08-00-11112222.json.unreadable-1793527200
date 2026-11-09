@@ -1,0 +1,22 @@
+{
+  "sessionId": "11112222-0000-4000-8000-000000000002",
+  "projectHash": "5f2a4b6c8d0e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a",
+  "startTime": "2026-11-01T08:00:00.000Z",
+  "lastUpdated": "2026-11-01T08:00:30.000Z",
+  "messages": [
+    {
+      "id": "h0",
+      "timestamp": "2026-11-01T08:00:01.000Z",
+      "type": "user",
+      "content": "VEYRA-CANARY older prompt"
+    },
+    {
+      "id": "h1",
+      "timestamp": "2026-11-01T08:00:20.000Z",
+      "type": "gemini",
+      "content": "VEYRA-CANARY older answer",
+      "tokens": { "input": 500, "output": 25, "cached": 0, "thoughts": 0, "total": 525 },
+      "model": "gemini-2.5-flash"
+    }
+  ]
+}

@@ -12,6 +12,48 @@ pub fn claude_code_projects() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/claude-code/v2.1/projects")
 }
 
+/// The synthetic Codex home directory (rollout format of Codex 0.167).
+#[must_use]
+pub fn codex_home() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/codex/v0.167/codex-home")
+}
+
+/// The synthetic Gemini CLI `~/.gemini/tmp` directory (format of Gemini CLI 0.67).
+#[must_use]
+pub fn gemini_tmp() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/gemini-cli/v0.67/gemini-tmp")
+}
+
+/// The synthetic GitHub Copilot CLI home directory (session events of Copilot CLI 1.0).
+#[must_use]
+pub fn copilot_home() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/copilot-cli/v1.0/copilot-home")
+}
+
+/// Creates `<data_dir>/opencode.db` from the synthetic OpenCode fixture (tables of
+/// OpenCode 1.2 and 2.2), in WAL mode as OpenCode keeps it. Returns the database path.
+///
+/// # Panics
+/// When the fixture cannot be read or the database cannot be created.
+#[must_use]
+pub fn opencode_database(data_dir: &Path) -> PathBuf {
+    let script = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/opencode/v2.2/opencode.sql");
+    let sql = std::fs::read_to_string(&script)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", script.display()));
+    std::fs::create_dir_all(data_dir)
+        .unwrap_or_else(|e| panic!("cannot create {}: {e}", data_dir.display()));
+    let path = data_dir.join("opencode.db");
+    let db = rusqlite::Connection::open(&path)
+        .unwrap_or_else(|e| panic!("cannot create {}: {e}", path.display()));
+    db.execute_batch(&format!(
+        "PRAGMA journal_mode = WAL;
+{sql}"
+    ))
+    .unwrap_or_else(|e| panic!("cannot load the OpenCode fixture: {e}"));
+    path
+}
+
 /// Copies a directory tree.
 ///
 /// # Panics
@@ -63,8 +105,15 @@ impl TempDir {
     /// `<home>/.claude/projects`. Returns the home directory.
     #[must_use]
     pub fn with_claude_code_home(&self) -> PathBuf {
+        self.with_home_copy(&claude_code_projects(), ".claude/projects")
+    }
+
+    /// A home directory inside this one holding a copy of a fixture tree at
+    /// `<home>/<at>` (for example `.codex`). Returns the home directory.
+    #[must_use]
+    pub fn with_home_copy(&self, fixture: &Path, at: &str) -> PathBuf {
         let home = self.0.join("home");
-        copy_tree(&claude_code_projects(), &home.join(".claude/projects"));
+        copy_tree(fixture, &home.join(at));
         home
     }
 }

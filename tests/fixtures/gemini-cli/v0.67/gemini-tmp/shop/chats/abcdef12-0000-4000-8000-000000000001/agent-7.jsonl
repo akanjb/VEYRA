@@ -1,0 +1,2 @@
+{"sessionId":"77770000-0000-4000-8000-000000000007","projectHash":"5f2a4b6c8d0e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a","startTime":"2026-11-08T09:00:12.000Z","lastUpdated":"2026-11-08T09:00:14.000Z","kind":"subagent"}
+{"id":"s1","timestamp":"2026-11-08T09:00:13.000Z","type":"gemini","content":"VEYRA-CANARY subagent answer","tokens":{"input":400,"output":10,"cached":0,"thoughts":0,"tool":0,"total":410},"model":"gemini-2.5-flash"}

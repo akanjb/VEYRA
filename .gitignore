@@ -18,6 +18,7 @@ test-results/
 .env
 .env.*
 *.log
+!tests/fixtures/**/*.log
 
 # OS and editor files
 .DS_Store

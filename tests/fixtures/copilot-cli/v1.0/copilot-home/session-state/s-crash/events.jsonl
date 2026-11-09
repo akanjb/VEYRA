@@ -1,0 +1,2 @@
+{"id":"c1","timestamp":"2026-11-08T17:00:00.000Z","type":"session.start","data":{"sessionId":"s-crash","copilotVersion":"1.0.100","context":{"cwd":"/home/dev/web"}}}
+{"id":"c2","timestamp":"2026-11-08T17:00:01.000Z","type":"user.message","data":{"content":"VEYRA-CANARY"}}

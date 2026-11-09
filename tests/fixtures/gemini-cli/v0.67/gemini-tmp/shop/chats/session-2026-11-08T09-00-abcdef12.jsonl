@@ -1,0 +1,13 @@
+{"sessionId":"abcdef12-0000-4000-8000-000000000001","projectHash":"5f2a4b6c8d0e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a","startTime":"2026-11-08T09:00:00.000Z","lastUpdated":"2026-11-08T09:00:00.000Z","directories":["/home/dev/shop"]}
+{"id":"u1","timestamp":"2026-11-08T09:00:05.000Z","type":"user","content":[{"text":"VEYRA-CANARY user prompt"}]}
+{"$set":{"lastUpdated":"2026-11-08T09:00:05.000Z"}}
+{"id":"g1","timestamp":"2026-11-08T09:00:09.000Z","type":"gemini","content":"VEYRA-CANARY answer","thoughts":[{"subject":"VEYRA-CANARY","description":"VEYRA-CANARY"}],"tokens":null,"model":"gemini-2.5-pro"}
+{"id":"g1","timestamp":"2026-11-08T09:00:09.000Z","type":"gemini","content":"VEYRA-CANARY answer","thoughts":[],"tokens":{"input":1200,"output":40,"cached":800,"thoughts":150,"tool":10,"total":1400},"model":"gemini-2.5-pro","toolCalls":[{"id":"c1","name":"read_file","args":{"path":"VEYRA-CANARY"},"status":"executing","timestamp":"2026-11-08T09:00:10.000Z"}]}
+{"id":"g1","timestamp":"2026-11-08T09:00:09.000Z","type":"gemini","content":"VEYRA-CANARY answer","thoughts":[],"tokens":{"input":1200,"output":40,"cached":800,"thoughts":150,"tool":10,"total":1400},"model":"gemini-2.5-pro","toolCalls":[{"id":"c1","name":"read_file","args":{"path":"VEYRA-CANARY"},"result":[{"text":"VEYRA-CANARY file contents"}],"status":"success","timestamp":"2026-11-08T09:00:10.000Z","displayName":"ReadFile"}]}
+{"id":"u2","timestamp":"2026-11-08T09:00:11.000Z","type":"user","content":[{"functionResponse":{"response":"VEYRA-CANARY"}}]}
+{"id":"g2","timestamp":"2026-11-08T09:00:15.000Z","type":"gemini","content":"","tokens":{"input":2000,"output":100,"cached":1500,"thoughts":0,"tool":0,"total":2100}}
+{"$rewindTo":"g2"}
+{"id":"g3","timestamp":"2026-11-08T09:01:00.000Z","type":"gemini","content":"VEYRA-CANARY","tokens":{"input":300,"output":20,"cached":0,"thoughts":30,"tool":0,"total":350},"model":"gemini-2.5-flash","toolCalls":[{"id":"c2","name":"run_shell_command","args":{"command":"VEYRA-CANARY"},"status":"error","timestamp":"2026-11-08T09:01:01.000Z"}]}
+{"$patch":{"id":"g3","content":"VEYRA-CANARY edited"}}
+{"id":"i1","timestamp":"2026-11-08T09:01:02.000Z","type":"info","content":"VEYRA-CANARY notice"}
+{"id":"g4","timestamp":"2026-11-08T09:01:03.000Z","type":"gemini","tokens": BROKEN

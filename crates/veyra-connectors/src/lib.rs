@@ -5,7 +5,11 @@
 //! the ingest pipeline does that and hands them complete lines (ADR-023).
 
 pub mod claude_code;
+pub mod codex;
+pub mod copilot_cli;
+pub mod gemini_cli;
 mod lines;
+pub mod opencode;
 mod shared;
 
 use veyra_domain::source::SourceConnector;
@@ -13,5 +17,11 @@ use veyra_domain::source::SourceConnector;
 /// Every connector shipped in this build.
 #[must_use]
 pub fn all() -> Vec<Box<dyn SourceConnector>> {
-    vec![Box::new(claude_code::ClaudeCode::new())]
+    vec![
+        Box::new(claude_code::ClaudeCode::new()),
+        Box::new(codex::Codex::new()),
+        Box::new(gemini_cli::GeminiCli::new()),
+        Box::new(opencode::OpenCode::new()),
+        Box::new(copilot_cli::CopilotCli::new()),
+    ]
 }
