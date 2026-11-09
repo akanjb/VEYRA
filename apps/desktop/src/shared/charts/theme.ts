@@ -58,13 +58,3 @@ function subscribe(onChange: () => void): () => void {
 export function useChartTheme(): ChartTheme {
   return useSyncExternalStore(subscribe, snapshot);
 }
-
-/** Escapes text for ECharts' HTML tooltips (labels are user data: never trusted). */
-export function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}

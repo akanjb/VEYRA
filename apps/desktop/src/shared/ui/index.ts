@@ -14,3 +14,4 @@ export {
   TipProvider,
   cn,
 } from "./primitives";
+export { adoptStyleNonce } from "./style-nonce";

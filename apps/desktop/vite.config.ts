@@ -20,6 +20,8 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_ENV_"],
   build: {
     target: "es2022",
+    // Never inline assets as data: URLs: the production CSP allows fonts from 'self' only.
+    assetsInlineLimit: 0,
     sourcemap: process.env["TAURI_ENV_DEBUG"] === "true",
   },
   test: {

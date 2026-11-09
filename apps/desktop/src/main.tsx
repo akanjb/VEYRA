@@ -14,6 +14,7 @@ import {
   isTauri,
   type ApiClient,
 } from "@/shared/api";
+import { adoptStyleNonce } from "@/shared/ui";
 import "@/styles/global.css";
 
 /**
@@ -32,6 +33,7 @@ async function createClient(): Promise<ApiClient> {
 }
 
 initTheme();
+adoptStyleNonce();
 const root = document.getElementById("root");
 if (root === null) throw new Error("Missing #root element");
 const client = await createClient();

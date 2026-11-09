@@ -3,7 +3,8 @@ import { useMemo } from "react";
 import { fmt } from "../format";
 import { Chart, baseOption, tooltipStyle, type ChartOption } from "./chart";
 import { DataTable } from "./table";
-import { escapeHtml, useChartTheme, type ChartTheme } from "./theme";
+import { useChartTheme, type ChartTheme } from "./theme";
+import { tooltipContent } from "./tooltip";
 
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
@@ -35,7 +36,7 @@ export function calendarOption(
       ...tooltipStyle(theme),
       formatter: (p: unknown) => {
         const [date, value] = ((p as ValueParam).value ?? ["", 0]) as [string, number];
-        return `<b>${escapeHtml(fmt.day(date))}</b><br/>${escapeHtml(format(value))}`;
+        return tooltipContent(fmt.day(date), [{ label: format(value) }]);
       },
     },
     visualMap: { show: false, min: 0, max, inRange: { color: theme.seq.slice(1) } },
@@ -97,7 +98,8 @@ export function hourOption(
           number,
           number,
         ];
-        return `<b>${WEEKDAYS[weekday] ?? ""} ${String(hour).padStart(2, "0")}:00</b><br/>${escapeHtml(format(value))}`;
+        const slot = `${WEEKDAYS[weekday] ?? ""} ${String(hour).padStart(2, "0")}:00`;
+        return tooltipContent(slot, [{ label: format(value) }]);
       },
     },
     visualMap: {

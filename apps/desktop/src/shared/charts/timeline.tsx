@@ -2,7 +2,8 @@ import { useMemo } from "react";
 
 import { fmt } from "../format";
 import { Chart, baseOption, legendStyle, tooltipStyle, type ChartOption } from "./chart";
-import { escapeHtml, useChartTheme, type ChartTheme } from "./theme";
+import { useChartTheme, type ChartTheme } from "./theme";
+import { tooltipContent } from "./tooltip";
 
 export interface TimelinePoint {
   at: number;
@@ -24,7 +25,10 @@ function pointTooltip(theme: ChartTheme, timeZone: string | undefined) {
     formatter: (p: unknown) => {
       const point = (p as { data?: { point?: TimelinePoint } }).data?.point;
       if (point === undefined) return "";
-      return `<b>${escapeHtml(fmt.time(point.at, timeZone))}</b> · ${escapeHtml(point.group)}<br/>${escapeHtml(point.detail)}`;
+      return tooltipContent(fmt.time(point.at, timeZone), [
+        { label: point.group, color: point.color },
+        { label: point.detail },
+      ]);
     },
   };
 }

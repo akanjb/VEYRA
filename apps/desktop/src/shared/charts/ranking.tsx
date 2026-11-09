@@ -4,7 +4,8 @@ import { fmt } from "../format";
 import { Chart, baseOption, tooltipStyle, type ChartClick, type ChartOption } from "./chart";
 import { DataTable } from "./table";
 import { readableOn } from "./colors";
-import { escapeHtml, useChartTheme, type ChartTheme } from "./theme";
+import { useChartTheme, type ChartTheme } from "./theme";
+import { tooltipContent } from "./tooltip";
 
 export interface RankItem {
   /** Filter value; `null` for "Other" and unknown values (not selectable). */
@@ -30,7 +31,9 @@ function itemTooltip(theme: ChartTheme, items: readonly RankItem[], format: Form
     formatter: (p: unknown) => {
       const item = items[(p as ItemParam).dataIndex ?? -1];
       if (item === undefined) return "";
-      return `<b>${escapeHtml(item.label)}</b><br/>${escapeHtml(format(item.value))} · ${escapeHtml(fmt.percent(item.share))}`;
+      return tooltipContent(item.label, [
+        { label: format(item.value), value: fmt.percent(item.share), color: item.color },
+      ]);
     },
   };
 }

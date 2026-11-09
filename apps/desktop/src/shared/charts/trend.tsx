@@ -3,7 +3,8 @@ import { useMemo } from "react";
 import { fmt } from "../format";
 import { Chart, baseOption, legendStyle, tooltipStyle, type ChartOption } from "./chart";
 import { DataTable } from "./table";
-import { escapeHtml, useChartTheme, type ChartTheme } from "./theme";
+import { useChartTheme, type ChartTheme } from "./theme";
+import { tooltipContent, type TooltipLine } from "./tooltip";
 
 export interface TrendSeries {
   name: string;
@@ -13,25 +14,25 @@ export interface TrendSeries {
 
 interface AxisParam {
   axisValue?: string;
-  marker?: string;
+  color?: string;
   seriesName?: string;
   value?: number;
 }
 
-function tooltip(params: unknown, format: (v: number) => string): string {
+function tooltip(params: unknown, format: (v: number) => string): HTMLElement | string {
   const list = (Array.isArray(params) ? params : [params]) as AxisParam[];
   const first = list[0];
   if (first === undefined) return "";
   const total = list.reduce((sum, p) => sum + (p.value ?? 0), 0);
-  const rows = list
+  const lines: TooltipLine[] = list
     .filter((p) => (p.value ?? 0) > 0)
-    .map(
-      (p) =>
-        `${p.marker ?? ""}${escapeHtml(p.seriesName ?? "")}&nbsp;&nbsp;<b>${escapeHtml(format(p.value ?? 0))}</b>`,
-    );
-  const head = `<b>${escapeHtml(fmt.day(first.axisValue ?? ""))}</b>`;
-  const foot = list.length > 1 ? `<br/>Total&nbsp;&nbsp;<b>${escapeHtml(format(total))}</b>` : "";
-  return [head, ...rows].join("<br/>") + foot;
+    .map((p) => ({
+      label: p.seriesName ?? "",
+      value: format(p.value ?? 0),
+      ...(p.color === undefined ? {} : { color: p.color }),
+    }));
+  if (list.length > 1) lines.push({ label: "Total", value: format(total) });
+  return tooltipContent(fmt.day(first.axisValue ?? ""), lines);
 }
 
 function trendOption(

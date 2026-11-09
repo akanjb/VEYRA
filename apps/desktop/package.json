@@ -17,6 +17,7 @@
     "@tauri-apps/api": "2.12.4",
     "@veyra/contracts": "workspace:*",
     "echarts": "6.1.0",
+    "get-nonce": "1.0.1",
     "lucide-react": "1.66.0",
     "radix-ui": "1.8.1",
     "react": "19.3.1",

@@ -14,6 +14,7 @@ const desktopSrc = path.join(import.meta.dirname, "apps/desktop/src");
 export default defineConfig(
   globalIgnores([
     "**/dist/",
+    "**/dist-fixtures/",
     "**/coverage/",
     "target/",
     "src-tauri/gen/",

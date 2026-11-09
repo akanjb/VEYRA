@@ -6,6 +6,9 @@
     <!-- The window icon comes from the native bundle; suppress the favicon request. -->
     <link rel="icon" href="data:," />
     <title>Veyra</title>
+    <!-- Tauri gives this element a fresh style nonce on each load; styles injected at
+         runtime adopt it (src/shared/ui/style-nonce.ts). -->
+    <style></style>
   </head>
   <body>
     <div id="root"></div>
