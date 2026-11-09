@@ -5,6 +5,15 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Connectors for Codex, Gemini CLI, OpenCode and GitHub Copilot CLI (M4).**
+  - Codex (CLI, IDE extension, desktop app): plain and zstd-compressed rollouts, exact per-response records or running-total increases with reset and fork handling.
+  - Gemini CLI: current JSONL recordings and older JSON documents, subagent sessions, the project folder from `.project_root`.
+  - OpenCode: the live SQLite database read through a deleted-after-use snapshot, both table generations, gateways recorded separately.
+  - GitHub Copilot CLI: per-session, per-model totals following the tool's summary rule; documented as session-level.
+  - Pipeline reading modes: whole files with a size cap, zstd decoding, SQLite snapshots, and small side files.
+  - A capability matrix per source on Sources & Health, and the supported tools not found on the device.
+  - Synthetic fixtures with canary markers, unit tests per connector, and end-to-end tests including a concurrent database writer and cross-source attribution.
+  - Connector documentation pages and ADR-025.
 - **Dashboard shell and first pages (M3).**
   - Commands `get_overview`, `list_sessions` and `get_session`, served by the analytics engine. Activity metrics: sessions, and active time as the union of request gaps capped at 5 minutes.
   - Design tokens for light and dark themes, a validated colour-blind-safe data palette, and bundled Inter and JetBrains Mono.
@@ -33,6 +42,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
   - Connector documentation and ADR-023.
 
 ### Changed
+- **Model names through gateways.** The registry resolves `vendor/model` and dotted spellings (`claude-sonnet-4.5`) to canonical models; exact names still match first.
 - **Display names and definitions come from the core.** KPI definitions come from the metric registry. Provider, model and application names come from the registry and connector descriptors, through one `DisplayNames` value.
 - **One clock and one test kit.** `UtcMillis::now()` replaces duplicated clocks. A new `veyra-testkit` crate holds the shared test fixtures and temporary directories.
 - **IPC.** The dashboard window may listen to (and stop listening to) application events; emitting events and every other core plugin stay denied (amends ADR-020).

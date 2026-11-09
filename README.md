@@ -6,7 +6,7 @@
 
 Veyra is a local-first desktop application that consolidates AI usage from model providers, coding agents, IDEs, desktop apps and CLIs into one accurate, privacy-preserving analytics product. Everything runs on your own machine.
 
-![Status](https://img.shields.io/badge/status-early%20development%20(M3)-orange)
+![Status](https://img.shields.io/badge/status-early%20development%20(M4)-orange)
 ![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Stack](https://img.shields.io/badge/stack-Tauri%202%20%C2%B7%20Rust%20%C2%B7%20React%2019%20%C2%B7%20SQLite-6f42c1)
@@ -27,11 +27,12 @@ Veyra is a local-first desktop application that consolidates AI usage from model
 ---
 
 > [!IMPORTANT]
-> **Project status: Milestones M0 (Foundations), M1 (Data core), M2 (Claude Code ingestion) and M3 (Dashboard shell) complete.**
+> **Project status: Milestones M0 (Foundations), M1 (Data core), M2 (Claude Code ingestion), M3 (Dashboard shell) and M4 (more connectors) complete.**
 > - **Built:** the secure desktop shell, generated contracts, the domain model, the verified pricing engine and price catalogue, the SQLite store and the analytics engine.
 > - **M2:** consent-gated, incremental ingestion of Claude Code logs, verified on 1.3 GB of real logs with no content stored.
-> - **New in M3:** the dashboard. It has three pages (Overview, Sessions with a session timeline, and Sources & Health), a first-run consent flow, light and dark themes, a command palette and full keyboard use, and accessibility checks in CI.
-> - **Next:** further connectors (M4), then the analytics pages (M5).
+> - **M3:** the dashboard. It has three pages (Overview, Sessions with a session timeline, and Sources & Health), a first-run consent flow, light and dark themes, a command palette and full keyboard use, and accessibility checks in CI.
+> - **New in M4:** connectors for Codex, Gemini CLI, OpenCode and GitHub Copilot CLI, each verified against the tool's source code. Compressed archives and live SQLite databases are read through snapshots. Every source shows what it can and cannot report.
+> - **Next:** the analytics pages (M5).
 >
 > This README marks every capability as **Available** or **Planned**.
 
@@ -98,7 +99,7 @@ Veyra answers the questions no single tool can:
 | Analytics engine: one metric registry, exact local days and weeks in any time zone, comparisons, top-N | **Available** |
 | Incremental collection from local tool data: consent first, checkpoints, file watcher, periodic and manual scans | **Available** |
 | Connector: Claude Code (CLI, desktop Code tab, IDE extensions) | **Available** |
-| Connectors: Codex CLI, Gemini CLI, OpenCode, Copilot CLI | Planned (M4) |
+| Connectors: Codex (CLI, IDE, desktop app), Gemini CLI, OpenCode, GitHub Copilot CLI (per session) | **Available** |
 | Dashboard shell: light and dark themes, URL-held filters, command palette, keyboard shortcuts, live refresh | **Available** |
 | Pages: Overview, Sessions (explorer and timeline), Sources & Health with first-run consent | **Available** |
 | Pages: Usage, Cost, Cache, Models & Providers, Projects, Activity | Planned (M5) |
@@ -142,10 +143,10 @@ The tiers below come from the research in [`docs/planning/00-research.md`](docs/
 | Source | Interface | Data | Accuracy | Tier |
 |---|---|---|---|---|
 | Claude Code (CLI, desktop Code tab, IDE extension) | CLI / Desktop / IDE | Local JSONL session logs | Exact | MVP · **Available** ([details](docs/connectors/claude-code.md)) |
-| Codex CLI | CLI | Local JSONL rollouts | Exact | MVP |
-| Gemini CLI | CLI | Local JSONL sessions | Exact | MVP |
-| OpenCode | CLI | Local SQLite | Exact | MVP |
-| GitHub Copilot CLI | CLI | Local session events | Partial → Exact | MVP after validation |
+| Codex (CLI, IDE extension, desktop app) | CLI / IDE / Desktop | Local JSONL rollouts, plain or zstd-compressed | Exact | MVP · **Available** ([details](docs/connectors/codex.md)) |
+| Gemini CLI | CLI | Local chat recordings (JSONL, or JSON before v0.39) | Exact (conversation requests only) | MVP · **Available** ([details](docs/connectors/gemini-cli.md)) |
+| OpenCode | CLI | Local SQLite, read through a snapshot | Exact | MVP · **Available** ([details](docs/connectors/opencode.md)) |
+| GitHub Copilot CLI | CLI | Local session events: totals per session and model | Provider-reported, per session | MVP · **Available** ([details](docs/connectors/copilot-cli.md)) |
 | Claude Code / Codex / Gemini CLI / Copilot (VS Code) | Official OpenTelemetry (opt-in) | OTLP to a local receiver | Exact | Next |
 | Claude Desktop Chat/Cowork, Aider, Cline, Roo Code | Desktop / CLI / IDE | Local files | Exact–Partial | Next |
 | Ollama, LM Studio, OpenAI-compatible endpoints | Local runtime / API | Opt-in local capture proxy | Exact | Later |
@@ -365,6 +366,26 @@ sequenceDiagram
   end
   Note over R,K: the reader prepares the next chunk while the worker commits
   K-->>UI: data-changed {inserted, updated}
+```
+
+**Reading modes (implemented, M4).** Each connector declares how its files are read; connectors only parse ([ADR-025](docs/adr/0025-reading-modes-and-capabilities.md)).
+
+```mermaid
+flowchart LR
+  subgraph modes [How the pipeline reads]
+    A[Append-only lines<br/>new bytes since the checkpoint]
+    W[Whole file<br/>re-read when it changes<br/>zstd decoded, 256 MiB cap]
+    D[Database snapshot<br/>backup API copy, queries, deleted]
+  end
+  CC[Claude Code] --> A
+  CX[Codex] --> W
+  GM[Gemini CLI] --> W
+  CP[Copilot CLI] --> W
+  OC[OpenCode] --> D
+  A --> P[Connector parser<br/>pure, no I/O]
+  W --> P
+  D -->|one JSON line per row| P
+  P --> N[Normalise · price · commit<br/>with the checkpoint]
 ```
 
 ### Frontend (dashboard)
@@ -681,8 +702,8 @@ veyra/
 │   ├── veyra-registry/          # loads + validates registry/*.toml (single source of truth)
 │   ├── veyra-analytics/         # metric registry, query specs, time-zone-aware engine
 │   ├── veyra-store/             # SQLite: migrations, idempotent writes, rollups, sources, checkpoints
-│   ├── veyra-connectors/        # pure source parsers, one module per tool (Claude Code)
-│   ├── veyra-ingest/            # discovery, scoped reads, checkpoints, pipeline, watcher worker
+│   ├── veyra-connectors/        # pure source parsers: Claude Code, Codex, Gemini CLI, OpenCode, Copilot CLI
+│   ├── veyra-ingest/            # discovery, scoped reads, whole files, SQLite snapshots, pipeline, worker
 │   ├── veyra-app/               # application layer: Api, page views, DTOs, display names, catalogues
 │   └── veyra-testkit/           # test-only: synthetic fixture paths, temporary directories
 ├── src-tauri/                   # Tauri shell: composition root, commands, capabilities
@@ -701,7 +722,7 @@ veyra/
 ├── docs/
 │   ├── planning/                # research, PRD, architecture, UX, risks, roadmap
 │   ├── connectors/              # one page per connector: paths, fields, mapping rules
-│   └── adr/                     # architecture decision records 0001–0024
+│   └── adr/                     # architecture decision records 0001–0025
 ├── .github/workflows/           # CI and security pipelines
 └── .githooks/                   # pre-commit checks
 ```
@@ -781,7 +802,8 @@ The compiler, the IPC access tests and the contract drift check catch any missed
 | Storage | Idempotency, moved events, rollups equal raw events on random data, all rollup levels agree, re-pricing, backups | `cargo test` (`veyra-store`) |
 | Integration | IPC access control against a mock Tauri runtime, with the real configuration | `cargo test` (`src-tauri/tests`) |
 | Contract | Generated TypeScript matches Rust DTOs and the command catalogue | `pnpm contracts:check` |
-| Parser | Each connector and format version: synthetic fixtures → expected records, field by field; only allow-listed files are read; no content leaves the parser | `cargo test` (`veyra-connectors`) |
+| Parser | Each connector and format version: synthetic fixtures → expected records, field by field; only allow-listed files are read; no content leaves the parser; running totals add up to the final total and resets start a new baseline (Codex); session summaries count once (Copilot CLI) | `cargo test` (`veyra-connectors`) |
+| Connectors end to end | Discovery, consent, totals, idempotent rescans and no stored content for every connector; compressed copies add nothing; a live SQLite database is never locked while a writer keeps writing; Claude through Copilot attributes vendor, gateway and application separately | `cargo test` (`veyra-ingest/tests/connectors.rs`) |
 | Ingestion | Consent, idempotent rescans, appends, partial lines, truncation, replacement, deletion, oversize lines, cancellation, concurrent writers, shared access, canaries, the watcher | `cargo test` (`veyra-ingest`) |
 | Performance | Overview query budgets on 1M synthetic events; end-to-end ingest throughput | `veyra-perf`, ignored throughput test, `Performance` workflow |
 | Page contract | Overview equals the metric engine for the same scope; parts add up to the headline; sessions sum to the Overview; one name per model across pages | `cargo test` (`veyra-app/tests/contract.rs`) |
@@ -816,7 +838,7 @@ flowchart LR
   M0[M0 Foundations<br/>✅ complete]:::done --> M1[M1 Data core<br/>✅ complete]:::done
   M1 --> M2[M2 Claude Code<br/>end-to-end ingestion<br/>✅ complete]:::done
   M2 --> M3[M3 Dashboard shell<br/>design system<br/>✅ complete]:::done
-  M2 --> M4[M4 Codex · Gemini CLI<br/>OpenCode · Copilot CLI]
+  M2 --> M4[M4 Codex · Gemini CLI<br/>OpenCode · Copilot CLI<br/>✅ complete]:::done
   M3 --> M5[M5 Analytics modules]
   M4 --> M5
   M5 --> M6[M6 Exports · Storage<br/>Settings]
@@ -848,7 +870,7 @@ The detailed, dependency-ordered plan with acceptance criteria is in [`docs/plan
 | [UX plan](docs/planning/03-ux.md) | Sitemap, page anatomy, chart choices, design system, accessibility |
 | [Feasibility and risks](docs/planning/04-feasibility-risks.md) | Feasibility, risk register, hidden costs, prioritisation |
 | [Roadmap](docs/planning/05-roadmap.md) | Milestones, tasks, acceptance criteria |
-| [Connectors](docs/connectors/claude-code.md) | Per-source paths, fields used, mapping rules, precedence and diagnostics |
+| Connectors: [Claude Code](docs/connectors/claude-code.md), [Codex](docs/connectors/codex.md), [Gemini CLI](docs/connectors/gemini-cli.md), [OpenCode](docs/connectors/opencode.md), [GitHub Copilot CLI](docs/connectors/copilot-cli.md) | Per-source paths, fields used, mapping rules, precedence and known gaps |
 | [Decision records](docs/adr/README.md) | ADR 0001–0023 |
 
 ## Author

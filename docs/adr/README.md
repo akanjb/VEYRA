@@ -28,5 +28,6 @@ Each record documents one significant decision: its context, the decision itself
 | [020](0020-ipc-security-baseline.md) | IPC and webview security baseline | Accepted, amended by 024 |
 | [021](0021-ci-scope-while-private.md) | CI scope while the repository is private | Accepted |
 | [022](0022-data-core-implementation.md) | Data-core implementation refinements | Accepted |
-| [023](0023-incremental-ingestion.md) | Incremental, consent-gated ingestion | Accepted |
+| [023](0023-incremental-ingestion.md) | Incremental, consent-gated ingestion | Accepted, extended by 025 |
 | [024](0024-dashboard-frontend.md) | Dashboard frontend: stack, design system and deviations from the plan | Accepted |
+| [025](0025-reading-modes-and-capabilities.md) | Reading modes, side files and capability matrices for connectors | Accepted |

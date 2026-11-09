@@ -1,6 +1,6 @@
 # 0023. Incremental, consent-gated ingestion
 
-- **Status:** Accepted
+- **Status:** Accepted, extended by [0025](0025-reading-modes-and-capabilities.md) (whole-file and database reading)
 - **Date:** 2026-11-08
 
 ## Context

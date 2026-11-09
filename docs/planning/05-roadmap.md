@@ -208,6 +208,14 @@ flowchart LR
 
 ## M4 — Remaining Tier-1 connectors (M–L)
 
+> **Implementation notes (2026-11-10).** Delivered as the `codex`, `gemini_cli`, `opencode` and `copilot_cli` connectors, whole-file and database reading in the pipeline, and a capability matrix per source (ADR-025).
+> - **Validation:** the development machine had only the Codex desktop app (no sessions yet) and Copilot debug logs, so each format was verified against the tool's source code or published schema at a recorded commit. The Codex desktop app's thread index points at the same rollout files as the CLI, which settles the open question from the research. Details are in `docs/connectors/`.
+> - **Codex:** exact per-response records where the version writes them, otherwise increases of running totals. Resets start a new baseline and fork copies are excluded. The test checks that the counted increases add up to the final total. `rate_limits` are not read yet (planned with quotas, M7).
+> - **Gemini CLI:** last copy of each message, both the JSONL and the older JSON document formats, and the project folder from `.project_root`. Background requests are not recorded by the tool; the capability matrix says so.
+> - **OpenCode:** read through a snapshot of the live database (ADR-015). Both table generations are read, with each message counted once. The test shows OpenCode writing continuously with no busy timeout while Veyra reads. Sessions stored as JSON before 1.2 are not read.
+> - **Copilot CLI:** the spike confirmed the aggregation rule (per run before 1.0.66, cumulative from 1.0.66), so it ships at session granularity with provider-reported accuracy rather than being deferred. Per-request usage is never written to disk by Copilot.
+> - **Attribution:** gateways are recorded separately from vendors, and the registry resolves gateway spellings of model names. A test checks Claude through Copilot as provider Anthropic, gateway GitHub Copilot, application Copilot CLI.
+
 **Tasks.**
 1. Run a validation spike per connector, as in M2 (real files read locally, synthetic fixtures committed).
 2. Connectors:
