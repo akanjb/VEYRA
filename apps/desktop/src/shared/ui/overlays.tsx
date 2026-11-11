@@ -153,7 +153,13 @@ export function Sheet({ open, onOpenChange, title, description, children }: Over
               <X size={16} aria-hidden />
             </Dialog.Close>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto px-5 py-4">{children}</div>
+          {/* Focusable, so the panel can be scrolled from the keyboard when it holds only text. */}
+          <div
+            tabIndex={0}
+            className="min-h-0 flex-1 overflow-auto px-5 py-4 focus-visible:-outline-offset-2"
+          >
+            {children}
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

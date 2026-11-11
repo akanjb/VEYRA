@@ -9,6 +9,7 @@ mod highlights;
 mod kpis;
 pub(crate) mod models;
 pub(crate) mod overview;
+pub(crate) mod pricing;
 pub(crate) mod projects;
 mod rankings;
 pub(crate) mod sessions;

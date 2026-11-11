@@ -1,5 +1,7 @@
 //! The read port the data layer implements (hexagonal: the port belongs to its consumer).
 
+use veyra_domain::money::NanoUsd;
+use veyra_domain::pricing::{Assumptions, CostStatus};
 use veyra_domain::time::UtcMillis;
 
 use crate::dimension::{Dimension, DimensionValue, Filters};
@@ -108,4 +110,43 @@ pub trait LabelReader {
     /// # Errors
     /// Returns [`ReadError`] when the underlying store fails.
     fn projects(&self) -> Result<Vec<ProjectLabel>, ReadError>;
+}
+
+/// How a group of events was priced: one row per provider, model, rule, outcome and set
+/// of assumptions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PricingUse {
+    pub provider: String,
+    /// The canonical model id, or the reported name when the model is unknown.
+    pub model: Option<String>,
+    /// The price rule applied; `None` when no rule covers the model.
+    pub rule_id: Option<String>,
+    pub status: CostStatus,
+    pub assumptions: Assumptions,
+    pub tally: Tally,
+}
+
+/// Events, tokens and API-equivalent cost of a group.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Tally {
+    pub events: u64,
+    pub tokens: u64,
+    pub cost: NanoUsd,
+}
+
+impl std::ops::AddAssign for Tally {
+    fn add_assign(&mut self, other: Self) {
+        self.events += other.events;
+        self.tokens += other.tokens;
+        self.cost = self.cost + other.cost;
+    }
+}
+
+/// How events were priced (implemented by the data layer).
+pub trait PricingReader {
+    /// Events in `[from, until)` matching the filters, grouped by how they were priced.
+    ///
+    /// # Errors
+    /// Returns [`ReadError`] when the underlying store fails.
+    fn pricing_uses(&self, query: &RangeQuery) -> Result<Vec<PricingUse>, ReadError>;
 }

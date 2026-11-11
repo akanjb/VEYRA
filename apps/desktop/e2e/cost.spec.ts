@@ -9,6 +9,14 @@ for (const theme of THEMES) {
     await expectAccessible(page);
   });
 
+  test(`the cost assumptions panel is accessible (${theme})`, async ({ page }) => {
+    await open(page, "/cost", { theme });
+    await page.getByRole("button", { name: "How cost is estimated" }).click();
+    const sheet = page.getByRole("dialog", { name: "How cost is estimated" });
+    await expect(sheet.getByRole("heading", { name: "Prices applied" })).toBeVisible();
+    await expectAccessible(page);
+  });
+
   test(`settings have no accessibility violations (${theme})`, async ({ page }) => {
     await open(page, "/settings", { theme });
     await expect(page.getByRole("heading", { name: "Billing entries" })).toBeVisible();
@@ -62,4 +70,22 @@ test("breakdowns and the waterfall have tables, and the waterfall switches dimen
   await change.getByRole("radio", { name: "Project" }).click();
   await change.getByRole("button", { name: /as a table/ }).click();
   await expect(change.getByRole("cell", { name: "Previous period" })).toBeVisible();
+});
+
+test("the assumptions panel lists the prices applied, stale rates and assumptions", async ({
+  page,
+}) => {
+  await open(page, "/cost");
+  await page.getByRole("button", { name: "How cost is estimated" }).click();
+  const sheet = page.getByRole("dialog", { name: "How cost is estimated" });
+  const prices = sheet.getByRole("region", { name: "Prices applied" });
+  await expect(prices.getByText("claude-sonnet-5-5")).toBeVisible();
+  await expect(prices.getByText("Stale")).toBeVisible();
+  await expect(prices.getByText("Input").first()).toBeVisible();
+  await expect(sheet.getByRole("region", { name: "Assumptions" })).toContainText(
+    "assumed not to have changed",
+  );
+  await expect(sheet.getByText(/prices? applied · 1 stale/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
 });

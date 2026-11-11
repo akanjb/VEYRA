@@ -14,6 +14,7 @@ pub mod engine;
 pub mod forecast;
 pub mod metrics;
 pub mod port;
+pub mod pricing;
 pub mod query;
 pub mod sessions;
 pub mod sizes;

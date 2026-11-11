@@ -8,7 +8,7 @@ mod support;
 use jiff::tz::TimeZone;
 use veyra_analytics::dimension::{Dimension, Filters};
 use veyra_analytics::engine::evaluate;
-use veyra_analytics::port::{BaseSumsQuery, BaseSumsReader};
+use veyra_analytics::port::{BaseSumsQuery, BaseSumsReader, PricingReader, RangeQuery};
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_analytics::sums::BaseSums;
 use veyra_domain::accuracy::Accuracy;
@@ -268,6 +268,52 @@ fn analytics_engine_runs_on_the_store() {
         vec![Some("claude-sonnet-5-5".to_owned())]
     );
     assert_eq!(result.previous_totals.map(|p| p.events), Some(0));
+}
+
+#[test]
+fn pricing_uses_group_events_by_rule_and_outcome() {
+    let db = TempDb::new();
+    let catalog = bundled_catalog();
+    let mut sessionless = event("b", NOV_8 + 2 * HOUR, tokens(1_000_000, 0));
+    sessionless.context.session_key = None;
+    let mut unknown = event("c", NOV_8 + 3 * HOUR, tokens(500, 50));
+    unknown.attribution.model = None;
+    unknown.attribution.raw_model = Some("mystery-1".to_owned());
+    let outside = event("d", NOV_8 + 30 * HOUR, tokens(9, 9));
+    let events: Vec<PricedEvent> = [
+        event("a", NOV_8 + HOUR, tokens(1_000_000, 100_000)),
+        sessionless,
+        unknown,
+        outside,
+    ]
+    .into_iter()
+    .map(|e| priced(e, &catalog))
+    .collect();
+    db.store.write_events(&events, now()).unwrap();
+
+    let mut uses = db
+        .store
+        .pricing_uses(&RangeQuery {
+            from: UtcMillis(NOV_8),
+            until: UtcMillis(NOV_8 + 24 * HOUR),
+            filters: Filters::new(),
+        })
+        .unwrap();
+    uses.sort_by_key(|u| u.status.as_str());
+    assert_eq!(uses.len(), 2, "one priced group and one unpriced model");
+    let (priced_use, unpriced) = (&uses[0], &uses[1]);
+    assert_eq!(priced_use.status, CostStatus::Priced);
+    assert_eq!(priced_use.model.as_deref(), Some("claude-sonnet-5-5"));
+    assert!(priced_use.rule_id.is_some());
+    // Both Sonnet requests, with or without a session: $3.00 + $2.00.
+    assert_eq!(priced_use.tally.events, 2);
+    assert_eq!(priced_use.tally.tokens, 2_100_000);
+    assert_eq!(priced_use.tally.cost, NanoUsd(5_000_000_000));
+    assert_eq!(unpriced.status, CostStatus::UnpricedModel);
+    assert_eq!(unpriced.model.as_deref(), Some("mystery-1"));
+    assert_eq!(unpriced.rule_id, None);
+    assert_eq!(unpriced.tally.tokens, 550);
+    assert_eq!(unpriced.tally.cost, NanoUsd(0));
 }
 
 #[test]

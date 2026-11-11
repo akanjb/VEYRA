@@ -86,6 +86,7 @@ pub fn api(store: &Arc<Store>) -> Api {
         projects: Arc::clone(store) as _,
         billing: Arc::clone(store) as _,
         analytics: Arc::clone(store) as _,
+        catalog: Arc::new(registry.catalog().clone()),
         connectors,
         names,
         ingest: Box::new(NoIngest),

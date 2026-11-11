@@ -10,6 +10,7 @@ mod billing;
 mod cache;
 mod cost;
 mod models;
+mod pricing;
 mod projects;
 mod sessions;
 mod sources;
@@ -32,6 +33,11 @@ pub use cost::{
     CostRequest, MonthOutlook, OutlookDay, RateRow, Waterfall, WaterfallStep,
 };
 pub use models::{Matrix, ModelLane, ModelRow, Models, ModelsRequest, ShareDay};
+pub use pricing::{
+    AssumptionKind, AssumptionUse, CostAssumptions, CostAssumptionsRequest, ModifierKind,
+    PriceModifier, PriceTier, PricingStatus, PricingTally, Rates, RuleUse, StatusUse,
+    UnpricedModel,
+};
 pub use projects::{
     MergeProjectRequest, ProjectAlias, ProjectDetail, ProjectInfo, ProjectList, ProjectRequest,
     ProjectRow, ProjectsChanged, ProjectsRequest, RenameProjectRequest, UnmergeProjectRequest,

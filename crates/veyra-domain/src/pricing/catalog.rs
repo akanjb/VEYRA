@@ -75,6 +75,12 @@ impl PriceCatalog {
     }
 
     /// The most specific rule covering `model` at instant `at`.
+    /// The rule with this id.
+    #[must_use]
+    pub fn rule(&self, id: &str) -> Option<&PriceRule> {
+        self.rules.iter().find(|rule| rule.id == id)
+    }
+
     #[must_use]
     pub fn resolve(&self, model: &ModelId, at: UtcMillis) -> Option<&PriceRule> {
         self.rules

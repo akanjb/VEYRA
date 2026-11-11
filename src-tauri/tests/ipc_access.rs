@@ -66,7 +66,13 @@ fn valid_request(cmd: &str) -> Value {
     });
     match cmd {
         "set_source_enabled" => json!({ "sourceId": 1, "enabled": false }),
-        "get_overview" | "get_usage" | "get_cost" | "get_cache" | "get_models" | "get_activity"
+        "get_overview"
+        | "get_usage"
+        | "get_cost"
+        | "get_cost_assumptions"
+        | "get_cache"
+        | "get_models"
+        | "get_activity"
         | "list_projects" => json!({ "scope": scope }),
         "list_sessions" => {
             json!({ "scope": scope, "sort": "lastActive", "page": 0, "pageSize": 50 })

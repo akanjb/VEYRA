@@ -33,7 +33,7 @@ fn read_error(error: &StoreError) -> ReadError {
 
 /// Clauses selecting events (alias `e`) in `[from, until)` that match the filters. The
 /// bucket range uses the index; the timestamp range makes unaligned bounds exact.
-pub(crate) fn event_clauses(
+pub(crate) fn range_clauses(
     from: UtcMillis,
     until: UtcMillis,
     filters: &Filters,
@@ -51,7 +51,6 @@ pub(crate) fn event_clauses(
         format!("e.bucket_start < ?{}", n - 1),
         format!("e.occurred_at >= ?{n}"),
         format!("e.occurred_at < ?{}", n - 1),
-        "e.session_id IS NOT NULL".to_owned(),
     ];
     for (dimension, allowed) in filters.iter() {
         let (_, column, integer) = dimension_info(dimension);
@@ -59,6 +58,18 @@ pub(crate) fn event_clauses(
             clauses.push(clause);
         }
     }
+    clauses
+}
+
+/// [`range_clauses`] for events that belong to a session.
+pub(crate) fn event_clauses(
+    from: UtcMillis,
+    until: UtcMillis,
+    filters: &Filters,
+    values: &mut Vec<Value>,
+) -> Vec<String> {
+    let mut clauses = range_clauses(from, until, filters, values);
+    clauses.push("e.session_id IS NOT NULL".to_owned());
     clauses
 }
 

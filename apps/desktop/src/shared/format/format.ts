@@ -50,6 +50,26 @@ export function usd(
   return prefix + formatter.format(dollars);
 }
 
+/** A published price from micro-USD per million tokens: "$2.50 / MTok". */
+export function pricePerMTok(microUsd: Num, locale?: string): string {
+  if (isMissing(microUsd)) return MISSING;
+  const formatter = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+  });
+  return `${formatter.format(microUsd / 1_000_000)} / MTok`;
+}
+
+/** A price multiplier from basis points (10 000 is 1×): "0.5×", "1.25×". */
+export function multiplier(basisPoints: Num, locale?: string): string {
+  if (isMissing(basisPoints)) return MISSING;
+  return (
+    new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }).format(basisPoints / 10_000) + "×"
+  );
+}
+
 /** A 0–1 ratio as a percentage, with one decimal below 10%. */
 export function percent(ratio: Num, locale?: string): string {
   if (isMissing(ratio)) return MISSING;

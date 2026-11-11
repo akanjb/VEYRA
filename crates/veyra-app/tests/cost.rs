@@ -13,8 +13,8 @@ use veyra_analytics::metrics::MetricId;
 use veyra_app::ApiError;
 use veyra_app::dto::{
     BillingEntryInput, BillingKind, BillingRecurrence, BillingRequest, BudgetInput, BudgetLevel,
-    Cost, CostRequest, DeleteBillingEntryRequest, DeleteBudgetRequest, SaveBillingEntryRequest,
-    SaveBudgetRequest,
+    Cost, CostAssumptionsRequest, CostRequest, DeleteBillingEntryRequest, DeleteBudgetRequest,
+    SaveBillingEntryRequest, SaveBudgetRequest,
 };
 
 use support::{api, engine_value, ingested, scope};
@@ -289,4 +289,42 @@ fn invalid_and_unknown_records_are_refused() {
         })
         .unwrap_err();
     assert!(matches!(no_project, ApiError::NotFound { .. }));
+}
+
+#[test]
+fn cost_assumptions_add_up_to_the_estimate() {
+    let data = ingested();
+    let api = api(&data.store);
+    let panel = api
+        .get_cost_assumptions(CostAssumptionsRequest { scope: scope() })
+        .unwrap();
+    let estimate = engine_value(&data.store, MetricId::ApiEquivalentCost).unwrap();
+    // Every event has exactly one outcome, so the outcomes add up to the estimate.
+    let by_status: i64 = panel
+        .statuses
+        .iter()
+        .map(|s| s.tally.api_equivalent_nano_usd)
+        .sum();
+    assert!((as_f64(by_status) - estimate).abs() < 1.0);
+    // Every priced event has exactly one rule, so the rules add up to the same.
+    let by_rule: i64 = panel
+        .rules
+        .iter()
+        .map(|r| r.tally.api_equivalent_nano_usd)
+        .sum();
+    assert_eq!(by_rule, by_status);
+    assert_ne!(panel.rules.len(), 0, "the fixtures use priced models");
+    for rule in &panel.rules {
+        assert!(rule.source_url.starts_with("https://"), "{}", rule.id);
+        assert_eq!(rule.verified_at.len(), "YYYY-MM-DD".len());
+        assert!(rule.base.output > 0);
+    }
+    assert!(
+        panel
+            .unpriced
+            .iter()
+            .all(|m| m.tally.api_equivalent_nano_usd == 0)
+    );
+    assert_eq!(panel.stale_after_days, 120);
+    assert_ne!(panel.catalog_version, "");
 }

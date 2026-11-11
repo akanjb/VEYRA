@@ -1,4 +1,4 @@
-import type { BreakdownDimension } from "@veyra/contracts";
+import type { BreakdownDimension, Cost, Scope } from "@veyra/contracts";
 import { useState } from "react";
 
 import { useCommand } from "@/shared/api";
@@ -22,6 +22,17 @@ import {
   ValueFraming,
 } from "./cost-cards";
 import { BREAKDOWN, hasCost } from "./cost-model";
+import { AssumptionsButton } from "./assumptions-sheet";
+
+/** The value framing, and the way into how the cost was estimated. */
+function FramingRow({ data, scope }: { data: Cost; scope: Scope }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <ValueFraming data={data} />
+      <AssumptionsButton scope={scope} />
+    </div>
+  );
+}
 
 /** "What does it cost: estimated, actual, subscription?" (docs/planning/03-ux.md §4, Cost). */
 export function CostPage() {
@@ -38,7 +49,7 @@ export function CostPage() {
   return (
     <div className="grid gap-4">
       <CostKpiStrip data={data} />
-      <ValueFraming data={data} />
+      <FramingRow data={data} scope={filters.scope} />
       <CardGrid>
         <MonthOutlookCard data={data} />
         <BudgetsCard data={data} />

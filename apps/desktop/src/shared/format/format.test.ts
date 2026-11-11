@@ -11,7 +11,9 @@ import {
   duration,
   integer,
   month,
+  multiplier,
   percent,
+  pricePerMTok,
   shortId,
   times,
   usd,
@@ -29,6 +31,8 @@ describe("format", () => {
       change(null, L),
       duration(undefined),
       times(null, L),
+      pricePerMTok(null, L),
+      multiplier(null, L),
     ]) {
       expect(formatted).toBe(MISSING);
     }
@@ -48,6 +52,13 @@ describe("format", () => {
     expect(usd(5_000_000, { locale: L })).toBe("<$0.01");
     expect(usd(0, { locale: L })).toBe("$0.00");
     expect(usd(25_400_000_000_000, { compact: true, locale: L })).toBe("$25.4K");
+  });
+
+  it("formats published prices and multipliers", () => {
+    expect(pricePerMTok(2_500_000, L)).toBe("$2.50 / MTok");
+    expect(pricePerMTok(75_000, L)).toBe("$0.075 / MTok");
+    expect(multiplier(5_000, L)).toBe("0.5×");
+    expect(multiplier(12_500, L)).toBe("1.25×");
   });
 
   it("formats ratios and signed changes", () => {

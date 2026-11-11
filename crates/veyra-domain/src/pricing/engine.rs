@@ -65,7 +65,8 @@ pub enum Assumption {
 }
 
 impl Assumption {
-    const ALL: [Self; 6] = [
+    /// Every assumption, in the order they are shown.
+    pub const ALL: [Self; 6] = [
         Self::UnspecifiedCacheWriteAtShortRate,
         Self::PromptSizeUnknownBaseTierUsed,
         Self::ServiceTierRateMissing,
@@ -85,8 +86,34 @@ impl Assumption {
         }
     }
 
+    /// What was assumed, in words a user understands.
+    #[must_use]
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::UnspecifiedCacheWriteAtShortRate => {
+                "Cache writes that did not say how long they last were priced at the short (5-minute) write rate."
+            }
+            Self::PromptSizeUnknownBaseTierUsed => {
+                "The size of each prompt was not reported, so long-prompt price tiers could not apply and the base rate was used."
+            }
+            Self::ServiceTierRateMissing => {
+                "The request used a service tier, such as batch or priority, that has no published rate, so the standard rate was used."
+            }
+            Self::InferenceGeoRateMissing => {
+                "US-only processing was requested but no regional price is published, so the global rate was used."
+            }
+            Self::ComponentRateMissing => {
+                "A reported kind of token has no published rate and was left out of the cost."
+            }
+            Self::HistoryAssumed => {
+                "The request is older than the date its price was checked; the price is assumed not to have changed since."
+            }
+        }
+    }
+
     /// Whether this assumption means the cost is not exact for the event.
-    fn makes_partial(self) -> bool {
+    #[must_use]
+    pub const fn makes_partial(self) -> bool {
         !matches!(self, Self::HistoryAssumed)
     }
 }

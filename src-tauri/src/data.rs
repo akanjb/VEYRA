@@ -37,6 +37,7 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
         registry.model_names(),
         &descriptors,
     );
+    let catalog = Arc::new(registry.catalog().clone());
     let emitter = app.clone();
     let worker = IngestWorker {
         store: Arc::clone(&store),
@@ -59,6 +60,7 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
         projects: Arc::clone(&store) as _,
         billing: Arc::clone(&store) as _,
         analytics: store,
+        catalog,
         connectors: descriptors,
         names,
         ingest: Box::new(ingest),

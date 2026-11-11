@@ -2,9 +2,12 @@
 
 use std::sync::{Arc, OnceLock};
 
-use veyra_analytics::port::{ActivityReader, BaseSumsReader, LabelReader, SizeReader};
+use veyra_analytics::port::{
+    ActivityReader, BaseSumsReader, LabelReader, PricingReader, SizeReader,
+};
 use veyra_analytics::sessions::SessionReader;
 use veyra_domain::billing::BillingRepository;
+use veyra_domain::pricing::PriceCatalog;
 use veyra_domain::project::ProjectRepository;
 use veyra_domain::source::{ConnectorDescriptor, IngestControl, SourceRepository};
 use veyra_domain::time::UtcMillis;
@@ -12,10 +15,10 @@ use veyra_domain::time::UtcMillis;
 use crate::dto::{
     Activity, ActivityRequest, AppInfo, AppInfoRequest, BillingChanged, BillingEntryInfo,
     BillingRequest, BillingSettings, BudgetInfo, BuildProfile, Cache, CacheRequest, Cost,
-    CostRequest, DeleteBillingEntryRequest, DeleteBudgetRequest, ListSourcesRequest,
-    MergeProjectRequest, Models, ModelsRequest, Overview, OverviewRequest, ProjectDetail,
-    ProjectInfo, ProjectList, ProjectRequest, ProjectsChanged, ProjectsRequest,
-    RenameProjectRequest, RescanAccepted, RescanRequest, SaveBillingEntryRequest,
+    CostAssumptions, CostAssumptionsRequest, CostRequest, DeleteBillingEntryRequest,
+    DeleteBudgetRequest, ListSourcesRequest, MergeProjectRequest, Models, ModelsRequest, Overview,
+    OverviewRequest, ProjectDetail, ProjectInfo, ProjectList, ProjectRequest, ProjectsChanged,
+    ProjectsRequest, RenameProjectRequest, RescanAccepted, RescanRequest, SaveBillingEntryRequest,
     SaveBudgetRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
     SetSourceEnabledRequest, SourceList, SourceSummary, UnmergeProjectRequest, Usage, UsageRequest,
 };
@@ -33,12 +36,26 @@ pub struct AppMetadata {
 
 /// Every analytics read port, as one object (implemented by the store).
 pub trait AnalyticsReader:
-    BaseSumsReader + ActivityReader + SessionReader + LabelReader + SizeReader + Send + Sync
+    BaseSumsReader
+    + ActivityReader
+    + SessionReader
+    + LabelReader
+    + SizeReader
+    + PricingReader
+    + Send
+    + Sync
 {
 }
 
 impl<T> AnalyticsReader for T where
-    T: BaseSumsReader + ActivityReader + SessionReader + LabelReader + SizeReader + Send + Sync
+    T: BaseSumsReader
+        + ActivityReader
+        + SessionReader
+        + LabelReader
+        + SizeReader
+        + PricingReader
+        + Send
+        + Sync
 {
 }
 
@@ -48,6 +65,8 @@ pub struct DataServices {
     pub projects: Arc<dyn ProjectRepository>,
     pub billing: Arc<dyn BillingRepository>,
     pub analytics: Arc<dyn AnalyticsReader>,
+    /// The price catalogue events are priced with.
+    pub catalog: Arc<PriceCatalog>,
     /// Descriptors of every connector in this build.
     pub connectors: Vec<ConnectorDescriptor>,
     /// Display names of providers, models and applications.
@@ -192,6 +211,21 @@ impl Api {
         let CostRequest { scope: requested } = request;
         let resolved = scope::resolve(&requested)?;
         views::cost::cost(self.data()?, &resolved, UtcMillis::now())
+    }
+
+    /// How the scope's API-equivalent cost was estimated: the price rules applied, the
+    /// assumptions made and the models with no price.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn get_cost_assumptions(
+        &self,
+        request: CostAssumptionsRequest,
+    ) -> Result<CostAssumptions, ApiError> {
+        let CostAssumptionsRequest { scope: requested } = request;
+        let resolved = scope::resolve(&requested)?;
+        views::pricing::cost_assumptions(self.data()?, &resolved, UtcMillis::now())
     }
 
     /// Every billing entry and budget, for editing.
@@ -449,6 +483,12 @@ mod tests {
                 projects: Arc::clone(&store) as _,
                 billing: Arc::clone(&store) as _,
                 analytics: Arc::clone(&store) as _,
+                catalog: Arc::new(
+                    veyra_registry::Registry::bundled()
+                        .unwrap()
+                        .catalog()
+                        .clone()
+                ),
                 connectors: veyra_connectors::all()
                     .iter()
                     .map(|c| c.descriptor().clone())

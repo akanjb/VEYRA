@@ -21,6 +21,7 @@ import { FixtureBilling } from "./billing-view";
 import { cache } from "./cache-view";
 import { costView } from "./cost-view";
 import { models } from "./models-view";
+import { costAssumptions } from "./pricing-view";
 import { FixtureProjects } from "./projects-view";
 import { usage } from "./usage-view";
 import { overview, sessions } from "./views";
@@ -195,6 +196,7 @@ export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient 
     get_overview: (r) => overview(state.flat(), r.scope),
     get_usage: (r) => usage(state.flat(), r.scope),
     get_cost: (r) => costView(state.flat(), r.scope, state.billing, state.now),
+    get_cost_assumptions: (r) => costAssumptions(state.flat(), r.scope, state.now),
     get_cache: (r) => cache(state.flat(), r.scope),
     get_models: (r) => models(state.flat(), r.scope),
     get_activity: (r) => activity(state.flat(), r.scope),

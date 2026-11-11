@@ -11,6 +11,8 @@ import type { BudgetInfo } from "./BudgetInfo";
 import type { Cache } from "./Cache";
 import type { CacheRequest } from "./CacheRequest";
 import type { Cost } from "./Cost";
+import type { CostAssumptions } from "./CostAssumptions";
+import type { CostAssumptionsRequest } from "./CostAssumptionsRequest";
 import type { CostRequest } from "./CostRequest";
 import type { DeleteBillingEntryRequest } from "./DeleteBillingEntryRequest";
 import type { DeleteBudgetRequest } from "./DeleteBudgetRequest";
@@ -51,6 +53,7 @@ export interface CommandMap {
   get_overview: { request: OverviewRequest; response: Overview };
   get_usage: { request: UsageRequest; response: Usage };
   get_cost: { request: CostRequest; response: Cost };
+  get_cost_assumptions: { request: CostAssumptionsRequest; response: CostAssumptions };
   get_cache: { request: CacheRequest; response: Cache };
   get_models: { request: ModelsRequest; response: Models };
   get_activity: { request: ActivityRequest; response: Activity };
@@ -78,6 +81,7 @@ export const COMMAND_NAMES = [
   "get_overview",
   "get_usage",
   "get_cost",
+  "get_cost_assumptions",
   "get_cache",
   "get_models",
   "get_activity",
