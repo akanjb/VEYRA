@@ -4,7 +4,7 @@
  */
 import type { Cache, CacheSession, RatioRow, Scope, TtlRow } from "@veyra/contracts";
 
-import { kpi, localDay, previousRange, select, type Flat } from "./aggregate";
+import { kpi, localDay, previousRange, select, bySession, type Flat } from "./aggregate";
 import { FIXTURE_PROJECTS, fixtureLabel, type FixtureEvent } from "./dataset";
 import { daysOf, groupBy } from "./views";
 
@@ -99,10 +99,7 @@ function ttlRows(selected: readonly Flat[]): TtlRow[] {
 }
 
 function losses(selected: readonly Flat[]): CacheSession[] {
-  const bySession = new Map<number, Flat[]>();
-  for (const f of selected)
-    bySession.set(f.session.id, [...(bySession.get(f.session.id) ?? []), f]);
-  return [...bySession.values()]
+  return [...bySession(selected).values()]
     .map((flat) => {
       const session = flat[0]?.session;
       const t = totals(flat.map((f) => f.event));

@@ -3,6 +3,7 @@
 //! These types are the contract with the dashboard. TypeScript definitions are
 //! generated from them (`pnpm contracts:generate`); never edit the generated files.
 
+mod activity;
 mod analytics;
 mod app_info;
 mod cache;
@@ -11,6 +12,7 @@ mod sessions;
 mod sources;
 mod usage;
 
+pub use activity::{Activity, ActivityDay, ActivityKpis, ActivityRequest, LengthBin, LongSession};
 pub use analytics::{
     AccuracyClass, CalendarDay, Comparison, Composition, DailyPoint, HourCell, Kpi, Labelled,
     Measures, Overview, OverviewKpis, OverviewRequest, RankRow, Scope, ScopeFilters,

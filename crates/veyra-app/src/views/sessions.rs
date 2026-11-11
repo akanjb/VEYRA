@@ -28,11 +28,7 @@ fn row(names: &DisplayNames, summary: &SessionSummary, active_ms: i64) -> Sessio
         key: summary.key.clone(),
         app: summary.app.clone(),
         project: summary.project.clone(),
-        models: summary
-            .models
-            .iter()
-            .map(|m| names.label_model(m.clone()))
-            .collect(),
+        models: names.label_models(&summary.models),
         is_subagent: summary.is_subagent,
         parent_id: summary.parent_id,
         started_at: summary.first_at.0,

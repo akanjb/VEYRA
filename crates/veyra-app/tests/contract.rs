@@ -17,8 +17,8 @@ use veyra_analytics::engine::evaluate;
 use veyra_analytics::metrics::{MetricId, MetricValue};
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_app::dto::{
-    CacheRequest, Comparison, Labelled, ModelsRequest, OverviewRequest, Scope, ScopeFilters,
-    SessionRequest, SessionSort, SessionsRequest, UsageRequest,
+    ActivityRequest, CacheRequest, Comparison, Labelled, ModelsRequest, OverviewRequest, Scope,
+    ScopeFilters, SessionRequest, SessionSort, SessionsRequest, UsageRequest,
 };
 use veyra_app::{Api, AppMetadata, DataServices, DisplayNames};
 use veyra_domain::source::{DiscoveryEnv, IngestControl};
@@ -440,4 +440,49 @@ fn models_numbers_add_up_to_the_scope() {
             .definition()
             .description
     );
+}
+
+#[test]
+fn activity_days_add_up_to_the_period_and_match_the_overview() {
+    let data = ingested();
+    let api = api(&data.store);
+    let activity = api
+        .get_activity(ActivityRequest { scope: scope() })
+        .unwrap();
+    let overview = api
+        .get_overview(OverviewRequest { scope: scope() })
+        .unwrap();
+    let k = &activity.kpis;
+    assert_eq!(k.sessions.value, overview.kpis.sessions.value);
+    assert_eq!(k.active_ms.value, overview.kpis.active_ms.value);
+    assert_eq!(k.active_days.value, Some(1.0));
+    assert!(
+        k.wall_ms.value >= k.active_ms.value,
+        "wall time includes idle gaps"
+    );
+
+    // Daily times add up to the period's; sessions are counted on each day they touch.
+    #[allow(clippy::cast_precision_loss, reason = "comparing with f64 KPIs")]
+    let total = |pick: fn(&veyra_app::dto::ActivityDay) -> i64| {
+        Some(activity.daily.iter().map(pick).sum::<i64>() as f64)
+    };
+    assert_eq!(total(|d| d.active_ms), k.active_ms.value);
+    assert_eq!(total(|d| d.wall_ms), k.wall_ms.value);
+
+    // Every session falls in exactly one length range, by either measure.
+    let by_active: u64 = activity.session_lengths.iter().map(|b| b.by_active).sum();
+    let by_wall: u64 = activity.session_lengths.iter().map(|b| b.by_wall).sum();
+    assert_eq!((by_active, by_wall), (2, 2));
+    assert_eq!(activity.calendar, overview.calendar);
+    assert_eq!(activity.hours, overview.hours);
+
+    // The longest sessions come first.
+    assert_ne!(activity.longest.len(), 0);
+    assert!(
+        activity
+            .longest
+            .windows(2)
+            .all(|w| w[0].wall_ms >= w[1].wall_ms)
+    );
+    assert!(activity.longest.iter().all(|s| s.active_ms <= s.wall_ms));
 }

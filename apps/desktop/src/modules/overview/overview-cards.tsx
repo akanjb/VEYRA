@@ -1,9 +1,6 @@
 import type { Overview } from "@veyra/contracts";
 
 import {
-  CalendarHeatmap,
-  HourHeatmap,
-  HourTable,
   RankTable,
   Ranking,
   StackedTrend,
@@ -12,10 +9,10 @@ import {
   useChartTheme,
 } from "@/shared/charts";
 import type { Measure } from "@/shared/filters";
-import { MEASURE, fmt } from "@/shared/format";
+import { MEASURE } from "@/shared/format";
 import { ChartCard } from "@/shared/ui";
 
-import { calendarDays, hourCells, modelItems, projectItems, trendInput } from "./overview-model";
+import { modelItems, projectItems, trendInput } from "./overview-model";
 
 interface CardProps {
   overview: Overview;
@@ -94,61 +91,6 @@ export function ProjectsCard({
       table={
         <RankTable items={items} format={meta.exact} caption="Usage by project" header="Project" />
       }
-    />
-  );
-}
-
-export function CalendarCard({
-  overview,
-  onSelectDate,
-}: {
-  overview: Overview;
-  onSelectDate: (date: string) => void;
-}) {
-  const days = calendarDays(overview);
-  return (
-    <ChartCard
-      title="Activity calendar"
-      definition="Tokens per local day over the year ending on the last day of the period. Click a day to narrow the period to it."
-      accuracy={overview.composition.weakest}
-      chart={
-        <CalendarHeatmap
-          days={days}
-          format={fmt.compact}
-          label="Tokens per day over the last year"
-          onSelectDate={onSelectDate}
-        />
-      }
-      table={
-        <RankTable
-          items={days
-            .filter((d) => d.value > 0)
-            .reverse()
-            .map((d) => ({
-              key: d.date,
-              label: fmt.day(d.date),
-              value: d.value,
-              share: 0,
-              color: "",
-            }))}
-          format={fmt.integer}
-          caption="Tokens per day"
-          header="Day"
-        />
-      }
-    />
-  );
-}
-
-export function HoursCard({ overview }: { overview: Overview }) {
-  const cells = hourCells(overview);
-  return (
-    <ChartCard
-      title="Hours of the week"
-      definition="Tokens by local weekday and hour over the selected period."
-      accuracy={overview.composition.weakest}
-      chart={<HourHeatmap cells={cells} format={fmt.compact} label="Tokens by weekday and hour" />}
-      table={<HourTable cells={cells} format={fmt.integer} caption="Tokens by weekday and hour" />}
     />
   );
 }

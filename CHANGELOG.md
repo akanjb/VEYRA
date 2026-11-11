@@ -5,6 +5,11 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Activity page.**
+  - Command `get_activity`: active time, wall time, sessions and active days with comparisons; active and wall time per day; sessions per length range by either measure; the longest sessions; the activity calendar and hours of the week.
+  - Wall time is defined once next to active time: each session from its first request to its last, idle gaps included, overlapping sessions counted once. Per-day figures split time at day boundaries, so the days add up to the period.
+  - Sessions can be ordered by duration.
+  - The calendar and hours-of-week cards are shared by the Overview and Activity pages.
 - **Models & Providers page.**
   - Command `get_models`: each provider's daily share of tokens; a leaderboard of every model with tokens, requests, cost, cost per million output tokens, cache hit ratio, price coverage and first and last day used; tokens per provider and per model in each application; daily tokens of the most used models.
   - Comparison of two to four models, one bar chart per measure (no radar charts).

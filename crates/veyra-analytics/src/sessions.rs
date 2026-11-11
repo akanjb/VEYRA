@@ -21,6 +21,8 @@ pub enum SessionSort {
     Events,
     /// Tokens written to the provider's cache, all TTLs.
     CacheWrites,
+    /// Time from the first event to the last.
+    Duration,
 }
 
 /// Sessions with at least one matching event in `[from, until)`.

@@ -60,6 +60,11 @@ impl DisplayNames {
         labelled(&self.models, id)
     }
 
+    /// Display names of several models, such as those of a session.
+    pub(crate) fn label_models(&self, ids: &[String]) -> Vec<Labelled> {
+        ids.iter().map(|id| self.label_model(id.clone())).collect()
+    }
+
     pub(crate) fn label_provider(&self, id: String) -> Labelled {
         labelled(&self.providers, id)
     }

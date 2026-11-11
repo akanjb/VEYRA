@@ -150,7 +150,7 @@ export function overview(flat: readonly Flat[], scope: Scope): Overview {
   };
 }
 
-function calendar(flat: readonly Flat[], scope: Scope): CalendarDay[] {
+export function calendar(flat: readonly Flat[], scope: Scope): CalendarDay[] {
   const start = addDays(scope.end, -364);
   const totals = new Map<string, number>();
   for (const { event } of select(flat, scope, start, scope.end)) {
@@ -160,7 +160,7 @@ function calendar(flat: readonly Flat[], scope: Scope): CalendarDay[] {
   return daysOf(start, scope.end).map((date) => ({ date, tokens: totals.get(date) ?? 0 }));
 }
 
-function hours(selected: readonly Flat[], timeZone: string): HourCell[] {
+export function hours(selected: readonly Flat[], timeZone: string): HourCell[] {
   const grid = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
   for (const { event } of selected) {
     const { weekday, hour } = localHourWeekday(event.at, timeZone);

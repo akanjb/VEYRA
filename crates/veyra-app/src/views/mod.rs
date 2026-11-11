@@ -1,6 +1,7 @@
 //! View builders: turn analytics results into DTOs. They contain no formulas of their
 //! own; every metric comes from the analytics crate.
 
+pub(crate) mod activity;
 pub(crate) mod cache;
 mod kpis;
 pub(crate) mod models;
@@ -8,6 +9,7 @@ pub(crate) mod overview;
 mod rankings;
 pub(crate) mod sessions;
 pub(crate) mod sources;
+mod time_grids;
 pub(crate) mod usage;
 
 use jiff::tz::TimeZone;

@@ -8,10 +8,10 @@ use veyra_domain::source::{ConnectorDescriptor, IngestControl, SourceRepository}
 use veyra_domain::time::UtcMillis;
 
 use crate::dto::{
-    AppInfo, AppInfoRequest, BuildProfile, Cache, CacheRequest, ListSourcesRequest, Models,
-    ModelsRequest, Overview, OverviewRequest, RescanAccepted, RescanRequest, SessionDetail,
-    SessionList, SessionRequest, SessionsRequest, SetSourceEnabledRequest, SourceList,
-    SourceSummary, Usage, UsageRequest,
+    Activity, ActivityRequest, AppInfo, AppInfoRequest, BuildProfile, Cache, CacheRequest,
+    ListSourcesRequest, Models, ModelsRequest, Overview, OverviewRequest, RescanAccepted,
+    RescanRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
+    SetSourceEnabledRequest, SourceList, SourceSummary, Usage, UsageRequest,
 };
 use crate::error::ApiError;
 use crate::names::DisplayNames;
@@ -196,6 +196,18 @@ impl Api {
         let ModelsRequest { scope: requested } = request;
         let resolved = scope::resolve(&requested)?;
         views::models::models(self.data()?, &resolved)
+    }
+
+    /// The Activity page for a scope: active and wall time per day, the calendar, hours of
+    /// the week, session lengths and the longest sessions.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn get_activity(&self, request: ActivityRequest) -> Result<Activity, ApiError> {
+        let ActivityRequest { scope: requested } = request;
+        let resolved = scope::resolve(&requested)?;
+        views::activity::activity(self.data()?, &resolved)
     }
 
     /// One page of sessions with activity in the scope, in the requested order.

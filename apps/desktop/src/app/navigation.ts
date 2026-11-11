@@ -4,6 +4,7 @@
  */
 import {
   Activity,
+  CalendarClock,
   ChartColumnStacked,
   Cpu,
   DatabaseZap,
@@ -13,7 +14,7 @@ import {
 } from "lucide-react";
 
 export interface Page {
-  to: "/" | "/usage" | "/cache" | "/models" | "/sessions" | "/sources";
+  to: "/" | "/usage" | "/cache" | "/models" | "/activity" | "/sessions" | "/sources";
   title: string;
   /** The question the page answers. */
   purpose: string;
@@ -63,6 +64,15 @@ export const PAGES: readonly Page[] = [
     section: "Analyze",
     icon: Cpu,
     shortcut: "m",
+    scoped: true,
+  },
+  {
+    to: "/activity",
+    title: "Activity",
+    purpose: "When do I work with AI?",
+    section: "Analyze",
+    icon: CalendarClock,
+    shortcut: "a",
     scoped: true,
   },
   {

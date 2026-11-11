@@ -178,3 +178,14 @@ export function sessionRow(
     accuracy: "exact",
   };
 }
+
+/** Events grouped by session, in the order given. */
+export function bySession(flat: readonly Flat[]): Map<number, Flat[]> {
+  const sessions = new Map<number, Flat[]>();
+  for (const f of flat) {
+    const list = sessions.get(f.session.id) ?? [];
+    list.push(f);
+    sessions.set(f.session.id, list);
+  }
+  return sessions;
+}

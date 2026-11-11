@@ -1,9 +1,10 @@
 import { useCommand } from "@/shared/api";
 import { toggleValue, useFilters, withDay } from "@/shared/filters";
+import { CalendarCard, HoursCard } from "@/shared/time-cards";
 import { CardGrid, ErrorState, NoUsageCard, PageSkeleton } from "@/shared/ui";
 
 import { KpiStrip } from "./kpi-strip";
-import { CalendarCard, HoursCard, ModelMixCard, ProjectsCard, TrendCard } from "./overview-cards";
+import { ModelMixCard, ProjectsCard, TrendCard } from "./overview-cards";
 import { hasUsage } from "./overview-model";
 
 /** "How am I using AI overall?" (docs/planning/03-ux.md §4, Overview). */
@@ -46,8 +47,12 @@ export function OverviewPage() {
         <NoUsageCard />
       )}
       <CardGrid>
-        <CalendarCard overview={data} onSelectDate={selectDay} />
-        <HoursCard overview={data} />
+        <CalendarCard
+          calendar={data.calendar}
+          accuracy={data.composition.weakest}
+          onSelectDate={selectDay}
+        />
+        <HoursCard hours={data.hours} accuracy={data.composition.weakest} />
       </CardGrid>
     </div>
   );

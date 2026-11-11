@@ -47,6 +47,12 @@ const modelsRoute = createRoute({
   component: lazyRouteComponent(() => import("@/modules/models"), "ModelsPage"),
 });
 
+const activityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/activity",
+  component: lazyRouteComponent(() => import("@/modules/activity"), "ActivityPage"),
+});
+
 const sessionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/sessions",
@@ -71,6 +77,7 @@ const routeTree = rootRoute.addChildren([
   usageRoute,
   cacheRoute,
   modelsRoute,
+  activityRoute,
   sessionsRoute,
   sessionRoute,
   sourcesRoute,

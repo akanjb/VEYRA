@@ -112,6 +112,7 @@ fn order_expression(sort: SessionSort) -> String {
         SessionSort::CacheWrites => "COALESCE(SUM(COALESCE(e.cache_write_short, 0) \
              + COALESCE(e.cache_write_long, 0) + COALESCE(e.cache_write_unspecified, 0)), 0)"
             .to_owned(),
+        SessionSort::Duration => "MAX(e.occurred_at) - MIN(e.occurred_at)".to_owned(),
     }
 }
 

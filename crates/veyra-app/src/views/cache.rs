@@ -129,11 +129,7 @@ fn cache_session(data: &DataServices, summary: &SessionSummary, net: i64) -> Cac
         id: summary.id,
         app: data.names.label_app(summary.app.clone()).label,
         project: summary.project.clone(),
-        models: summary
-            .models
-            .iter()
-            .map(|m| data.names.label_model(m.clone()))
-            .collect(),
+        models: data.names.label_models(&summary.models),
         ended_at: summary.last_at.0,
         cache_write: tokens(MetricId::CacheWriteTokens, sums),
         cache_read: tokens(MetricId::CacheReadTokens, sums),

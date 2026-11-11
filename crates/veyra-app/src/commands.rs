@@ -20,6 +20,7 @@ macro_rules! for_each_command {
             get_usage($crate::dto::UsageRequest) -> $crate::dto::Usage;
             get_cache($crate::dto::CacheRequest) -> $crate::dto::Cache;
             get_models($crate::dto::ModelsRequest) -> $crate::dto::Models;
+            get_activity($crate::dto::ActivityRequest) -> $crate::dto::Activity;
             list_sessions($crate::dto::SessionsRequest) -> $crate::dto::SessionList;
             get_session($crate::dto::SessionRequest) -> $crate::dto::SessionDetail;
         }

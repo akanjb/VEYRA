@@ -51,11 +51,3 @@ export function projectItems(overview: Overview, measure: Measure, theme: ChartT
     theme,
   );
 }
-
-export function calendarDays(overview: Overview) {
-  return overview.calendar.map((d) => ({ date: d.date, value: d.tokens }));
-}
-
-export function hourCells(overview: Overview) {
-  return overview.hours.map((h) => ({ weekday: h.weekday, hour: h.hour, value: h.tokens }));
-}
