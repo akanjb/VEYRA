@@ -4,6 +4,7 @@ import { KpiStrip, ModelMixCard, TrendCard, hasUsage } from "@/shared/summary";
 import { CalendarCard, HoursCard } from "@/shared/time-cards";
 import { CardGrid, ErrorState, NoUsageCard, PageSkeleton } from "@/shared/ui";
 
+import { HighlightsCard } from "./highlights-card";
 import { ProjectsCard } from "./overview-cards";
 
 /** "How am I using AI overall?" (docs/planning/03-ux.md §4, Overview). */
@@ -22,6 +23,7 @@ export function OverviewPage() {
   return (
     <div className="grid gap-4">
       <KpiStrip summary={data} measure={state.measure} />
+      <HighlightsCard highlights={data.highlights} />
       {hasUsage(data) ? (
         <>
           <TrendCard summary={data} measure={state.measure} onSelectDate={selectDay} />

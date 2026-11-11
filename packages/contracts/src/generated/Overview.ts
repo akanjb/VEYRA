@@ -2,6 +2,7 @@
 import type { CalendarDay } from "./CalendarDay";
 import type { Composition } from "./Composition";
 import type { DailyPoint } from "./DailyPoint";
+import type { Highlight } from "./Highlight";
 import type { HourCell } from "./HourCell";
 import type { Labelled } from "./Labelled";
 import type { OverviewKpis } from "./OverviewKpis";
@@ -34,4 +35,8 @@ calendar: Array<CalendarDay>,
 /**
  * 7 × 24 cells in the scope's time zone.
  */
-hours: Array<HourCell>, };
+hours: Array<HourCell>, 
+/**
+ * Up to five facts about the period, in a fixed order.
+ */
+highlights: Array<Highlight>, };

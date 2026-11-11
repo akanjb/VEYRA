@@ -41,6 +41,7 @@ export type * from "./DailyPoint";
 export type * from "./DataChanged";
 export type * from "./DeleteBillingEntryRequest";
 export type * from "./DeleteBudgetRequest";
+export type * from "./Highlight";
 export type * from "./HourCell";
 export type * from "./IssueCount";
 export type * from "./Kpi";

@@ -5,11 +5,12 @@ use std::collections::BTreeMap;
 use veyra_analytics::activity::{ACTIVE_TIME_DEFINITION, SESSIONS_DEFINITION};
 use veyra_analytics::composition::AccuracyComposition;
 use veyra_analytics::dimension::Dimension;
-use veyra_analytics::metrics::{MetricId, MetricValue};
+use veyra_analytics::metrics::{MetricId, MetricValue, net_cache_benefit_nano_usd};
 use veyra_analytics::query::TimeGrain;
 use veyra_analytics::sums::BaseSums;
 use veyra_domain::accuracy::Accuracy;
 
+use super::highlights::highlights;
 use super::kpis::{kpi, metric_kpi, token_accuracy};
 use super::rankings::{Labeller, RankBy, dimension_ranking, groups_of};
 use super::time_grids::{calendar, hours};
@@ -172,14 +173,24 @@ pub(crate) fn overview(data: &DataServices, scope: &Resolved) -> Result<Overview
     let current = &totals.totals;
     let scope_tokens = measures(current).tokens;
     let (apps, daily_points) = daily(data, scope)?;
+    let kpis = kpis(data, scope, current, totals.previous_totals.as_ref())?;
+    let models = top(data, scope, Dimension::Model, TOP_MODELS, scope_tokens)?;
+    let projects = top(data, scope, Dimension::Project, TOP_PROJECTS, scope_tokens)?;
     Ok(Overview {
-        kpis: kpis(data, scope, current, totals.previous_totals.as_ref())?,
+        highlights: highlights(
+            &daily_points,
+            &models,
+            &projects,
+            &kpis.cost_nano_usd,
+            net_cache_benefit_nano_usd(current),
+        ),
+        kpis,
         composition: composition(current),
         apps,
         providers: providers(data, scope)?,
         daily: daily_points,
-        models: top(data, scope, Dimension::Model, TOP_MODELS, scope_tokens)?,
-        projects: top(data, scope, Dimension::Project, TOP_PROJECTS, scope_tokens)?,
+        models,
+        projects,
         calendar: calendar(data, scope)?,
         hours: hours(data, scope)?,
     })

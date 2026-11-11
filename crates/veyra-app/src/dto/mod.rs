@@ -17,8 +17,8 @@ mod usage;
 
 pub use activity::{Activity, ActivityDay, ActivityKpis, ActivityRequest, LengthBin, LongSession};
 pub use analytics::{
-    AccuracyClass, CalendarDay, Comparison, Composition, DailyPoint, HourCell, Kpi, Labelled,
-    Measures, Overview, OverviewKpis, OverviewRequest, RankRow, Scope, ScopeFilters,
+    AccuracyClass, CalendarDay, Comparison, Composition, DailyPoint, Highlight, HourCell, Kpi,
+    Labelled, Measures, Overview, OverviewKpis, OverviewRequest, RankRow, Scope, ScopeFilters,
 };
 pub use app_info::{AppInfo, AppInfoRequest, BuildProfile};
 pub use billing::{

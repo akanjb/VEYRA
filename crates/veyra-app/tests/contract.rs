@@ -11,9 +11,9 @@ mod support;
 
 use veyra_analytics::metrics::MetricId;
 use veyra_app::dto::{
-    ActivityRequest, CacheRequest, Labelled, MergeProjectRequest, ModelsRequest, OverviewRequest,
-    ProjectRequest, ProjectsRequest, RenameProjectRequest, SessionRequest, SessionSort,
-    SessionsRequest, UsageRequest,
+    ActivityRequest, CacheRequest, Highlight, Labelled, MergeProjectRequest, ModelsRequest,
+    OverviewRequest, ProjectRequest, ProjectsRequest, RenameProjectRequest, SessionRequest,
+    SessionSort, SessionsRequest, UsageRequest,
 };
 
 use support::{api, engine_value, ingested, scope};
@@ -444,4 +444,56 @@ fn projects_match_the_overview_and_can_be_renamed() {
         }),
         Err(veyra_app::ApiError::NotFound { .. })
     ));
+}
+
+#[test]
+fn highlights_restate_the_overview() {
+    let data = ingested();
+    let overview = api(&data.store)
+        .get_overview(OverviewRequest { scope: scope() })
+        .unwrap();
+    assert!(overview.highlights.len() <= 5);
+    for highlight in &overview.highlights {
+        match highlight {
+            Highlight::BusiestDay { date, tokens } => {
+                let day = overview.daily.iter().find(|d| &d.date == date).unwrap();
+                let total: u64 = day.values.iter().map(|m| m.tokens).sum();
+                assert_eq!(total, *tokens);
+                assert!(
+                    overview
+                        .daily
+                        .iter()
+                        .all(|d| { d.values.iter().map(|m| m.tokens).sum::<u64>() <= *tokens })
+                );
+            }
+            Highlight::TopModel { label, share, .. } => {
+                let first = overview
+                    .models
+                    .iter()
+                    .find(|r| !r.is_other && r.key.is_some());
+                assert_eq!(first.map(|r| (&r.label, r.share)), Some((label, *share)));
+            }
+            Highlight::TopProject { key, share, .. } => {
+                let first = overview
+                    .projects
+                    .iter()
+                    .find(|r| !r.is_other && r.key.is_some());
+                assert_eq!(
+                    first.map(|r| (r.key.as_ref(), r.share)),
+                    Some((Some(key), *share))
+                );
+            }
+            Highlight::CacheSaved { net_nano_usd } => assert!(*net_nano_usd > 0),
+            Highlight::CostChange { change } => {
+                assert_eq!(overview.kpis.cost_nano_usd.change, Some(*change));
+            }
+        }
+    }
+    assert!(
+        matches!(
+            overview.highlights.first(),
+            Some(Highlight::BusiestDay { .. })
+        ),
+        "the fixtures have usage, so the busiest day comes first"
+    );
 }

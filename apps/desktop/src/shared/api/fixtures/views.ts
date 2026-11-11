@@ -2,9 +2,11 @@
 import type {
   CalendarDay,
   DailyPoint,
+  Highlight,
   HourCell,
   Labelled,
   Overview,
+  RankRow,
   Scope,
   SessionList,
   SessionsRequest,
@@ -137,17 +139,57 @@ export function overview(flat: readonly Flat[], scope: Scope): Overview {
     (f) => String(f.session.projectId),
     (f) => ({ label: FIXTURE_PROJECTS[f.session.projectId - 1] ?? "No project", provider: null }),
   );
+  const days = daily(selected, scope);
+  const models = rank(byModel, 8, tokens);
+  const projects = rank(byProject, 30, tokens);
+  const figures = kpis(selected, before);
   return {
-    kpis: kpis(selected, before),
+    kpis: figures,
     composition: composition(selected.length > 0),
     apps: labelled(["claude-code"]),
     providers: labelled([...new Set(selected.map((f) => f.event.provider))]),
-    daily: daily(selected, scope),
-    models: rank(byModel, 8, tokens),
-    projects: rank(byProject, 30, tokens),
+    daily: days,
+    models,
+    projects,
     calendar: calendar(flat, scope),
     hours: hours(selected, scope.timeZone),
+    highlights: highlights(days, models, projects, figures.costNanoUsd.change),
   };
+}
+
+/** Like the core's: busiest day, top model and project, and the change in cost. */
+function highlights(
+  days: readonly DailyPoint[],
+  models: readonly RankRow[],
+  projects: readonly RankRow[],
+  costChange: number | null,
+): Highlight[] {
+  const found: Highlight[] = [];
+  let busiest: { date: string; tokens: number } | null = null;
+  for (const d of days) {
+    const total = d.values.reduce((n, m) => n + m.tokens, 0);
+    if (total > 0 && (busiest === null || total > busiest.tokens))
+      busiest = { date: d.date, tokens: total };
+  }
+  if (busiest !== null) found.push({ kind: "busiestDay", ...busiest });
+  const model = models.find((r) => !r.isOther && r.key !== null);
+  if (model !== undefined)
+    found.push({
+      kind: "topModel",
+      label: model.label,
+      provider: model.provider,
+      share: model.share,
+    });
+  const project = projects.find((r) => !r.isOther && r.key !== null);
+  if (project !== undefined && project.key !== null)
+    found.push({
+      kind: "topProject",
+      key: project.key,
+      label: project.label,
+      share: project.share,
+    });
+  if (costChange !== null) found.push({ kind: "costChange", change: costChange });
+  return found;
 }
 
 export function calendar(flat: readonly Flat[], scope: Scope): CalendarDay[] {

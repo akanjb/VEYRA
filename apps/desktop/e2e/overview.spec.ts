@@ -6,6 +6,9 @@ for (const theme of THEMES) {
   test(`the overview has no accessibility violations (${theme})`, async ({ page }) => {
     await open(page, "/", { theme });
     await expect(page.getByRole("heading", { name: "Daily tokens by application" })).toBeVisible();
+    await expect(
+      page.getByRole("list", { name: "Highlights" }).getByText(/^Busiest day:/),
+    ).toBeVisible();
     await expectAccessible(page);
   });
 }

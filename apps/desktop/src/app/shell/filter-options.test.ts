@@ -54,6 +54,7 @@ const overview: Overview = {
   projects: [row("7", "c:/code/veyra", null)],
   calendar: [],
   hours: [],
+  highlights: [],
 };
 
 describe("filter options", () => {

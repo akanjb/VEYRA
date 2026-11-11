@@ -157,6 +157,41 @@ pub struct HourCell {
     pub tokens: u64,
 }
 
+/// A deterministic fact about the period, worded by the dashboard (03-ux.md §4).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum Highlight {
+    /// The local day with the most tokens (the earliest on a tie).
+    BusiestDay {
+        date: String,
+        #[ts(type = "number")]
+        tokens: u64,
+    },
+    /// The model with the largest share of tokens.
+    TopModel {
+        label: String,
+        provider: Option<String>,
+        share: f64,
+    },
+    /// The project with the largest share of tokens (`key` is its id).
+    TopProject {
+        key: String,
+        label: String,
+        share: f64,
+    },
+    /// A positive net cache benefit, in API-equivalent nano-USD.
+    CacheSaved {
+        #[ts(type = "number")]
+        net_nano_usd: i64,
+    },
+    /// The relative change of API-equivalent cost against the comparison period.
+    CostChange { change: f64 },
+}
+
 /// Request for [`crate::Api::get_overview`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -183,4 +218,6 @@ pub struct Overview {
     pub calendar: Vec<CalendarDay>,
     /// 7 × 24 cells in the scope's time zone.
     pub hours: Vec<HourCell>,
+    /// Up to five facts about the period, in a fixed order.
+    pub highlights: Vec<Highlight>,
 }

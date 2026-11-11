@@ -5,6 +5,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Overview highlights.** Up to five facts chosen by fixed rules from the figures the Overview shows: the busiest day, the top model and project, what caching saved and how API-equivalent cost changed. The core picks them; the dashboard words them.
 - **Cost page and billing settings.**
   - Command `get_cost`: API-equivalent cost, subscription spend and actual charges as separate tiles with comparisons, never added together; pricing coverage, cost per request and per million output tokens; daily cost with a running total; this period's running cost against the previous one; the month to date, run rate and forecast with budget lines; budgets with month-to-date and forecast states; cost by model, provider, application and project; the most expensive sessions; cost by token kind; effective cost per million output tokens by model; and the change from the previous period by model or project as a waterfall.
   - Billing entries (subscriptions and charges, once, monthly or yearly, with a currency) and monthly budgets, edited on a new Settings page through `get_billing`, `save_billing_entry`, `delete_billing_entry`, `save_budget` and `delete_budget`. Recurring entries are spread evenly over the days each payment covers; only US dollar entries are totalled (ADR-028).
