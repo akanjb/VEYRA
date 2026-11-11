@@ -66,7 +66,7 @@ fn valid_request(cmd: &str) -> Value {
     });
     match cmd {
         "set_source_enabled" => json!({ "sourceId": 1, "enabled": false }),
-        "get_overview" => json!({ "scope": scope }),
+        "get_overview" | "get_usage" => json!({ "scope": scope }),
         "list_sessions" => {
             json!({ "scope": scope, "sort": "lastActive", "page": 0, "pageSize": 50 })
         }

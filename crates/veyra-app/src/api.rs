@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, OnceLock};
 
-use veyra_analytics::port::{ActivityReader, BaseSumsReader, LabelReader};
+use veyra_analytics::port::{ActivityReader, BaseSumsReader, LabelReader, SizeReader};
 use veyra_analytics::sessions::SessionReader;
 use veyra_domain::source::{ConnectorDescriptor, IngestControl, SourceRepository};
 use veyra_domain::time::UtcMillis;
@@ -10,7 +10,7 @@ use veyra_domain::time::UtcMillis;
 use crate::dto::{
     AppInfo, AppInfoRequest, BuildProfile, ListSourcesRequest, Overview, OverviewRequest,
     RescanAccepted, RescanRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
-    SetSourceEnabledRequest, SourceList, SourceSummary,
+    SetSourceEnabledRequest, SourceList, SourceSummary, Usage, UsageRequest,
 };
 use crate::error::ApiError;
 use crate::names::DisplayNames;
@@ -26,12 +26,12 @@ pub struct AppMetadata {
 
 /// Every analytics read port, as one object (implemented by the store).
 pub trait AnalyticsReader:
-    BaseSumsReader + ActivityReader + SessionReader + LabelReader + Send + Sync
+    BaseSumsReader + ActivityReader + SessionReader + LabelReader + SizeReader + Send + Sync
 {
 }
 
 impl<T> AnalyticsReader for T where
-    T: BaseSumsReader + ActivityReader + SessionReader + LabelReader + Send + Sync
+    T: BaseSumsReader + ActivityReader + SessionReader + LabelReader + SizeReader + Send + Sync
 {
 }
 
@@ -158,6 +158,18 @@ impl Api {
         let OverviewRequest { scope: requested } = request;
         let resolved = scope::resolve(&requested)?;
         views::overview::overview(self.data()?, &resolved)
+    }
+
+    /// The Usage page for a scope: token kinds over time, breakdowns with concentration,
+    /// and request and session sizes.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn get_usage(&self, request: UsageRequest) -> Result<Usage, ApiError> {
+        let UsageRequest { scope: requested } = request;
+        let resolved = scope::resolve(&requested)?;
+        views::usage::usage(self.data()?, &resolved)
     }
 
     /// One page of sessions with activity in the scope, in the requested order.

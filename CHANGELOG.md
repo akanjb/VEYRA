@@ -5,6 +5,10 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Usage page.**
+  - Command `get_usage`: headline tokens by kind with comparisons, daily token composition with reasoning shown where reported, breakdowns by model, provider, application, interface, project and device with a Pareto line and a concentration index, tokens per request and per session (mean, median and 90th percentile per day), and the distribution of request sizes.
+  - Request counts per size bin kept as a rollup, so request-size percentiles stay within the query budgets (ADR-026). Session sizes are exact.
+  - Chart primitives: an overlay line on the stacked trend, a percentile band, a size histogram and a Pareto chart, each with a table twin.
 - **Connectors for Codex, Gemini CLI, OpenCode and GitHub Copilot CLI (M4).**
   - Codex (CLI, IDE extension, desktop app): plain and zstd-compressed rollouts, exact per-response records or running-total increases with reset and fork handling.
   - Gemini CLI: current JSONL recordings and older JSON documents, subagent sessions, the project folder from `.project_root`.

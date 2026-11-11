@@ -1,4 +1,4 @@
-//! Contract tests (M3): the Overview and Sessions commands return exactly what the
+//! Contract tests: the analytics commands return exactly what the
 //! analytics engine computes for the same scope, on data ingested from the Claude Code
 //! fixtures through the real pipeline.
 
@@ -18,7 +18,7 @@ use veyra_analytics::metrics::{MetricId, MetricValue};
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_app::dto::{
     Comparison, Labelled, OverviewRequest, Scope, ScopeFilters, SessionRequest, SessionSort,
-    SessionsRequest,
+    SessionsRequest, UsageRequest,
 };
 use veyra_app::{Api, AppMetadata, DataServices, DisplayNames};
 use veyra_domain::source::{DiscoveryEnv, IngestControl};
@@ -252,4 +252,62 @@ fn sessions_and_their_timelines_match_the_overview() {
             "{name} vs {overview_names:?}"
         );
     }
+}
+
+#[test]
+fn usage_numbers_equal_the_metric_engine_and_add_up() {
+    let data = ingested();
+    let usage = api(&data.store)
+        .get_usage(UsageRequest { scope: scope() })
+        .unwrap();
+    let k = &usage.kpis;
+    for (kpi, metric) in [
+        (&k.tokens, MetricId::TotalTokens),
+        (&k.input_tokens, MetricId::InputTokens),
+        (&k.output_tokens, MetricId::OutputTokens),
+        (&k.requests, MetricId::Requests),
+        (&k.tokens_per_request, MetricId::TokensPerRequest),
+    ] {
+        assert_eq!(kpi.value, engine_value(&data.store, metric), "{metric:?}");
+        assert_eq!(kpi.definition, metric.definition().description);
+    }
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "whole tokens"
+    )]
+    let tokens = k.tokens.value.unwrap() as u64;
+
+    // The four token kinds add up to the total, day by day.
+    let mixed: u64 = usage
+        .composition
+        .iter()
+        .map(|d| d.input_uncached + d.cache_read + d.cache_write + d.output)
+        .sum();
+    assert_eq!(mixed, tokens);
+
+    // Every breakdown covers every token once, and its Pareto line ends at 100%.
+    assert_eq!(usage.breakdowns.len(), 6);
+    for breakdown in &usage.breakdowns {
+        let total: u64 = breakdown.rows.iter().map(|r| r.measures.tokens).sum();
+        assert_eq!(total, tokens, "{:?}", breakdown.dimension);
+        assert_eq!(breakdown.cumulative_share.len(), breakdown.rows.len());
+        assert_eq!(breakdown.cumulative_share.last().copied(), Some(1.0));
+        let index = breakdown.concentration.unwrap();
+        assert!(index > 0.0 && index <= 1.0, "{:?}", breakdown.dimension);
+    }
+
+    // Each request is in one size bin; each session counts once.
+    let binned: u64 = usage.request_sizes.iter().map(|b| b.requests).sum();
+    assert_eq!(binned, 4, "the fixtures hold four requests");
+    let per_day: u64 = usage.per_request.iter().map(|p| p.count).sum();
+    assert_eq!(per_day, 4);
+    let sessions: u64 = usage.per_session.iter().map(|p| p.count).sum();
+    assert_eq!(sessions, 2, "a main session and its subagent");
+    let day = &usage.per_request[0];
+    assert!(day.p50.unwrap() <= day.p90.unwrap());
+    assert_eq!(
+        usage.request_definition,
+        veyra_analytics::sizes::REQUEST_PERCENTILES_DEFINITION
+    );
 }

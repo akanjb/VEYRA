@@ -9,6 +9,7 @@
     "allow-set-source-enabled",
     "allow-request-rescan",
     "allow-get-overview",
+    "allow-get-usage",
     "allow-list-sessions",
     "allow-get-session",
     "core:event:allow-listen",

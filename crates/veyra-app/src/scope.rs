@@ -4,6 +4,7 @@
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
 use veyra_analytics::dimension::{Dimension, Filters};
+use veyra_analytics::port::RangeQuery;
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 
 use crate::dto::{Comparison, Scope};
@@ -92,6 +93,15 @@ impl Resolved {
             group_by,
             grain,
             time_zone: self.time_zone.clone(),
+        }
+    }
+
+    /// The events of `period` that match this scope's filters.
+    pub fn range(&self, period: Period) -> RangeQuery {
+        RangeQuery {
+            from: period.from(),
+            until: period.until(),
+            filters: self.filters.clone(),
         }
     }
 }

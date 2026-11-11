@@ -1,19 +1,50 @@
 //! View builders: turn analytics results into DTOs. They contain no formulas of their
 //! own; every metric comes from the analytics crate.
 
+mod kpis;
 pub(crate) mod overview;
+mod rankings;
 pub(crate) mod sessions;
 pub(crate) mod sources;
+pub(crate) mod usage;
 
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, Zoned};
+use veyra_analytics::activity::{Activity, DEFAULT_IDLE_THRESHOLD_MS, activity};
+use veyra_analytics::engine::{QueryResult, evaluate};
 use veyra_analytics::metrics::{MetricId, MetricValue};
+use veyra_analytics::query::{Period, QuerySpec};
 use veyra_analytics::sums::BaseSums;
 use veyra_domain::accuracy::Accuracy;
 use veyra_domain::time::UtcMillis;
 
+use crate::DataServices;
 use crate::dto::{AccuracyClass, Measures};
 use crate::error::ApiError;
+use crate::scope::Resolved;
+
+/// Evaluates an analytics query.
+pub(crate) fn evaluated(data: &DataServices, spec: &QuerySpec) -> Result<QueryResult, ApiError> {
+    evaluate(data.analytics.as_ref(), spec).map_err(|e| internal(&e))
+}
+
+/// Sessions and active time of a scope's events in `period`.
+pub(crate) fn activity_of(
+    data: &DataServices,
+    scope: &Resolved,
+    period: Period,
+) -> Result<Activity, ApiError> {
+    let times = data
+        .analytics
+        .event_times(&scope.range(period))
+        .map_err(|e| internal(&e))?;
+    Ok(activity(&times, DEFAULT_IDLE_THRESHOLD_MS))
+}
+
+/// The local calendar date (`YYYY-MM-DD`) of an instant.
+pub(crate) fn local_date(at: UtcMillis, time_zone: &TimeZone) -> Result<String, ApiError> {
+    Ok(local_time(at, time_zone)?.date().to_string())
+}
 
 pub(crate) fn internal(error: &dyn std::fmt::Display) -> ApiError {
     ApiError::internal(error)

@@ -29,6 +29,12 @@ const overviewRoute = createRoute({
   component: lazyRouteComponent(() => import("@/modules/overview"), "OverviewPage"),
 });
 
+const usageRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/usage",
+  component: lazyRouteComponent(() => import("@/modules/usage"), "UsagePage"),
+});
+
 const sessionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/sessions",
@@ -48,7 +54,13 @@ const sourcesRoute = createRoute({
   component: lazyRouteComponent(() => import("@/modules/sources"), "SourcesPage"),
 });
 
-const routeTree = rootRoute.addChildren([overviewRoute, sessionsRoute, sessionRoute, sourcesRoute]);
+const routeTree = rootRoute.addChildren([
+  overviewRoute,
+  usageRoute,
+  sessionsRoute,
+  sessionRoute,
+  sourcesRoute,
+]);
 
 export const router = createRouter({ routeTree, defaultPreload: "intent" });
 

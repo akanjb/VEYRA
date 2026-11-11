@@ -13,6 +13,8 @@ import type { SessionsRequest } from "./SessionsRequest";
 import type { SetSourceEnabledRequest } from "./SetSourceEnabledRequest";
 import type { SourceList } from "./SourceList";
 import type { SourceSummary } from "./SourceSummary";
+import type { Usage } from "./Usage";
+import type { UsageRequest } from "./UsageRequest";
 
 /** Request and response types of every command, keyed by command name. */
 export interface CommandMap {
@@ -21,6 +23,7 @@ export interface CommandMap {
   set_source_enabled: { request: SetSourceEnabledRequest; response: SourceSummary };
   request_rescan: { request: RescanRequest; response: RescanAccepted };
   get_overview: { request: OverviewRequest; response: Overview };
+  get_usage: { request: UsageRequest; response: Usage };
   list_sessions: { request: SessionsRequest; response: SessionList };
   get_session: { request: SessionRequest; response: SessionDetail };
 }
@@ -33,6 +36,7 @@ export const COMMAND_NAMES = [
   "set_source_enabled",
   "request_rescan",
   "get_overview",
+  "get_usage",
   "list_sessions",
   "get_session",
 ] as const satisfies readonly CommandName[];

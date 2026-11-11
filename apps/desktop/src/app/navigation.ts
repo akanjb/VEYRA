@@ -2,10 +2,16 @@
  * The pages of the dashboard: the single source for the sidebar, page titles, the
  * command palette and the "g" shortcuts (docs/planning/03-ux.md §2.1).
  */
-import { Activity, Database, LayoutDashboard, type LucideIcon } from "lucide-react";
+import {
+  Activity,
+  ChartColumnStacked,
+  Database,
+  LayoutDashboard,
+  type LucideIcon,
+} from "lucide-react";
 
 export interface Page {
-  to: "/" | "/sessions" | "/sources";
+  to: "/" | "/usage" | "/sessions" | "/sources";
   title: string;
   /** The question the page answers. */
   purpose: string;
@@ -30,6 +36,15 @@ const OVERVIEW: Page = {
 
 export const PAGES: readonly Page[] = [
   OVERVIEW,
+  {
+    to: "/usage",
+    title: "Usage",
+    purpose: "What is consumed, and where?",
+    section: "Analyze",
+    icon: ChartColumnStacked,
+    shortcut: "u",
+    scoped: true,
+  },
   {
     to: "/sessions",
     title: "Sessions",

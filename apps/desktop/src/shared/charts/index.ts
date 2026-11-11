@@ -13,3 +13,6 @@ export { categoryColor, modelColors, otherColor, providerColor, readableOn, tint
 export { useChartTheme, type ChartTheme } from "./theme";
 export { Timeline, type TimelinePoint } from "./timeline";
 export { StackedTrend, TrendTable, type TrendSeries } from "./trend";
+export { BandTable, BandTrend, type BandPoint } from "./band";
+export { Histogram, HistogramTable, binLabel, type HistogramBin } from "./histogram";
+export { Pareto, ParetoTable } from "./pareto";

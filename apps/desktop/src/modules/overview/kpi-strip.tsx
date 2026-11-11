@@ -2,7 +2,7 @@ import type { Overview, OverviewKpis } from "@veyra/contracts";
 
 import type { Measure } from "@/shared/filters";
 import { MEASURE, fmt } from "@/shared/format";
-import { KpiTile } from "@/shared/ui";
+import { KpiGrid, KpiTile } from "@/shared/ui";
 
 import { dailyTotals } from "./overview-model";
 
@@ -75,9 +75,9 @@ export function KpiStrip({ overview, measure }: { overview: Overview; measure: M
     );
   };
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-[minmax(0,2fr)_repeat(5,minmax(0,1fr))]">
+    <KpiGrid>
       {tile(hero, true)}
       {ORDER.filter((k) => k !== hero).map((k) => tile(k, false))}
-    </div>
+    </KpiGrid>
   );
 }

@@ -7,6 +7,7 @@ mod analytics;
 mod app_info;
 mod sessions;
 mod sources;
+mod usage;
 
 pub use analytics::{
     AccuracyClass, CalendarDay, Comparison, Composition, DailyPoint, HourCell, Kpi, Labelled,
@@ -20,4 +21,8 @@ pub use sessions::{
 pub use sources::{
     Capability, DataChanged, IssueCount, ListSourcesRequest, RescanAccepted, RescanRequest,
     SetSourceEnabledRequest, SourceList, SourceSummary, SupportLevel,
+};
+pub use usage::{
+    Breakdown, BreakdownDimension, SizeBinCount, SizePoint, TokenMixPoint, Usage, UsageKpis,
+    UsageRequest,
 };

@@ -3,23 +3,20 @@
 use std::collections::BTreeMap;
 
 use jiff::ToSpan;
-use veyra_analytics::activity::{
-    ACTIVE_TIME_DEFINITION, Activity, DEFAULT_IDLE_THRESHOLD_MS, SESSIONS_DEFINITION, activity,
-};
+use veyra_analytics::activity::{ACTIVE_TIME_DEFINITION, SESSIONS_DEFINITION};
 use veyra_analytics::composition::AccuracyComposition;
 use veyra_analytics::dimension::Dimension;
-use veyra_analytics::engine::{GroupResult, evaluate};
-use veyra_analytics::metrics::{MetricId, MetricValue, delta};
-use veyra_analytics::port::RangeQuery;
+use veyra_analytics::metrics::{MetricId, MetricValue};
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_analytics::sums::BaseSums;
-use veyra_analytics::top_n::top_n;
 use veyra_domain::accuracy::Accuracy;
 
-use super::{accuracy_class, internal, local_time, measures};
+use super::kpis::{kpi, metric_kpi, token_accuracy};
+use super::rankings::{Labeller, dimension_ranking, groups_of};
+use super::{accuracy_class, activity_of, evaluated, internal, local_date, local_time, measures};
 use crate::DataServices;
 use crate::dto::{
-    AccuracyClass, CalendarDay, Composition, DailyPoint, HourCell, Kpi, Labelled, Overview,
+    AccuracyClass, CalendarDay, Composition, DailyPoint, HourCell, Labelled, Overview,
     OverviewKpis, RankRow,
 };
 use crate::error::ApiError;
@@ -32,52 +29,7 @@ const TOP_PROJECTS: usize = 30;
 /// Days in the activity calendar.
 const CALENDAR_DAYS: i32 = 365;
 
-fn kpi(
-    current: Option<MetricValue>,
-    previous: Option<MetricValue>,
-    accuracy: Option<AccuracyClass>,
-    definition: &str,
-) -> Kpi {
-    Kpi {
-        value: current.map(MetricValue::as_f64),
-        previous: previous.map(MetricValue::as_f64),
-        change: delta(current, previous).and_then(|d| d.relative),
-        accuracy,
-        definition: definition.to_owned(),
-    }
-}
-
-fn metric_kpi(
-    metric: MetricId,
-    current: &BaseSums,
-    previous: Option<&BaseSums>,
-    accuracy: Option<AccuracyClass>,
-) -> Kpi {
-    kpi(
-        metric.compute(current),
-        previous.and_then(|p| metric.compute(p)),
-        accuracy,
-        metric.definition().description,
-    )
-}
-
-fn activity_of(
-    data: &DataServices,
-    scope: &Resolved,
-    period: Period,
-) -> Result<Activity, ApiError> {
-    let times = data
-        .analytics
-        .event_times(&RangeQuery {
-            from: period.from(),
-            until: period.until(),
-            filters: scope.filters.clone(),
-        })
-        .map_err(|e| internal(&e))?;
-    Ok(activity(&times, DEFAULT_IDLE_THRESHOLD_MS))
-}
-
-fn composition(sums: &BaseSums) -> Composition {
+pub(crate) fn composition(sums: &BaseSums) -> Composition {
     let mix = AccuracyComposition::of(sums);
     let share = |class| mix.share(class).unwrap_or(0.0);
     Composition {
@@ -93,62 +45,6 @@ fn composition(sums: &BaseSums) -> Composition {
     }
 }
 
-#[expect(clippy::cast_precision_loss, reason = "a display share")]
-fn share(part: u64, whole: u64) -> f64 {
-    if whole == 0 {
-        0.0
-    } else {
-        part as f64 / whole as f64
-    }
-}
-
-/// A ranking by tokens: the top `n` groups and an exact "Other".
-fn ranking(
-    groups: Vec<GroupResult>,
-    n: usize,
-    scope_tokens: u64,
-    row: impl Fn(&GroupResult) -> (Option<String>, String, Option<String>),
-) -> Vec<RankRow> {
-    let ranked = top_n(groups, MetricId::TotalTokens, n);
-    let mut rows: Vec<RankRow> = ranked
-        .top
-        .iter()
-        .map(|group| {
-            let (key, label, provider) = row(group);
-            let measures = measures(&group.totals);
-            RankRow {
-                key,
-                label,
-                provider,
-                measures,
-                share: share(measures.tokens, scope_tokens),
-                group_count: 1,
-                is_other: false,
-            }
-        })
-        .collect();
-    if let Some(other) = ranked.other {
-        let measures = measures(&other.totals);
-        rows.push(RankRow {
-            key: None,
-            label: "Other".to_owned(),
-            provider: None,
-            measures,
-            share: share(measures.tokens, scope_tokens),
-            group_count: u64::try_from(other.group_count).unwrap_or(u64::MAX),
-            is_other: true,
-        });
-    }
-    rows
-}
-
-fn evaluated(
-    data: &DataServices,
-    spec: &QuerySpec,
-) -> Result<veyra_analytics::engine::QueryResult, ApiError> {
-    evaluate(data.analytics.as_ref(), spec).map_err(|e| internal(&e))
-}
-
 /// Headline tiles with comparisons. Sessions and active time come from event times.
 fn kpis(
     data: &DataServices,
@@ -156,29 +52,27 @@ fn kpis(
     current: &BaseSums,
     previous: Option<&BaseSums>,
 ) -> Result<OverviewKpis, ApiError> {
-    let token_accuracy = AccuracyComposition::of(current)
-        .weakest()
-        .map(accuracy_class);
+    let accuracy = token_accuracy(current);
+    let count = |n: u64| Some(MetricValue::Count(n));
     let now = activity_of(data, scope, scope.period)?;
     let before = scope
         .previous
         .map(|period| activity_of(data, scope, period))
         .transpose()?;
-    let count = |n: u64| Some(MetricValue::Count(n));
-    let millis = |ms: i64| Some(MetricValue::Count(u64::try_from(ms).unwrap_or(0)));
+    let millis = |ms: i64| count(u64::try_from(ms).unwrap_or(0));
     Ok(OverviewKpis {
-        tokens: metric_kpi(MetricId::TotalTokens, current, previous, token_accuracy),
+        tokens: metric_kpi(MetricId::TotalTokens, current, previous, accuracy),
         cost_nano_usd: metric_kpi(
             MetricId::ApiEquivalentCost,
             current,
             previous,
             Some(AccuracyClass::Estimated),
         ),
-        requests: metric_kpi(MetricId::Requests, current, previous, token_accuracy),
+        requests: metric_kpi(MetricId::Requests, current, previous, accuracy),
         sessions: kpi(
             count(now.sessions),
             before.and_then(|b| count(b.sessions)),
-            token_accuracy,
+            accuracy,
             SESSIONS_DEFINITION,
         ),
         active_ms: kpi(
@@ -187,7 +81,7 @@ fn kpis(
             None,
             ACTIVE_TIME_DEFINITION,
         ),
-        cache_hit_ratio: metric_kpi(MetricId::CacheHitRatio, current, previous, token_accuracy),
+        cache_hit_ratio: metric_kpi(MetricId::CacheHitRatio, current, previous, accuracy),
     })
 }
 
@@ -216,9 +110,7 @@ fn daily(
         .iter()
         .map(|point| {
             Ok(DailyPoint {
-                date: local_time(point.start, &scope.time_zone)?
-                    .date()
-                    .to_string(),
+                date: local_date(point.start, &scope.time_zone)?,
                 values: by_start
                     .iter()
                     .map(|series| series.get(&point.start.0).map(measures).unwrap_or_default())
@@ -257,60 +149,17 @@ fn providers(data: &DataServices, scope: &Resolved) -> Result<Vec<Labelled>, Api
     Ok(providers)
 }
 
-/// The model mix, keyed by (provider, model).
-fn models(
+/// The top groups of one dimension by tokens, plus "Other".
+fn top(
     data: &DataServices,
     scope: &Resolved,
+    dimension: Dimension,
+    n: usize,
     scope_tokens: u64,
 ) -> Result<Vec<RankRow>, ApiError> {
-    let result = evaluated(
-        data,
-        &scope.spec(
-            vec![Dimension::Provider, Dimension::Model],
-            TimeGrain::Total,
-            false,
-        ),
-    )?;
-    Ok(ranking(result.groups, TOP_MODELS, scope_tokens, |group| {
-        let provider = group.key.first().cloned().flatten();
-        let model = group.key.get(1).cloned().flatten();
-        let label = model
-            .as_deref()
-            .map_or_else(|| "Unknown model".to_owned(), |id| data.names.model(id));
-        (model, label, provider)
-    }))
-}
-
-/// The project distribution, labelled with project paths.
-fn projects(
-    data: &DataServices,
-    scope: &Resolved,
-    scope_tokens: u64,
-) -> Result<Vec<RankRow>, ApiError> {
-    let result = evaluated(
-        data,
-        &scope.spec(vec![Dimension::Project], TimeGrain::Total, false),
-    )?;
-    let paths: BTreeMap<String, String> = data
-        .analytics
-        .projects()
-        .map_err(|e| internal(&e))?
-        .into_iter()
-        .map(|p| (p.id.to_string(), p.path))
-        .collect();
-    Ok(ranking(
-        result.groups,
-        TOP_PROJECTS,
-        scope_tokens,
-        |group| {
-            let id = group.key.first().cloned().flatten();
-            let label = id
-                .as_ref()
-                .and_then(|id| paths.get(id).cloned())
-                .unwrap_or_else(|| "No project".to_owned());
-            (id, label, None)
-        },
-    ))
+    let labeller = Labeller::new(data, dimension)?;
+    let groups = groups_of(data, scope, &labeller)?;
+    Ok(dimension_ranking(data, groups, &labeller, n, scope_tokens))
 }
 
 /// The activity calendar: the year ending on the last day of the scope.
@@ -331,9 +180,7 @@ fn calendar(data: &DataServices, scope: &Resolved) -> Result<Vec<CalendarDay>, A
         .iter()
         .map(|point| {
             Ok(CalendarDay {
-                date: local_time(point.start, &scope.time_zone)?
-                    .date()
-                    .to_string(),
+                date: local_date(point.start, &scope.time_zone)?,
                 tokens: measures(&point.sums).tokens,
             })
         })
@@ -374,8 +221,8 @@ pub(crate) fn overview(data: &DataServices, scope: &Resolved) -> Result<Overview
         apps,
         providers: providers(data, scope)?,
         daily: daily_points,
-        models: models(data, scope, scope_tokens)?,
-        projects: projects(data, scope, scope_tokens)?,
+        models: top(data, scope, Dimension::Model, TOP_MODELS, scope_tokens)?,
+        projects: top(data, scope, Dimension::Project, TOP_PROJECTS, scope_tokens)?,
         calendar: calendar(data, scope)?,
         hours: hours(data, scope)?,
     })

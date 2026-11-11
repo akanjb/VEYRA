@@ -31,20 +31,20 @@ function labelled(keys: readonly string[]): Labelled[] {
   return keys.map(fixtureLabel).sort((a, b) => a.label.localeCompare(b.label));
 }
 
-interface Group {
+export interface Group {
   label: string;
   provider: string | null;
   events: FixtureEvent[];
 }
 
-function daysOf(start: string, end: string): string[] {
+export function daysOf(start: string, end: string): string[] {
   const days: string[] = [];
   for (let d = start; d <= end; d = addDays(d, 1)) days.push(d);
   return days;
 }
 
 /** Groups events by a key; `describe` names a group the first time it is seen. */
-function groupBy(
+export function groupBy(
   selected: readonly Flat[],
   keyOf: (f: Flat) => string,
   describe: (f: Flat) => Omit<Group, "events">,
@@ -60,7 +60,7 @@ function groupBy(
 }
 
 /** One period's headline values, `null` where nothing was reported (like the core). */
-function headline(period: readonly Flat[]) {
+export function headline(period: readonly Flat[]) {
   const sums = measuresOf(period.map((f) => f.event));
   const act = activity(period);
   const read = period.reduce((n, f) => n + f.event.cacheRead, 0);

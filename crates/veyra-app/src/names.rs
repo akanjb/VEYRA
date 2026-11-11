@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use veyra_domain::identity::Interface;
 use veyra_domain::source::ConnectorDescriptor;
 
 use crate::dto::Labelled;
@@ -13,6 +14,19 @@ pub struct DisplayNames {
     providers: BTreeMap<String, String>,
     models: BTreeMap<String, String>,
     apps: BTreeMap<String, String>,
+    interfaces: BTreeMap<String, String>,
+}
+
+/// The display name of each interface.
+const fn interface_name(interface: Interface) -> &'static str {
+    match interface {
+        Interface::Cli => "CLI",
+        Interface::Desktop => "Desktop app",
+        Interface::Ide => "IDE",
+        Interface::Browser => "Browser",
+        Interface::Api => "API",
+        Interface::LocalRuntime => "Local runtime",
+    }
 }
 
 impl DisplayNames {
@@ -28,6 +42,10 @@ impl DisplayNames {
             apps: connectors
                 .iter()
                 .map(|c| (c.app.as_str().to_owned(), c.display_name.to_owned()))
+                .collect(),
+            interfaces: Interface::ALL
+                .into_iter()
+                .map(|i| (i.as_str().to_owned(), interface_name(i).to_owned()))
                 .collect(),
         }
     }
@@ -48,6 +66,10 @@ impl DisplayNames {
 
     pub(crate) fn label_app(&self, id: String) -> Labelled {
         labelled(&self.apps, id)
+    }
+
+    pub(crate) fn label_interface(&self, id: String) -> Labelled {
+        labelled(&self.interfaces, id)
     }
 }
 

@@ -2,18 +2,12 @@
  * Maps the Overview response to chart inputs for the selected measure. Pure: no React,
  * no formulas beyond selecting and normalising what the core computed.
  */
-import type { Overview, RankRow } from "@veyra/contracts";
+import type { Overview } from "@veyra/contracts";
 
-import {
-  categoryColor,
-  modelColors,
-  otherColor,
-  type ChartTheme,
-  type RankItem,
-  type TrendSeries,
-} from "@/shared/charts";
+import { categoryColor, type ChartTheme, type RankItem, type TrendSeries } from "@/shared/charts";
 import type { Measure } from "@/shared/filters";
 import { MEASURE } from "@/shared/format";
+import { rankItems } from "@/shared/rankings";
 
 /** Whether the scope has any recorded usage. */
 export function hasUsage(overview: Overview): boolean {
@@ -40,47 +34,22 @@ export function dailyTotals(overview: Overview, measure: Measure): number[] {
   return overview.daily.map((d) => d.values.reduce((sum, v) => sum + pick(v), 0));
 }
 
-/** Shares of the selected measure (the core's shares are of tokens). */
-function shares(rows: readonly RankRow[], measure: Measure): number[] {
-  const pick = MEASURE[measure].pick;
-  const total = rows.reduce((sum, r) => sum + pick(r.measures), 0);
-  return rows.map((r) => (total === 0 ? 0 : pick(r.measures) / total));
-}
-
-function sortedByMeasure(rows: readonly RankRow[], measure: Measure): RankRow[] {
-  const pick = MEASURE[measure].pick;
-  const named = rows.filter((r) => !r.isOther).sort((a, b) => pick(b.measures) - pick(a.measures));
-  return [...named, ...rows.filter((r) => r.isOther)];
-}
-
 /** Model mix with provider identity colours (models tinted within their provider). */
 export function modelItems(overview: Overview, measure: Measure, theme: ChartTheme): RankItem[] {
-  const rows = sortedByMeasure(overview.models, measure);
-  const colors = modelColors(
+  return rankItems(
+    overview.models,
+    { pick: MEASURE[measure].pick, coloring: "model", noun: "models" },
     theme,
-    rows.filter((r) => r.key !== null).map((r) => ({ id: r.key ?? "", provider: r.provider })),
   );
-  const share = shares(rows, measure);
-  return rows.map((r, i) => ({
-    key: r.isOther ? null : r.key,
-    label: r.isOther ? `Other (${String(r.groupCount)} models)` : r.label,
-    value: MEASURE[measure].pick(r.measures),
-    share: share[i] ?? 0,
-    color: r.key === null ? otherColor(theme) : (colors.get(r.key) ?? otherColor(theme)),
-  }));
 }
 
 /** Project distribution; each project keeps a colour by rank. */
 export function projectItems(overview: Overview, measure: Measure, theme: ChartTheme): RankItem[] {
-  const rows = sortedByMeasure(overview.projects, measure);
-  const share = shares(rows, measure);
-  return rows.map((r, i) => ({
-    key: r.isOther ? null : r.key,
-    label: r.isOther ? `Other (${String(r.groupCount)} projects)` : r.label,
-    value: MEASURE[measure].pick(r.measures),
-    share: share[i] ?? 0,
-    color: r.isOther || r.key === null ? otherColor(theme) : categoryColor(theme, i),
-  }));
+  return rankItems(
+    overview.projects,
+    { pick: MEASURE[measure].pick, coloring: "category", noun: "projects" },
+    theme,
+  );
 }
 
 export function calendarDays(overview: Overview) {
