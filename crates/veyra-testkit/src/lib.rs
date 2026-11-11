@@ -5,6 +5,13 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Duration;
+
+/// The busy timeout the concurrent-writer tests give the owning application: a fiftieth
+/// of the 5 seconds OpenCode uses. While a commit is in progress, any SQLite reader (the
+/// application's own or Veyra's) may hold the WAL write lock for an instant to re-read
+/// the WAL index, so a writer with no timeout at all can be refused by any reader.
+pub const OWNER_BUSY_TIMEOUT: Duration = Duration::from_millis(100);
 
 /// The synthetic Claude Code `projects` directory (format v2.1).
 #[must_use]

@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use rusqlite::Connection;
 use veyra_domain::connector::DatabaseQuery;
-use veyra_testkit::TempDir;
+use veyra_testkit::{OWNER_BUSY_TIMEOUT, TempDir};
 
 use super::database_rows_in;
 
@@ -63,7 +63,7 @@ fn reports_a_database_that_cannot_be_read() {
     assert_eq!(scratch_entries(&scratch), 0);
 }
 
-/// The owning application keeps writing, with no busy timeout at all, while Veyra
+/// The owning application keeps writing, with a short busy timeout, while Veyra
 /// snapshots its database over and over: it must never be refused a write.
 #[test]
 fn never_blocks_the_owning_applications_writer() {
@@ -76,7 +76,7 @@ fn never_blocks_the_owning_applications_writer() {
         let (path, stop) = (path.clone(), Arc::clone(&stop));
         std::thread::spawn(move || {
             let db = Connection::open(&path).unwrap();
-            db.busy_timeout(std::time::Duration::ZERO).unwrap();
+            db.busy_timeout(OWNER_BUSY_TIMEOUT).unwrap();
             let mut written = 0_u32;
             while !stop.load(Ordering::Relaxed) {
                 db.execute("INSERT INTO message VALUES ('m', '{}', NULL)", [])

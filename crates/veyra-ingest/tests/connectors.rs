@@ -276,7 +276,7 @@ mod opencode {
         fixture.assert_no_content_stored();
     }
 
-    /// OpenCode keeps writing, with no busy timeout at all, while Veyra reads its
+    /// OpenCode keeps writing, with a busy timeout a fiftieth of its own, while Veyra reads its
     /// database: no write is refused, and the next scan picks up the new message.
     #[test]
     fn never_blocks_opencode_and_reads_its_new_messages() {
@@ -286,7 +286,7 @@ mod opencode {
             let (path, stop) = (database(&fixture), Arc::clone(&stop));
             std::thread::spawn(move || {
                 let db = rusqlite::Connection::open(&path).unwrap();
-                db.busy_timeout(std::time::Duration::ZERO).unwrap();
+                db.busy_timeout(veyra_testkit::OWNER_BUSY_TIMEOUT).unwrap();
                 let mut written = 0_u32;
                 while !stop.load(Ordering::Relaxed) {
                     written += 1;

@@ -44,7 +44,7 @@ Each tool's format was established from its source code or published schema, bec
 - An active whole-file source is re-read on each change. Records are idempotent, so this costs reading time but never correctness.
 - Copilot CLI usage appears only after a session ends, and prompt-length price tiers cannot be applied to it exactly.
 - Gemini CLI totals can be below Google's bill, because background requests are not recorded. Its capability matrix says so.
-- The snapshot path is covered by a test in which the owning application writes with no busy timeout while Veyra reads.
+- The snapshot path is covered by a test in which the owning application keeps writing, with a busy timeout of 100 ms (a fiftieth of OpenCode's 5 seconds), while Veyra reads. A timeout of zero cannot be guaranteed: while a commit is in progress, any SQLite reader, including the application's own, may hold the WAL write lock for an instant to re-read the WAL index.
 
 ## Revisit when
 

@@ -23,7 +23,7 @@ Root: `$XDG_DATA_HOME/opencode`, else `~/.local/share/opencode` on **every** ope
 
 ## How it reads (ADR-015)
 
-The database is opened read-only and copied in one step with SQLite's backup API into a private temporary file, which is deleted right after the queries. In WAL mode this never blocks OpenCode's writers; a test keeps writing with no busy timeout while Veyra reads. The snapshot holds everything OpenCode stores, including prompts, so the queries select **only** metadata columns and JSON fields with `json_extract`, never a whole `data` column. The database is re-read when its file, or a non-empty write-ahead log, changes.
+The database is opened read-only and copied in one step with SQLite's backup API into a private temporary file, which is deleted right after the queries. In WAL mode this never makes OpenCode's writers wait longer than an instant; a test keeps writing with a busy timeout of 100 ms, a fiftieth of the 5 seconds OpenCode uses, while Veyra reads. The snapshot holds everything OpenCode stores, including prompts, so the queries select **only** metadata columns and JSON fields with `json_extract`, never a whole `data` column. The database is re-read when its file, or a non-empty write-ahead log, changes.
 
 ## Tables and fields used
 
