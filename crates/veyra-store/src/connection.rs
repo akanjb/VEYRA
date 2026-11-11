@@ -56,5 +56,8 @@ pub fn open_reader(path: &Path) -> Result<Connection, StoreError> {
     )?;
     connection.busy_timeout(BUSY_TIMEOUT)?;
     connection.pragma_update(None, "query_only", "ON")?;
+    // Sorts and groupings stay in memory: temporary files are slow, and on some systems
+    // each one is scanned by antivirus software before it can be used.
+    connection.pragma_update(None, "temp_store", "MEMORY")?;
     Ok(connection)
 }

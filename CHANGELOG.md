@@ -76,6 +76,11 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
   - Connector documentation and ADR-023.
 
 ### Changed
+- **Faster dashboard pages** (ADR-029):
+  - each page runs its independent reads at the same time, on four reader connections instead of two;
+  - readers sort in memory;
+  - the session list ranks sessions before adding up only the shown page.
+  - `veyra-perf` now times the command behind every page, with a p95 budget of 150 ms up to one million events and 400 ms above. `--database` re-times a kept database.
 - **Model names through gateways.** The registry resolves `vendor/model` and dotted spellings (`claude-sonnet-4.5`) to canonical models; exact names still match first.
 - **Display names and definitions come from the core.** KPI definitions come from the metric registry. Provider, model and application names come from the registry and connector descriptors, through one `DisplayNames` value.
 - **One clock and one test kit.** `UtcMillis::now()` replaces duplicated clocks. A new `veyra-testkit` crate holds the shared test fixtures and temporary directories.

@@ -4,6 +4,8 @@
 //! fields and are never added together (ADR-004). Every figure comes from the analytics
 //! crate (ADR-008).
 
+use std::thread;
+
 use jiff::ToSpan;
 use jiff::civil::Date;
 use veyra_analytics::billing::{
@@ -26,7 +28,7 @@ use veyra_domain::time::UtcMillis;
 
 use super::kpis::{kpi, metric_kpi, token_accuracy};
 use super::rankings::{Labeller, RankBy, RowLabel, dimension_ranking, groups_of};
-use super::{evaluated, internal, local_time, measures};
+use super::{evaluated, internal, joined, local_time, measures};
 use crate::DataServices;
 use crate::dto::{
     AccuracyClass, BreakdownDimension, BudgetLevel, BudgetStatus, Cost, CostBreakdown, CostDay,
@@ -519,41 +521,54 @@ pub(crate) fn cost(
     let billing = Billing::of(&entries, scope, days)?;
     let today = local_time(now, &scope.time_zone)?.date();
     let frame = MonthFrame::of(scope, today)?;
-    let month = MonthCost::of(data, scope, &frame, &scope.filters)?;
-    let grouped = BREAKDOWNS
-        .into_iter()
-        .map(|pair| Grouped::of(data, scope, pair))
-        .collect::<Result<Vec<_>, _>>()?;
-    let scope_cost = RankBy::Cost.amount(&measures(totals));
-    let models = &grouped[0];
-    let waterfalls = WATERFALLS
-        .iter()
-        .filter_map(|(shown, _)| grouped.iter().find(|g| g.dimension == *shown))
-        .map(|g| g.waterfall(data, scope))
-        .collect::<Result<Vec<_>, _>>()?;
-    let sessions = super::sessions::list(data, scope, SessionSort::Cost, 0, SESSIONS_SHOWN)?;
-    Ok(Cost {
-        kpis: kpis(
-            totals,
-            result.previous_totals.as_ref(),
-            token_accuracy(totals),
-            &billing,
-        ),
-        accuracy: token_accuracy(totals),
-        other_currency_entries: u32::try_from(billing.current.other_currency_entries)
-            .unwrap_or(u32::MAX),
-        daily: daily(data, scope, days, &current)?,
-        month: outlook(&frame, &month)?,
-        budgets: budgets(data, scope, &frame)?,
-        breakdowns: grouped
-            .iter()
-            .map(|g| g.breakdown(data, scope_cost))
-            .collect(),
-        sessions: sessions.rows,
-        composition: composition(data, models, totals),
-        rates: rates(data, models),
-        waterfalls,
-        definitions: definitions(),
+    thread::scope(|s| {
+        let month = s.spawn(|| MonthCost::of(data, scope, &frame, &scope.filters));
+        let daily = s.spawn(|| daily(data, scope, days, &current));
+        let budgets = s.spawn(|| budgets(data, scope, &frame));
+        let sessions =
+            s.spawn(|| super::sessions::list(data, scope, SessionSort::Cost, 0, SESSIONS_SHOWN));
+        let grouped: Vec<_> = BREAKDOWNS
+            .into_iter()
+            .map(|pair| s.spawn(move || Grouped::of(data, scope, pair)))
+            .collect();
+        let grouped = grouped
+            .into_iter()
+            .map(joined)
+            .collect::<Result<Vec<_>, _>>()?;
+        let waterfalls = thread::scope(|w| {
+            let parts: Vec<_> = WATERFALLS
+                .iter()
+                .filter_map(|(shown, _)| grouped.iter().find(|g| g.dimension == *shown))
+                .map(|g| w.spawn(|| g.waterfall(data, scope)))
+                .collect();
+            parts.into_iter().map(joined).collect::<Result<Vec<_>, _>>()
+        })?;
+        let scope_cost = RankBy::Cost.amount(&measures(totals));
+        let models = &grouped[0];
+        let month = joined(month)?;
+        Ok(Cost {
+            kpis: kpis(
+                totals,
+                result.previous_totals.as_ref(),
+                token_accuracy(totals),
+                &billing,
+            ),
+            accuracy: token_accuracy(totals),
+            other_currency_entries: u32::try_from(billing.current.other_currency_entries)
+                .unwrap_or(u32::MAX),
+            daily: joined(daily)?,
+            month: outlook(&frame, &month)?,
+            budgets: joined(budgets)?,
+            breakdowns: grouped
+                .iter()
+                .map(|g| g.breakdown(data, scope_cost))
+                .collect(),
+            sessions: joined(sessions)?.rows,
+            composition: composition(data, models, totals),
+            rates: rates(data, models),
+            waterfalls,
+            definitions: definitions(),
+        })
     })
 }
 

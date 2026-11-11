@@ -2,6 +2,7 @@
 //! engine (ADR-008).
 
 use std::collections::HashMap;
+use std::thread;
 
 use veyra_analytics::activity::{
     self as engine, ACTIVE_TIME_DEFINITION, DEFAULT_IDLE_THRESHOLD_MS, DURATION_BOUNDS_MS,
@@ -15,7 +16,7 @@ use veyra_domain::time::UtcMillis;
 
 use super::kpis::kpi;
 use super::time_grids::{calendar, hours};
-use super::{internal, local_date};
+use super::{internal, joined, local_date};
 use crate::DataServices;
 use crate::dto::{Activity, ActivityDay, ActivityKpis, LengthBin, LongSession};
 use crate::error::ApiError;
@@ -149,33 +150,40 @@ fn longest(
 
 /// Builds the Activity page for a scope.
 pub(crate) fn activity(data: &DataServices, scope: &Resolved) -> Result<Activity, ApiError> {
-    let (now, starts) = period_times(data, scope, scope.period)?;
-    let before = scope
-        .previous
-        .map(|period| period_times(data, scope, period).map(|(times, _)| times))
-        .transpose()?;
-    let daily = starts
-        .iter()
-        .zip(&now.days)
-        .map(|(start, day)| {
-            Ok(ActivityDay {
-                date: local_date(*start, &scope.time_zone)?,
-                sessions: day.sessions,
-                active_ms: day.active_ms,
-                wall_ms: day.wall_ms,
+    thread::scope(|s| {
+        let before = s.spawn(|| {
+            scope
+                .previous
+                .map(|period| period_times(data, scope, period).map(|(times, _)| times))
+                .transpose()
+        });
+        let calendar = s.spawn(|| calendar(data, scope));
+        let hours = s.spawn(|| hours(data, scope));
+        let (now, starts) = period_times(data, scope, scope.period)?;
+        let daily = starts
+            .iter()
+            .zip(&now.days)
+            .map(|(start, day)| {
+                Ok(ActivityDay {
+                    date: local_date(*start, &scope.time_zone)?,
+                    sessions: day.sessions,
+                    active_ms: day.active_ms,
+                    wall_ms: day.wall_ms,
+                })
             })
+            .collect::<Result<Vec<_>, ApiError>>()?;
+        let lengths = engine::session_lengths(&now.times, DEFAULT_IDLE_THRESHOLD_MS);
+        let longest = longest(data, scope, &lengths)?;
+        Ok(Activity {
+            kpis: kpis(&now, joined(before)?.as_ref()),
+            calendar: joined(calendar)?,
+            hours: joined(hours)?,
+            daily,
+            session_lengths: length_bins(&lengths),
+            longest,
+            idle_threshold_ms: DEFAULT_IDLE_THRESHOLD_MS,
+            active_definition: ACTIVE_TIME_DEFINITION.to_owned(),
+            wall_definition: WALL_TIME_DEFINITION.to_owned(),
         })
-        .collect::<Result<Vec<_>, ApiError>>()?;
-    let lengths = engine::session_lengths(&now.times, DEFAULT_IDLE_THRESHOLD_MS);
-    Ok(Activity {
-        kpis: kpis(&now, before.as_ref()),
-        calendar: calendar(data, scope)?,
-        hours: hours(data, scope)?,
-        daily,
-        session_lengths: length_bins(&lengths),
-        longest: longest(data, scope, &lengths)?,
-        idle_threshold_ms: DEFAULT_IDLE_THRESHOLD_MS,
-        active_definition: ACTIVE_TIME_DEFINITION.to_owned(),
-        wall_definition: WALL_TIME_DEFINITION.to_owned(),
     })
 }

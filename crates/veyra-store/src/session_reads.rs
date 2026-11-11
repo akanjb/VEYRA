@@ -127,6 +127,36 @@ fn order_expression(sort: SessionSort) -> String {
     }
 }
 
+/// The ids of one page of sessions, in display order. Ranking needs only each
+/// session's sort key, so the full sums are computed for the page's sessions alone.
+fn page_ids(
+    connection: &Connection,
+    where_sql: &str,
+    values: &[Value],
+    query: &SessionQuery,
+) -> Result<Vec<i64>, StoreError> {
+    let costs = if query.sort == SessionSort::Cost {
+        "LEFT JOIN event_costs c ON c.event_id = e.id"
+    } else {
+        ""
+    };
+    let n = values.len();
+    let mut statement = connection.prepare(&format!(
+        "SELECT e.session_id FROM usage_events e {costs} WHERE {where_sql}          GROUP BY e.session_id ORDER BY {} DESC, e.session_id DESC LIMIT ?{} OFFSET ?{}",
+        order_expression(query.sort),
+        n + 1,
+        n + 2
+    ))?;
+    let paging = [
+        Value::Integer(i64::from(query.limit)),
+        Value::Integer(i64::from(query.offset)),
+    ];
+    let rows = statement.query_map(params_from_iter(values.iter().chain(&paging)), |row| {
+        row.get::<_, i64>(0)
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
 fn page(connection: &Connection, query: &SessionQuery) -> Result<SessionPage, StoreError> {
     let mut values = Vec::new();
     let where_sql =
@@ -136,19 +166,30 @@ fn page(connection: &Connection, query: &SessionQuery) -> Result<SessionPage, St
         params_from_iter(values.iter()),
         |row| row.get(0),
     )?;
-    values.extend([
-        Value::Integer(i64::from(query.limit)),
-        Value::Integer(i64::from(query.offset)),
-    ]);
-    let n = values.len();
-    let tail = format!(
-        "ORDER BY {} DESC, e.session_id DESC LIMIT ?{} OFFSET ?{n}",
-        order_expression(query.sort),
-        n - 1
-    );
+    let ids = page_ids(connection, &where_sql, &values, query)?;
+    let first = values.len() + 1;
+    let placeholders: Vec<String> = (first..first + ids.len())
+        .map(|i| format!("?{i}"))
+        .collect();
+    values.extend(ids.iter().map(|id| Value::Integer(*id)));
+    let mut sessions = if ids.is_empty() {
+        Vec::new()
+    } else {
+        summaries(
+            connection,
+            &format!(
+                "{where_sql} AND e.session_id IN ({})",
+                placeholders.join(", ")
+            ),
+            values,
+            "",
+        )?
+    };
+    let position: HashMap<i64, usize> = ids.iter().enumerate().map(|(i, id)| (*id, i)).collect();
+    sessions.sort_by_key(|summary| position.get(&summary.id).copied());
     Ok(SessionPage {
         total: count_from(Some(total), "session count")?.unwrap_or(0),
-        sessions: summaries(connection, &where_sql, values, &tail)?,
+        sessions,
     })
 }
 

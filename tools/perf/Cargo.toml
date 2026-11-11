@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 jiff.workspace = true
 veyra-analytics.workspace = true
+veyra-app.workspace = true
 veyra-domain.workspace = true
 veyra-registry.workspace = true
 veyra-store.workspace = true

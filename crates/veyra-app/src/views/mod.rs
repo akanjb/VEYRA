@@ -17,6 +17,8 @@ pub(crate) mod sources;
 mod time_grids;
 pub(crate) mod usage;
 
+use std::thread::ScopedJoinHandle;
+
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, Zoned};
 use veyra_analytics::activity::{Activity, DEFAULT_IDLE_THRESHOLD_MS, activity};
@@ -31,6 +33,15 @@ use crate::DataServices;
 use crate::dto::{AccuracyClass, Measures};
 use crate::error::ApiError;
 use crate::scope::Resolved;
+
+/// The result of a part of a view run on its own thread inside `std::thread::scope`.
+/// Independent reads then proceed at the same time, each on its own reader connection, so
+/// a page costs about as much as its slowest part rather than the sum of its parts. A
+/// panic in the part is passed on.
+pub(crate) fn joined<T>(part: ScopedJoinHandle<'_, T>) -> T {
+    part.join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+}
 
 /// Evaluates an analytics query.
 pub(crate) fn evaluated(data: &DataServices, spec: &QuerySpec) -> Result<QueryResult, ApiError> {

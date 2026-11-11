@@ -1,6 +1,8 @@
 //! The Cache page: is caching working, and what does it save? Every number comes from
 //! the analytics engine (ADR-008).
 
+use std::thread;
+
 use veyra_analytics::dimension::Dimension;
 use veyra_analytics::engine::GroupResult;
 use veyra_analytics::metrics::{
@@ -13,7 +15,7 @@ use veyra_analytics::top_n::top_n;
 
 use super::kpis::{metric_kpi, token_accuracy};
 use super::rankings::{Labeller, RowLabel, groups_of};
-use super::{evaluated, internal, local_date};
+use super::{evaluated, internal, joined, local_date};
 use crate::DataServices;
 use crate::dto::{AccuracyClass, Cache, CacheKpis, CachePoint, CacheSession, RatioRow, TtlRow};
 use crate::error::ApiError;
@@ -183,25 +185,31 @@ pub(crate) fn cache(data: &DataServices, scope: &Resolved) -> Result<Cache, ApiE
             })
         })
         .collect::<Result<Vec<_>, ApiError>>()?;
-    Ok(Cache {
-        kpis: kpis(
-            current,
-            daily.previous_totals.as_ref(),
-            token_accuracy(current),
-        ),
-        accuracy: token_accuracy(current),
-        pricing_coverage: MetricId::PricingCoverage
-            .compute(current)
-            .map(MetricValue::as_f64),
-        coverage_definition: MetricId::PricingCoverage
-            .definition()
-            .description
-            .to_owned(),
-        daily: points,
-        by_model: hit_ratios(data, scope, Dimension::Model)?,
-        by_project: hit_ratios(data, scope, Dimension::Project)?,
-        writes_by_model: writes_by_model(data, scope)?,
-        inefficient: losses(data, scope)?,
-        inefficient_definition: CACHE_LOSS_DEFINITION.to_owned(),
+    thread::scope(|s| {
+        let by_model = s.spawn(|| hit_ratios(data, scope, Dimension::Model));
+        let by_project = s.spawn(|| hit_ratios(data, scope, Dimension::Project));
+        let writes = s.spawn(|| writes_by_model(data, scope));
+        let inefficient = losses(data, scope)?;
+        Ok(Cache {
+            kpis: kpis(
+                current,
+                daily.previous_totals.as_ref(),
+                token_accuracy(current),
+            ),
+            accuracy: token_accuracy(current),
+            pricing_coverage: MetricId::PricingCoverage
+                .compute(current)
+                .map(MetricValue::as_f64),
+            coverage_definition: MetricId::PricingCoverage
+                .definition()
+                .description
+                .to_owned(),
+            daily: points,
+            by_model: joined(by_model)?,
+            by_project: joined(by_project)?,
+            writes_by_model: joined(writes)?,
+            inefficient,
+            inefficient_definition: CACHE_LOSS_DEFINITION.to_owned(),
+        })
     })
 }

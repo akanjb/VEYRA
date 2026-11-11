@@ -1,6 +1,8 @@
 //! The Usage page: how many tokens of which kinds, through what, and how large requests
 //! and sessions are. Every number comes from the analytics engine (ADR-008).
 
+use std::thread;
+
 use veyra_analytics::concentration::{HERFINDAHL_DEFINITION, cumulative_shares, herfindahl};
 use veyra_analytics::dimension::Dimension;
 use veyra_analytics::engine::QueryResult;
@@ -15,7 +17,7 @@ use veyra_domain::time::UtcMillis;
 
 use super::kpis::{metric_kpi, token_accuracy};
 use super::rankings::{Labeller, RankBy, dimension_ranking, groups_of};
-use super::{evaluated, internal, local_date, measures};
+use super::{evaluated, internal, joined, local_date, measures};
 use crate::DataServices;
 use crate::dto::{
     AccuracyClass, Breakdown, BreakdownDimension, SizeBinCount, SizePoint, TokenMixPoint, Usage,
@@ -172,27 +174,36 @@ pub(crate) fn usage(data: &DataServices, scope: &Resolved) -> Result<Usage, ApiE
         .map(|start| local_date(*start, &scope.time_zone))
         .collect::<Result<Vec<_>, _>>()?;
     let scope_tokens = measures(current).tokens;
-    let breakdowns = BREAKDOWNS
-        .iter()
-        .map(|(shown, grouped)| breakdown(data, scope, *shown, *grouped, scope_tokens))
-        .collect::<Result<Vec<_>, _>>()?;
-    let (per_request, request_sizes) = requests(data, scope, &daily, &starts, &dates)?;
-    Ok(Usage {
-        kpis: kpis(current, daily.previous_totals.as_ref(), accuracy),
-        accuracy,
-        composition: daily
-            .series
+    thread::scope(|s| {
+        let breakdowns: Vec<_> = BREAKDOWNS
             .iter()
-            .zip(&dates)
-            .map(|(point, date)| mix_point(date.clone(), &point.sums))
-            .collect(),
-        reasoning_reported: current.tokens.reasoning.is_some(),
-        breakdowns,
-        per_request,
-        per_session: sessions(data, scope, &starts, &dates)?,
-        request_sizes,
-        request_definition: REQUEST_PERCENTILES_DEFINITION.to_owned(),
-        session_definition: SESSION_SIZES_DEFINITION.to_owned(),
-        concentration_definition: HERFINDAHL_DEFINITION.to_owned(),
+            .map(|(shown, grouped)| {
+                s.spawn(move || breakdown(data, scope, *shown, *grouped, scope_tokens))
+            })
+            .collect();
+        let per_session = s.spawn(|| sessions(data, scope, &starts, &dates));
+        let (per_request, request_sizes) = requests(data, scope, &daily, &starts, &dates)?;
+        let breakdowns = breakdowns
+            .into_iter()
+            .map(joined)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Usage {
+            kpis: kpis(current, daily.previous_totals.as_ref(), accuracy),
+            accuracy,
+            composition: daily
+                .series
+                .iter()
+                .zip(&dates)
+                .map(|(point, date)| mix_point(date.clone(), &point.sums))
+                .collect(),
+            reasoning_reported: current.tokens.reasoning.is_some(),
+            breakdowns,
+            per_request,
+            per_session: joined(per_session)?,
+            request_sizes,
+            request_definition: REQUEST_PERCENTILES_DEFINITION.to_owned(),
+            session_definition: SESSION_SIZES_DEFINITION.to_owned(),
+            concentration_definition: HERFINDAHL_DEFINITION.to_owned(),
+        })
     })
 }

@@ -1,6 +1,7 @@
 //! The Overview page: every number comes from the analytics engine (ADR-008).
 
 use std::collections::BTreeMap;
+use std::thread;
 
 use veyra_analytics::activity::{ACTIVE_TIME_DEFINITION, SESSIONS_DEFINITION};
 use veyra_analytics::composition::AccuracyComposition;
@@ -14,7 +15,7 @@ use super::highlights::highlights;
 use super::kpis::{kpi, metric_kpi, token_accuracy};
 use super::rankings::{Labeller, RankBy, dimension_ranking, groups_of};
 use super::time_grids::{calendar, hours};
-use super::{accuracy_class, activity_of, evaluated, local_date, measures};
+use super::{accuracy_class, activity_of, evaluated, joined, local_date, measures};
 use crate::DataServices;
 use crate::dto::{
     AccuracyClass, Composition, DailyPoint, Labelled, Overview, OverviewKpis, RankRow,
@@ -52,11 +53,16 @@ pub(crate) fn kpis(
 ) -> Result<OverviewKpis, ApiError> {
     let accuracy = token_accuracy(current);
     let count = |n: u64| Some(MetricValue::Count(n));
-    let now = activity_of(data, scope, scope.period)?;
-    let before = scope
-        .previous
-        .map(|period| activity_of(data, scope, period))
-        .transpose()?;
+    let (now, before) = thread::scope(|s| {
+        let before = s.spawn(|| {
+            scope
+                .previous
+                .map(|period| activity_of(data, scope, period))
+                .transpose()
+        });
+        (activity_of(data, scope, scope.period), joined(before))
+    });
+    let (now, before) = (now?, before?);
     let millis = |ms: i64| count(u64::try_from(ms).unwrap_or(0));
     Ok(OverviewKpis {
         tokens: metric_kpi(MetricId::TotalTokens, current, previous, accuracy),
@@ -172,26 +178,33 @@ pub(crate) fn overview(data: &DataServices, scope: &Resolved) -> Result<Overview
     let totals = evaluated(data, &scope.spec(vec![], TimeGrain::Total, true))?;
     let current = &totals.totals;
     let scope_tokens = measures(current).tokens;
-    let (apps, daily_points) = daily(data, scope)?;
-    let kpis = kpis(data, scope, current, totals.previous_totals.as_ref())?;
-    let models = top(data, scope, Dimension::Model, TOP_MODELS, scope_tokens)?;
-    let projects = top(data, scope, Dimension::Project, TOP_PROJECTS, scope_tokens)?;
-    Ok(Overview {
-        highlights: highlights(
-            &daily_points,
-            &models,
-            &projects,
-            &kpis.cost_nano_usd,
-            net_cache_benefit_nano_usd(current),
-        ),
-        kpis,
-        composition: composition(current),
-        apps,
-        providers: providers(data, scope)?,
-        daily: daily_points,
-        models,
-        projects,
-        calendar: calendar(data, scope)?,
-        hours: hours(data, scope)?,
+    thread::scope(|s| {
+        let trend = s.spawn(|| daily(data, scope));
+        let kpis = s.spawn(|| kpis(data, scope, current, totals.previous_totals.as_ref()));
+        let models = s.spawn(|| top(data, scope, Dimension::Model, TOP_MODELS, scope_tokens));
+        let projects = s.spawn(|| top(data, scope, Dimension::Project, TOP_PROJECTS, scope_tokens));
+        let providers = s.spawn(|| providers(data, scope));
+        let calendar = s.spawn(|| calendar(data, scope));
+        let hours = hours(data, scope)?;
+        let (apps, daily_points) = joined(trend)?;
+        let (kpis, models, projects) = (joined(kpis)?, joined(models)?, joined(projects)?);
+        Ok(Overview {
+            highlights: highlights(
+                &daily_points,
+                &models,
+                &projects,
+                &kpis.cost_nano_usd,
+                net_cache_benefit_nano_usd(current),
+            ),
+            kpis,
+            composition: composition(current),
+            apps,
+            providers: joined(providers)?,
+            daily: daily_points,
+            models,
+            projects,
+            calendar: joined(calendar)?,
+            hours,
+        })
     })
 }

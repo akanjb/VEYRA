@@ -2,6 +2,7 @@
 //! Every number comes from the analytics engine (ADR-008).
 
 use std::collections::BTreeMap;
+use std::thread;
 
 use veyra_analytics::concentration::share;
 use veyra_analytics::dimension::{Dimension, DimensionValue};
@@ -11,7 +12,7 @@ use veyra_analytics::query::TimeGrain;
 
 use super::kpis::token_accuracy;
 use super::rankings::{Labeller, RowLabel};
-use super::{evaluated, local_date, measures};
+use super::{evaluated, joined, local_date, measures};
 use crate::DataServices;
 use crate::dto::{Labelled, Matrix, ModelLane, ModelRow, Models, ShareDay};
 use crate::error::ApiError;
@@ -170,78 +171,88 @@ pub(crate) fn models(data: &DataServices, scope: &Resolved) -> Result<Models, Ap
         .iter()
         .map(|p| local_date(p.start, &scope.time_zone))
         .collect::<Result<Vec<_>, _>>()?;
-    let (providers, provider_share) = provider_share(data, scope, &dates)?;
-
     let model_labels = Labeller::new(data, Dimension::Model)?;
-    let model_groups = grouped(data, scope, model_labels.group_by(), TimeGrain::Day)?;
-    let leaderboard: Vec<ModelRow> = model_groups
-        .iter()
-        .map(|g| model_row(data, &model_labels, g, &dates))
-        .collect();
-    let top_models: Vec<&GroupResult> = model_groups.iter().take(TOP_MODELS).collect();
-
-    let app_labels = Labeller::new(data, Dimension::App)?;
-    let app_groups = grouped(data, scope, vec![Dimension::App], TimeGrain::Total)?;
-    let apps: Vec<(DimensionValue, Labelled)> = app_groups
-        .iter()
-        .map(|g| {
-            (
-                g.key.first().cloned().flatten(),
-                labelled(app_labels.label(data, g)),
+    thread::scope(|s| {
+        let share = s.spawn(|| provider_share(data, scope, &dates));
+        let model_groups =
+            s.spawn(|| grouped(data, scope, model_labels.group_by(), TimeGrain::Day));
+        let app_groups = s.spawn(|| grouped(data, scope, vec![Dimension::App], TimeGrain::Total));
+        let provider_groups =
+            s.spawn(|| grouped(data, scope, vec![Dimension::Provider], TimeGrain::Total));
+        let provider_cells = s.spawn(|| {
+            grouped(
+                data,
+                scope,
+                vec![Dimension::Provider, Dimension::App],
+                TimeGrain::Total,
             )
-        })
-        .collect();
+        });
+        let model_cells = grouped(
+            data,
+            scope,
+            vec![Dimension::Provider, Dimension::Model, Dimension::App],
+            TimeGrain::Total,
+        )?;
+        let (providers, provider_share) = joined(share)?;
+        let model_groups = joined(model_groups)?;
+        let leaderboard: Vec<ModelRow> = model_groups
+            .iter()
+            .map(|g| model_row(data, &model_labels, g, &dates))
+            .collect();
+        let top_models: Vec<&GroupResult> = model_groups.iter().take(TOP_MODELS).collect();
 
-    let provider_labels = Labeller::new(data, Dimension::Provider)?;
-    let provider_rows = grouped(data, scope, vec![Dimension::Provider], TimeGrain::Total)?
-        .iter()
-        .map(|g| (g.key.clone(), labelled(provider_labels.label(data, g))))
-        .collect();
-    let provider_cells = grouped(
-        data,
-        scope,
-        vec![Dimension::Provider, Dimension::App],
-        TimeGrain::Total,
-    )?;
-    let model_rows = top_models
-        .iter()
-        .map(|g| (g.key.clone(), labelled(model_labels.label(data, g))))
-        .collect();
-    let model_cells = grouped(
-        data,
-        scope,
-        vec![Dimension::Provider, Dimension::Model, Dimension::App],
-        TimeGrain::Total,
-    )?;
-
-    Ok(Models {
-        accuracy: token_accuracy(&daily.totals),
-        providers,
-        provider_share,
-        leaderboard,
-        provider_by_app: matrix(provider_rows, apps.clone(), &provider_cells, |g| {
-            (g.key[..1].to_vec(), g.key.get(1).cloned().flatten())
-        }),
-        model_by_app: matrix(model_rows, apps.clone(), &model_cells, |g| {
-            (g.key[..2].to_vec(), g.key.get(2).cloned().flatten())
-        }),
-        apps: apps.into_iter().map(|(_, l)| l).collect(),
-        timeline: top_models
+        let app_labels = Labeller::new(data, Dimension::App)?;
+        let app_groups = joined(app_groups)?;
+        let apps: Vec<(DimensionValue, Labelled)> = app_groups
             .iter()
             .map(|g| {
-                let label = model_labels.label(data, g);
-                ModelLane {
-                    key: label.key,
-                    label: label.label,
-                    provider: label.provider,
-                    tokens: g.series.iter().map(|p| measures(&p.sums).tokens).collect(),
-                }
+                (
+                    g.key.first().cloned().flatten(),
+                    labelled(app_labels.label(data, g)),
+                )
             })
-            .collect(),
-        dates,
-        rate_definition: MetricId::CostPerMillionOutputTokens
-            .definition()
-            .description
-            .to_owned(),
+            .collect();
+
+        let provider_labels = Labeller::new(data, Dimension::Provider)?;
+        let provider_rows = joined(provider_groups)?
+            .iter()
+            .map(|g| (g.key.clone(), labelled(provider_labels.label(data, g))))
+            .collect();
+        let provider_cells = joined(provider_cells)?;
+        let model_rows = top_models
+            .iter()
+            .map(|g| (g.key.clone(), labelled(model_labels.label(data, g))))
+            .collect();
+
+        Ok(Models {
+            accuracy: token_accuracy(&daily.totals),
+            providers,
+            provider_share,
+            leaderboard,
+            provider_by_app: matrix(provider_rows, apps.clone(), &provider_cells, |g| {
+                (g.key[..1].to_vec(), g.key.get(1).cloned().flatten())
+            }),
+            model_by_app: matrix(model_rows, apps.clone(), &model_cells, |g| {
+                (g.key[..2].to_vec(), g.key.get(2).cloned().flatten())
+            }),
+            apps: apps.into_iter().map(|(_, l)| l).collect(),
+            timeline: top_models
+                .iter()
+                .map(|g| {
+                    let label = model_labels.label(data, g);
+                    ModelLane {
+                        key: label.key,
+                        label: label.label,
+                        provider: label.provider,
+                        tokens: g.series.iter().map(|p| measures(&p.sums).tokens).collect(),
+                    }
+                })
+                .collect(),
+            dates: dates.clone(),
+            rate_definition: MetricId::CostPerMillionOutputTokens
+                .definition()
+                .description
+                .to_owned(),
+        })
     })
 }

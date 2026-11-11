@@ -24,7 +24,7 @@ mod write;
 
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard, TryLockError};
 
 use rusqlite::{Connection, Row, Transaction};
 use veyra_domain::source::PortError;
@@ -36,8 +36,9 @@ pub use sources::{RunStats, StoredCheckpoint};
 pub use veyra_domain::source::SourceRecord;
 pub use write::{FileCheckpoint, IngestBatch, PricedEvent, WriteSummary};
 
-/// Number of read-only connections serving analytics.
-const READERS: usize = 2;
+/// Number of read-only connections serving analytics. A dashboard page runs its
+/// independent reads at the same time, each on its own connection.
+const READERS: usize = 4;
 
 /// The Veyra database.
 #[derive(Debug)]
@@ -167,13 +168,22 @@ impl Store {
         Ok(result)
     }
 
-    /// Runs `f` on a read-only connection.
+    /// Runs `f` on a read-only connection: the first free one, starting from the next in
+    /// turn, or else the next in turn once it is free.
     fn with_reader<T>(
         &self,
         f: impl FnOnce(&Connection) -> Result<T, StoreError>,
     ) -> Result<T, StoreError> {
-        let index = self.next_reader.fetch_add(1, Ordering::Relaxed) % self.readers.len();
-        let reader = self.readers[index]
+        let count = self.readers.len();
+        let first = self.next_reader.fetch_add(1, Ordering::Relaxed) % count;
+        for offset in 0..count {
+            match self.readers[(first + offset) % count].try_lock() {
+                Ok(reader) => return f(&reader),
+                Err(TryLockError::WouldBlock) => {}
+                Err(TryLockError::Poisoned(_)) => return Err(StoreError::Poisoned),
+            }
+        }
+        let reader = self.readers[first]
             .lock()
             .map_err(|_| StoreError::Poisoned)?;
         f(&reader)

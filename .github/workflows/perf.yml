@@ -1,9 +1,11 @@
 name: Performance
 
 # Data-core performance budgets (PRD NFR-06) on a clean runner: ingests one million
-# synthetic events and fails if any overview query's p95 exceeds 150 ms, then checks
-# that end-to-end ingestion of a Claude Code log reaches 35,000 events/s. Manual and
-# weekly only, to keep private-repository minutes low (ADR-021).
+# synthetic events (or the number given) and fails if the p95 of any overview query or
+# dashboard page exceeds its budget (150 ms up to one million events, 400 ms above,
+# ADR-029), then checks that end-to-end ingestion of a Claude Code log reaches
+# 35,000 events/s. Manual and weekly only, to keep private-repository minutes low
+# (ADR-021).
 
 on:
   workflow_dispatch:
