@@ -4,6 +4,8 @@ import type { AppInfoRequest } from "./AppInfoRequest";
 import type { Cache } from "./Cache";
 import type { CacheRequest } from "./CacheRequest";
 import type { ListSourcesRequest } from "./ListSourcesRequest";
+import type { Models } from "./Models";
+import type { ModelsRequest } from "./ModelsRequest";
 import type { Overview } from "./Overview";
 import type { OverviewRequest } from "./OverviewRequest";
 import type { RescanAccepted } from "./RescanAccepted";
@@ -27,6 +29,7 @@ export interface CommandMap {
   get_overview: { request: OverviewRequest; response: Overview };
   get_usage: { request: UsageRequest; response: Usage };
   get_cache: { request: CacheRequest; response: Cache };
+  get_models: { request: ModelsRequest; response: Models };
   list_sessions: { request: SessionsRequest; response: SessionList };
   get_session: { request: SessionRequest; response: SessionDetail };
 }
@@ -41,6 +44,7 @@ export const COMMAND_NAMES = [
   "get_overview",
   "get_usage",
   "get_cache",
+  "get_models",
   "list_sessions",
   "get_session",
 ] as const satisfies readonly CommandName[];

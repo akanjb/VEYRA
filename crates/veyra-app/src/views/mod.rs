@@ -3,6 +3,7 @@
 
 pub(crate) mod cache;
 mod kpis;
+pub(crate) mod models;
 pub(crate) mod overview;
 mod rankings;
 pub(crate) mod sessions;

@@ -17,8 +17,8 @@ use veyra_analytics::engine::evaluate;
 use veyra_analytics::metrics::{MetricId, MetricValue};
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_app::dto::{
-    CacheRequest, Comparison, Labelled, OverviewRequest, Scope, ScopeFilters, SessionRequest,
-    SessionSort, SessionsRequest, UsageRequest,
+    CacheRequest, Comparison, Labelled, ModelsRequest, OverviewRequest, Scope, ScopeFilters,
+    SessionRequest, SessionSort, SessionsRequest, UsageRequest,
 };
 use veyra_app::{Api, AppMetadata, DataServices, DisplayNames};
 use veyra_domain::source::{DiscoveryEnv, IngestControl};
@@ -379,5 +379,65 @@ fn cache_numbers_equal_the_metric_engine_and_add_up() {
     assert_eq!(
         cache.inefficient_definition,
         veyra_analytics::metrics::CACHE_LOSS_DEFINITION
+    );
+}
+
+#[test]
+fn models_numbers_add_up_to_the_scope() {
+    let data = ingested();
+    let models = api(&data.store)
+        .get_models(ModelsRequest { scope: scope() })
+        .unwrap();
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "comparing with f64 engine values"
+    )]
+    let as_f64 = |n: u64| Some(n as f64);
+    let tokens = engine_value(&data.store, MetricId::TotalTokens);
+
+    // The leaderboard covers every token once, largest model first.
+    let ranked: Vec<u64> = models
+        .leaderboard
+        .iter()
+        .map(|m| m.measures.tokens)
+        .collect();
+    assert_eq!(as_f64(ranked.iter().sum()), tokens);
+    assert!(ranked.windows(2).all(|w| w[0] >= w[1]));
+    assert!(
+        models
+            .leaderboard
+            .iter()
+            .all(|m| m.first_day == "2026-11-08")
+    );
+    assert!(
+        models.leaderboard.iter().all(
+            |m| m.provider_label == "Anthropic" && m.cost_per_million_output_nano_usd.is_some()
+        )
+    );
+
+    // Each day's provider shares add up to one (or are all zero without tokens).
+    for day in &models.provider_share {
+        let total: f64 = day.shares.iter().sum();
+        assert!(total == 0.0 || (total - 1.0).abs() < 1e-9, "{}", day.date);
+    }
+
+    // Both matrices cover every token; the timeline covers the top models' tokens.
+    for matrix in [&models.provider_by_app, &models.model_by_app] {
+        let cells: u64 = matrix.values.iter().flatten().sum();
+        assert_eq!(as_f64(cells), tokens);
+        assert!(
+            matrix
+                .values
+                .iter()
+                .all(|row| row.len() == matrix.columns.len())
+        );
+    }
+    let lanes: u64 = models.timeline.iter().flat_map(|l| l.tokens.iter()).sum();
+    assert_eq!(as_f64(lanes), tokens);
+    assert_eq!(
+        models.rate_definition,
+        MetricId::CostPerMillionOutputTokens
+            .definition()
+            .description
     );
 }

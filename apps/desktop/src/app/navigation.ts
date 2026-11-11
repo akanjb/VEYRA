@@ -5,6 +5,7 @@
 import {
   Activity,
   ChartColumnStacked,
+  Cpu,
   DatabaseZap,
   Database,
   LayoutDashboard,
@@ -12,7 +13,7 @@ import {
 } from "lucide-react";
 
 export interface Page {
-  to: "/" | "/usage" | "/cache" | "/sessions" | "/sources";
+  to: "/" | "/usage" | "/cache" | "/models" | "/sessions" | "/sources";
   title: string;
   /** The question the page answers. */
   purpose: string;
@@ -53,6 +54,15 @@ export const PAGES: readonly Page[] = [
     section: "Analyze",
     icon: DatabaseZap,
     shortcut: "c",
+    scoped: true,
+  },
+  {
+    to: "/models",
+    title: "Models & Providers",
+    purpose: "Which models do I use and how do they compare?",
+    section: "Analyze",
+    icon: Cpu,
+    shortcut: "m",
     scoped: true,
   },
   {

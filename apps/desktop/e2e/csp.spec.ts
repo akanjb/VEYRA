@@ -58,6 +58,13 @@ test("every page and overlay runs without a CSP violation", async ({ page }) => 
 
   await page
     .getByRole("navigation", { name: "Pages" })
+    .getByRole("link", { name: "Models & Providers" })
+    .click();
+  await expect(page.getByRole("heading", { name: "Model leaderboard" })).toBeVisible();
+  await hoverChart(page);
+
+  await page
+    .getByRole("navigation", { name: "Pages" })
     .getByRole("link", { name: "Sessions" })
     .click();
   await page.locator("tbody tr").first().click();

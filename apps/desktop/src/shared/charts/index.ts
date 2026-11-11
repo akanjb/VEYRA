@@ -18,3 +18,5 @@ export { Histogram, HistogramTable, binLabel, type HistogramBin } from "./histog
 export { Pareto, ParetoTable } from "./pareto";
 export { GroupedBars, GroupedTable, type GroupSeries } from "./grouped";
 export { MirroredTable, MirroredTrend, type MirroredSeries } from "./mirrored";
+export { HeatTable, type HeatMatrix } from "./heat-table";
+export { Lanes, LanesTable, type Lane } from "./lanes";

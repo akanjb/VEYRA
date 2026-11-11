@@ -5,6 +5,10 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Models & Providers page.**
+  - Command `get_models`: each provider's daily share of tokens; a leaderboard of every model with tokens, requests, cost, cost per million output tokens, cache hit ratio, price coverage and first and last day used; tokens per provider and per model in each application; daily tokens of the most used models.
+  - Comparison of two to four models, one bar chart per measure (no radar charts).
+  - Chart primitives: swimlanes and a shaded matrix table.
 - **Cache page.**
   - Command `get_cache`: net cache benefit, gross saving, write overhead, hit ratio and reuse with comparisons, and the share of tokens the money figures cover; cache reads and writes per day; hit ratio by model and by project; cache writes per lifetime next to reads; the sessions whose cache writes cost more than their reads saved.
   - Sessions can be ordered by cache writes.

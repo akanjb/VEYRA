@@ -8,9 +8,10 @@ use veyra_domain::source::{ConnectorDescriptor, IngestControl, SourceRepository}
 use veyra_domain::time::UtcMillis;
 
 use crate::dto::{
-    AppInfo, AppInfoRequest, BuildProfile, Cache, CacheRequest, ListSourcesRequest, Overview,
-    OverviewRequest, RescanAccepted, RescanRequest, SessionDetail, SessionList, SessionRequest,
-    SessionsRequest, SetSourceEnabledRequest, SourceList, SourceSummary, Usage, UsageRequest,
+    AppInfo, AppInfoRequest, BuildProfile, Cache, CacheRequest, ListSourcesRequest, Models,
+    ModelsRequest, Overview, OverviewRequest, RescanAccepted, RescanRequest, SessionDetail,
+    SessionList, SessionRequest, SessionsRequest, SetSourceEnabledRequest, SourceList,
+    SourceSummary, Usage, UsageRequest,
 };
 use crate::error::ApiError;
 use crate::names::DisplayNames;
@@ -183,6 +184,18 @@ impl Api {
         let CacheRequest { scope: requested } = request;
         let resolved = scope::resolve(&requested)?;
         views::cache::cache(self.data()?, &resolved)
+    }
+
+    /// The Models & Providers page for a scope: provider shares over time, the model
+    /// leaderboard, provider and model use per application, and when each model was used.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn get_models(&self, request: ModelsRequest) -> Result<Models, ApiError> {
+        let ModelsRequest { scope: requested } = request;
+        let resolved = scope::resolve(&requested)?;
+        views::models::models(self.data()?, &resolved)
     }
 
     /// One page of sessions with activity in the scope, in the requested order.
