@@ -116,7 +116,8 @@ pub trait LabelReader {
 /// of assumptions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PricingUse {
-    pub provider: String,
+    /// `None` when the source did not say which provider served the request.
+    pub provider: Option<String>,
     /// The canonical model id, or the reported name when the model is unknown.
     pub model: Option<String>,
     /// The price rule applied; `None` when no rule covers the model.

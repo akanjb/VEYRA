@@ -311,6 +311,7 @@ fn pricing_uses_group_events_by_rule_and_outcome() {
     assert_eq!(priced_use.tally.cost, NanoUsd(5_000_000_000));
     assert_eq!(unpriced.status, CostStatus::UnpricedModel);
     assert_eq!(unpriced.model.as_deref(), Some("mystery-1"));
+    assert_eq!(unpriced.provider.as_deref(), Some("anthropic"));
     assert_eq!(unpriced.rule_id, None);
     assert_eq!(unpriced.tally.tokens, 550);
     assert_eq!(unpriced.tally.cost, NanoUsd(0));

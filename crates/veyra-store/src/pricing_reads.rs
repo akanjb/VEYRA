@@ -18,7 +18,7 @@ fn count(value: i64, what: &str) -> Result<u64, StoreError> {
 fn pricing_use(row: &Row<'_>) -> Result<PricingUse, StoreError> {
     let status: String = row.get(3)?;
     Ok(PricingUse {
-        provider: row.get::<_, Option<String>>(0)?.unwrap_or_default(),
+        provider: row.get(0)?,
         model: row.get(1)?,
         rule_id: row.get(2)?,
         status: CostStatus::parse(&status)

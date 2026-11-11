@@ -168,7 +168,8 @@ pub struct RuleUse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct UnpricedModel {
-    pub provider: Labelled,
+    /// `None` when the source did not name the provider.
+    pub provider: Option<Labelled>,
     /// The model as reported; `None` when the source did not name one.
     pub model: Option<Labelled>,
     pub tally: PricingTally,

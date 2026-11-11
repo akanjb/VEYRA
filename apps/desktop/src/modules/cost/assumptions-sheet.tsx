@@ -115,7 +115,7 @@ function UnpricedItem({ model }: { model: UnpricedModel }) {
     <li className="flex flex-wrap items-baseline justify-between gap-x-3">
       <span className="min-w-0 text-sm break-words">
         {model.model?.label ?? "Unnamed model"}{" "}
-        <span className="text-xs text-muted">{model.provider.label}</span>
+        <span className="text-xs text-muted">{model.provider?.label ?? "Unknown provider"}</span>
       </span>
       <span className="text-xs text-muted" data-numeric>
         {MEASURE.tokens.format(model.tally.tokens)} tokens
@@ -161,7 +161,10 @@ function AssumptionsBody({ data }: { data: CostAssumptions }) {
         <Section title="Without a published price">
           <List>
             {data.unpriced.map((model) => (
-              <UnpricedItem key={`${model.provider.key}/${model.model?.key ?? ""}`} model={model} />
+              <UnpricedItem
+                key={`${model.provider?.key ?? ""}/${model.model?.key ?? ""}`}
+                model={model}
+              />
             ))}
           </List>
         </Section>

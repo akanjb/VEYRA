@@ -5,7 +5,11 @@ import type { PricingTally } from "./PricingTally";
 /**
  * A model with no published price; its tokens add nothing to the cost.
  */
-export type UnpricedModel = { provider: Labelled, 
+export type UnpricedModel = { 
+/**
+ * `None` when the source did not name the provider.
+ */
+provider: Labelled | null, 
 /**
  * The model as reported; `None` when the source did not name one.
  */

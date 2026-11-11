@@ -145,7 +145,7 @@ fn rule_use(
 
 fn unpriced(model: Unpriced, names: &DisplayNames) -> UnpricedModel {
     UnpricedModel {
-        provider: names.label_provider(model.provider),
+        provider: model.provider.map(|p| names.label_provider(p)),
         model: model.model.map(|m| names.label_model(m)),
         tally: tally(model.tally),
     }

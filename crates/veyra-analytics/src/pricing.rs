@@ -34,7 +34,7 @@ pub fn is_stale(verified_at: CivilDate, now: UtcMillis) -> bool {
 /// A model with no price rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unpriced {
-    pub provider: String,
+    pub provider: Option<String>,
     pub model: Option<String>,
     pub tally: Tally,
 }
@@ -141,7 +141,7 @@ mod tests {
             assumptions.insert(*a);
         }
         PricingUse {
-            provider: "acme".to_owned(),
+            provider: Some("acme".to_owned()),
             model: Some(model.to_owned()),
             rule_id: rule.map(str::to_owned),
             status,

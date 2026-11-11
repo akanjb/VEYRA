@@ -29,7 +29,9 @@ function FramingRow({ data, scope }: { data: Cost; scope: Scope }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <ValueFraming data={data} />
-      <AssumptionsButton scope={scope} />
+      <div className="ml-auto">
+        <AssumptionsButton scope={scope} />
+      </div>
     </div>
   );
 }
