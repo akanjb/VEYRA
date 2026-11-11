@@ -3,6 +3,7 @@
 use veyra_domain::time::UtcMillis;
 
 use crate::dimension::{Dimension, DimensionValue, Filters};
+use crate::sizes::{SessionSize, SizeRow};
 use crate::sums::BaseSums;
 
 /// A request for additive sums over `[from, until)`, grouped by dimensions and,
@@ -40,7 +41,7 @@ pub trait BaseSumsReader {
 
 /// Events in `[from, until)` matching the filters, for activity metrics.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EventTimesQuery {
+pub struct RangeQuery {
     pub from: UtcMillis,
     pub until: UtcMillis,
     pub filters: Filters,
@@ -53,7 +54,24 @@ pub trait ActivityReader {
     ///
     /// # Errors
     /// Returns [`ReadError`] when the underlying store fails.
-    fn event_times(&self, query: &EventTimesQuery) -> Result<Vec<(i64, UtcMillis)>, ReadError>;
+    fn event_times(&self, query: &RangeQuery) -> Result<Vec<(i64, UtcMillis)>, ReadError>;
+}
+
+/// Request and session sizes (implemented by the data layer).
+pub trait SizeReader {
+    /// Request counts per 15-minute bucket and size bin, for events in `[from, until)`
+    /// that record individual requests.
+    ///
+    /// # Errors
+    /// Returns [`ReadError`] when the underlying store fails.
+    fn request_sizes(&self, query: &RangeQuery) -> Result<Vec<SizeRow>, ReadError>;
+
+    /// Each session's tokens over its events in `[from, until)`, with the time of the
+    /// first of them. Events without a session are omitted.
+    ///
+    /// # Errors
+    /// Returns [`ReadError`] when the underlying store fails.
+    fn session_sizes(&self, query: &RangeQuery) -> Result<Vec<SessionSize>, ReadError>;
 }
 
 /// A project as stored: its id (the analytics dimension value) and normalised path.

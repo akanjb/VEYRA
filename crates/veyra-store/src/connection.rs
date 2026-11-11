@@ -3,7 +3,9 @@
 use std::path::Path;
 use std::time::Duration;
 
+use rusqlite::functions::FunctionFlags;
 use rusqlite::{Connection, OpenFlags};
+use veyra_analytics::sizes::size_bin;
 
 use crate::StoreError;
 
@@ -26,7 +28,25 @@ pub fn open_writer(path: &Path) -> Result<Connection, StoreError> {
     connection.pragma_update(None, "foreign_keys", "ON")?;
     connection.pragma_update(None, "temp_store", "MEMORY")?;
     connection.pragma_update(None, "cache_size", WRITER_CACHE_KIB)?;
+    register_functions(&connection)?;
     Ok(connection)
+}
+
+/// SQL name of [`size_bin`], used by the size rollups and their migration.
+pub const SIZE_BIN_FUNCTION: &str = "veyra_size_bin";
+
+/// Registers the Rust functions the writer's SQL calls, so each rule has one definition.
+pub(crate) fn register_functions(connection: &Connection) -> Result<(), StoreError> {
+    connection.create_scalar_function(
+        SIZE_BIN_FUNCTION,
+        1,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        |context| {
+            let tokens = u64::try_from(context.get::<i64>(0)?).unwrap_or(0);
+            Ok(i64::from(size_bin(tokens)))
+        },
+    )?;
+    Ok(())
 }
 
 pub fn open_reader(path: &Path) -> Result<Connection, StoreError> {

@@ -10,7 +10,7 @@ use veyra_analytics::composition::AccuracyComposition;
 use veyra_analytics::dimension::Dimension;
 use veyra_analytics::engine::{GroupResult, evaluate};
 use veyra_analytics::metrics::{MetricId, MetricValue, delta};
-use veyra_analytics::port::EventTimesQuery;
+use veyra_analytics::port::RangeQuery;
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_analytics::sums::BaseSums;
 use veyra_analytics::top_n::top_n;
@@ -68,7 +68,7 @@ fn activity_of(
 ) -> Result<Activity, ApiError> {
     let times = data
         .analytics
-        .event_times(&EventTimesQuery {
+        .event_times(&RangeQuery {
             from: period.from(),
             until: period.until(),
             filters: scope.filters.clone(),

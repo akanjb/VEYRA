@@ -559,8 +559,9 @@ mod ingestion {
 mod session_reads {
     use veyra_analytics::activity::{DEFAULT_IDLE_THRESHOLD_MS, activity};
     use veyra_analytics::dimension::{Dimension, Filters};
-    use veyra_analytics::port::{ActivityReader, EventTimesQuery, LabelReader};
+    use veyra_analytics::port::{ActivityReader, LabelReader, RangeQuery, SizeReader};
     use veyra_analytics::sessions::{SessionQuery, SessionReader, SessionSort};
+    use veyra_analytics::sizes::{SizeHistogram, size_bin};
     use veyra_domain::identity::ModelId;
     use veyra_domain::time::UtcMillis;
     use veyra_domain::tooling::{ToolCall, ToolOutcome};
@@ -714,7 +715,7 @@ mod session_reads {
         let db = seeded();
         let times = db
             .store
-            .event_times(&EventTimesQuery {
+            .event_times(&RangeQuery {
                 from: UtcMillis(NOV_8),
                 until: UtcMillis(NOV_8 + 24 * 60 * MIN),
                 filters: Filters::new(),
@@ -738,5 +739,83 @@ mod session_reads {
             .map(|p| p.path)
             .collect();
         assert_eq!(paths, ["/work/other", "/work/veyra"]);
+    }
+
+    fn day() -> RangeQuery {
+        RangeQuery {
+            from: UtcMillis(NOV_8),
+            until: UtcMillis(NOV_8 + 24 * 60 * MIN),
+            filters: Filters::new(),
+        }
+    }
+
+    fn histogram(rows: &[veyra_analytics::sizes::SizeRow]) -> Vec<(u32, u64)> {
+        let mut histogram = SizeHistogram::default();
+        for row in rows {
+            histogram.add(row.bin, row.requests);
+        }
+        histogram.bins().collect()
+    }
+
+    fn expected(sizes: &[u64]) -> Vec<(u32, u64)> {
+        let mut histogram = SizeHistogram::default();
+        for size in sizes {
+            histogram.add(size_bin(*size), 1);
+        }
+        histogram.bins().collect()
+    }
+
+    #[test]
+    fn request_sizes_count_each_request_in_its_size_bin() {
+        let db = seeded();
+        let all = db.store.request_sizes(&day()).unwrap();
+        assert_eq!(histogram(&all), expected(&[110, 210, 310, 1_050, 5_500]));
+        let opus = RangeQuery {
+            filters: Filters::new().with(Dimension::Model, [Some("claude-opus-5-5".to_owned())]),
+            ..day()
+        };
+        assert_eq!(
+            histogram(&db.store.request_sizes(&opus).unwrap()),
+            expected(&[1_050])
+        );
+    }
+
+    #[test]
+    fn the_migration_backfill_matches_the_rebuild() {
+        let db = seeded();
+        let rebuilt = db.store.request_sizes(&day()).unwrap();
+        let connection = rusqlite::Connection::open(db.path().join("veyra.db")).unwrap();
+        connection
+            .create_scalar_function(
+                "veyra_size_bin",
+                1,
+                rusqlite::functions::FunctionFlags::SQLITE_UTF8,
+                |context| {
+                    let tokens = u64::try_from(context.get::<i64>(0)?).unwrap_or(0);
+                    Ok(i64::from(size_bin(tokens)))
+                },
+            )
+            .unwrap();
+        let migration = include_str!("../migrations/0004_request_sizes.sql");
+        let backfill = &migration[migration.find("INSERT INTO").unwrap()..];
+        connection
+            .execute_batch(&format!("DELETE FROM rollup_15m_sizes; {backfill}"))
+            .unwrap();
+        drop(connection);
+        assert_eq!(db.store.request_sizes(&day()).unwrap(), rebuilt);
+    }
+
+    #[test]
+    fn session_sizes_total_each_sessions_tokens() {
+        let db = seeded();
+        let mut sizes: Vec<(u64, i64)> = db
+            .store
+            .session_sizes(&day())
+            .unwrap()
+            .into_iter()
+            .map(|s| (s.tokens, s.first_at.0 - NOV_8))
+            .collect();
+        sizes.sort_unstable();
+        assert_eq!(sizes, [(630, 0), (1_050, 3 * MIN), (5_500, 60 * MIN)]);
     }
 }

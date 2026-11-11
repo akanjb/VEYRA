@@ -129,10 +129,14 @@ fn previous_totals(
 /// The start of the local period containing `bucket`, found by binary search over the
 /// period boundaries. Exact because every boundary is a 15-minute bucket boundary.
 fn containing_period(starts: &[UtcMillis], bucket: UtcMillis) -> i64 {
-    let index = starts.partition_point(|start| *start <= bucket);
-    starts
-        .get(index.saturating_sub(1))
-        .map_or(bucket.0, |start| start.0)
+    period_index(starts, bucket).map_or(bucket.0, |index| starts[index].0)
+}
+
+/// The index of the local period (in ascending `starts`) that contains `at`; `None`
+/// before the first period.
+#[must_use]
+pub fn period_index(starts: &[UtcMillis], at: UtcMillis) -> Option<usize> {
+    starts.partition_point(|start| *start <= at).checked_sub(1)
 }
 
 fn fill(starts: &[UtcMillis], values: &BTreeMap<i64, BaseSums>) -> Vec<SeriesPoint> {
@@ -173,8 +177,12 @@ fn period_start(at: UtcMillis, grain: TimeGrain, tz: &TimeZone) -> Result<UtcMil
     Ok(millis(start.timestamp()))
 }
 
-/// Every local period start overlapping the query period, in order.
-fn period_starts(
+/// Every local period start overlapping the query period, in order (empty for
+/// [`TimeGrain::Total`]).
+///
+/// # Errors
+/// Returns [`jiff::Error`] for instants or dates outside the supported range.
+pub fn period_starts(
     period: &Period,
     grain: TimeGrain,
     tz: &TimeZone,

@@ -13,6 +13,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_initial.sql"),
     include_str!("../migrations/0002_ingestion.sql"),
     include_str!("../migrations/0003_write_path.sql"),
+    include_str!("../migrations/0004_request_sizes.sql"),
 ];
 
 /// The schema version this build creates and understands.
@@ -48,10 +49,18 @@ mod tests {
 
     use super::{LATEST_SCHEMA_VERSION, migrate};
     use crate::StoreError;
+    use crate::connection::register_functions;
+
+    /// An in-memory database with the functions migrations call.
+    fn memory() -> Connection {
+        let connection = Connection::open_in_memory().unwrap();
+        register_functions(&connection).unwrap();
+        connection
+    }
 
     #[test]
     fn migrates_a_fresh_database_and_is_idempotent() {
-        let mut connection = Connection::open_in_memory().unwrap();
+        let mut connection = memory();
         assert_eq!(migrate(&mut connection).unwrap(), LATEST_SCHEMA_VERSION);
         assert_eq!(migrate(&mut connection).unwrap(), LATEST_SCHEMA_VERSION);
         let tables: i64 = connection
@@ -67,7 +76,7 @@ mod tests {
 
     #[test]
     fn upgrades_a_version_one_database_in_place() {
-        let mut connection = Connection::open_in_memory().unwrap();
+        let mut connection = memory();
         connection.execute_batch(super::MIGRATIONS[0]).unwrap();
         connection.pragma_update(None, "user_version", 1).unwrap();
         connection
@@ -99,7 +108,7 @@ mod tests {
 
     #[test]
     fn rekeys_tool_calls_without_losing_them() {
-        let mut connection = Connection::open_in_memory().unwrap();
+        let mut connection = memory();
         connection.execute_batch(super::MIGRATIONS[0]).unwrap();
         connection.execute_batch(super::MIGRATIONS[1]).unwrap();
         connection.pragma_update(None, "user_version", 2).unwrap();
@@ -148,7 +157,7 @@ mod tests {
 
     #[test]
     fn refuses_databases_from_newer_versions() {
-        let mut connection = Connection::open_in_memory().unwrap();
+        let mut connection = memory();
         connection
             .pragma_update(None, "user_version", LATEST_SCHEMA_VERSION + 1)
             .unwrap();

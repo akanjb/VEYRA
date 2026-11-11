@@ -7,9 +7,7 @@ use std::collections::HashMap;
 use rusqlite::types::Value;
 use rusqlite::{Connection, Row, params_from_iter};
 use veyra_analytics::dimension::Filters;
-use veyra_analytics::port::{
-    ActivityReader, EventTimesQuery, LabelReader, ProjectLabel, ReadError,
-};
+use veyra_analytics::port::{ActivityReader, LabelReader, ProjectLabel, RangeQuery, ReadError};
 use veyra_analytics::sessions::{
     SessionDetail, SessionEvent, SessionPage, SessionQuery, SessionReader, SessionSort,
     SessionSummary, ToolUse,
@@ -35,7 +33,7 @@ fn read_error(error: &StoreError) -> ReadError {
 
 /// Clauses selecting events (alias `e`) in `[from, until)` that match the filters. The
 /// bucket range uses the index; the timestamp range makes unaligned bounds exact.
-fn event_clauses(
+pub(crate) fn event_clauses(
     from: UtcMillis,
     until: UtcMillis,
     filters: &Filters,
@@ -245,7 +243,7 @@ impl SessionReader for Store {
 }
 
 impl ActivityReader for Store {
-    fn event_times(&self, query: &EventTimesQuery) -> Result<Vec<(i64, UtcMillis)>, ReadError> {
+    fn event_times(&self, query: &RangeQuery) -> Result<Vec<(i64, UtcMillis)>, ReadError> {
         self.with_reader(|connection| {
             let mut values = Vec::new();
             let where_sql =

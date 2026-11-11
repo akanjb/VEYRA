@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use veyra_analytics::activity::{DEFAULT_IDLE_THRESHOLD_MS, session_active_ms};
 use veyra_analytics::composition::AccuracyComposition;
-use veyra_analytics::port::EventTimesQuery;
+use veyra_analytics::port::RangeQuery;
 use veyra_analytics::sessions::{self as reads, SessionQuery, SessionSummary};
 use veyra_domain::time::UtcMillis;
 
@@ -90,7 +90,7 @@ pub(crate) fn list(
     let mut times: HashMap<i64, Vec<UtcMillis>> = HashMap::new();
     for (session, at) in data
         .analytics
-        .event_times(&EventTimesQuery {
+        .event_times(&RangeQuery {
             from: scope.period.from(),
             until: scope.period.until(),
             filters: scope.filters.clone(),

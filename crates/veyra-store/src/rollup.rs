@@ -3,7 +3,8 @@
 //! Rebuilding instead of incrementally adjusting keeps rollups correct by construction:
 //! a bucket's rows are always exactly the aggregation of its events. Three levels exist:
 //! `rollup_15m` (per dimension combination), `rollup_15m_by_dimension` (per value of each
-//! single dimension) and `rollup_15m_totals` (one row per bucket).
+//! single dimension) and `rollup_15m_totals` (one row per bucket). Beside them,
+//! `rollup_15m_sizes` counts requests per size bin (ADR-026).
 //!
 //! Rebuilds are set-based: the batch's affected buckets go into a temporary table and
 //! each level is rebuilt for all of them with one statement.
@@ -14,7 +15,10 @@ use std::sync::LazyLock;
 use rusqlite::Transaction;
 
 use crate::StoreError;
-use crate::sql::{DIMENSIONS, EVENT_SUMS_SELECT, ROLLUP_SUM_COLUMNS, rollup_sums_select};
+use crate::connection::SIZE_BIN_FUNCTION;
+use crate::sql::{
+    DIMENSIONS, EVENT_SUMS_SELECT, EVENT_TOTAL_TOKENS, ROLLUP_SUM_COLUMNS, rollup_sums_select,
+};
 
 /// The affected buckets of the current batch.
 const AFFECTED: &str = "(SELECT bucket_start FROM temp.rollup_affected)";
@@ -64,6 +68,22 @@ static REBUILD_BY_DIMENSION_SQL: LazyLock<Vec<String>> = LazyLock::new(|| {
         .collect()
 });
 
+/// Counts the affected buckets' request-level events per dimension combination and
+/// size bin (ADR-026).
+static REBUILD_SIZES_SQL: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "INSERT INTO rollup_15m_sizes (bucket_start, slot, provider_id, model_id, app_id, \
+         interface, gateway_id, project_id, device_id, size_bin, requests) \
+         SELECT e.bucket_start, ROW_NUMBER() OVER (PARTITION BY e.bucket_start), e.provider_id, \
+         e.model_id, e.app_id, e.interface, e.gateway_id, e.project_id, e.device_id, \
+         {SIZE_BIN_FUNCTION}({EVENT_TOTAL_TOKENS}) AS size_bin, COUNT(*) \
+         FROM usage_events e \
+         WHERE e.bucket_start IN {AFFECTED} AND e.granularity = 'request' \
+         GROUP BY e.bucket_start, e.provider_id, e.model_id, e.app_id, e.interface, \
+         e.gateway_id, e.project_id, e.device_id, size_bin"
+    )
+});
+
 /// Rebuilds every rollup level for the given buckets. Returns the number of buckets.
 pub fn rebuild(
     transaction: &Transaction<'_>,
@@ -81,7 +101,7 @@ pub fn rebuild(
         add.execute([bucket])?;
     }
 
-    for table in ["rollup_15m", "rollup_15m_totals"] {
+    for table in ["rollup_15m", "rollup_15m_totals", "rollup_15m_sizes"] {
         transaction
             .prepare_cached(&format!(
                 "DELETE FROM {table} WHERE bucket_start IN {AFFECTED}"
@@ -103,5 +123,8 @@ pub fn rebuild(
     for sql in REBUILD_BY_DIMENSION_SQL.iter() {
         transaction.prepare_cached(sql)?.execute([])?;
     }
+    transaction
+        .prepare_cached(&REBUILD_SIZES_SQL)?
+        .execute([])?;
     Ok(buckets.len())
 }
