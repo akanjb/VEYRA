@@ -5,6 +5,12 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Cost page and billing settings.**
+  - Command `get_cost`: API-equivalent cost, subscription spend and actual charges as separate tiles with comparisons, never added together; pricing coverage, cost per request and per million output tokens; daily cost with a running total; this period's running cost against the previous one; the month to date, run rate and forecast with budget lines; budgets with month-to-date and forecast states; cost by model, provider, application and project; the most expensive sessions; cost by token kind; effective cost per million output tokens by model; and the change from the previous period by model or project as a waterfall.
+  - Billing entries (subscriptions and charges, once, monthly or yearly, with a currency) and monthly budgets, edited on a new Settings page through `get_billing`, `save_billing_entry`, `delete_billing_entry`, `save_budget` and `delete_budget`. Recurring entries are spread evenly over the days each payment covers; only US dollar entries are totalled (ADR-028).
+  - A test over every generated contract and every dashboard source file fails if any field or line adds different cost kinds together.
+  - Chart primitives: lines with dashed series and threshold lines, a waterfall, 100% stacked bars and a dot plot, each with a table twin; a trend overlay can use its own axis.
+  - Forms show the core's own message when it refuses an input.
 - **Projects pages.**
   - Command `list_projects`: every project with tokens, cost, sessions, active time, top model, last activity and daily tokens; search by name, path or merged folder.
   - Command `get_project`: one project's headline figures, daily trend, model mix, providers, cache benefit and most expensive sessions.

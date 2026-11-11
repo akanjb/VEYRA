@@ -11,11 +11,23 @@ import {
   Database,
   FolderGit2,
   LayoutDashboard,
+  Settings,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
 export interface Page {
-  to: "/" | "/usage" | "/cache" | "/models" | "/activity" | "/projects" | "/sessions" | "/sources";
+  to:
+    | "/"
+    | "/usage"
+    | "/cost"
+    | "/cache"
+    | "/models"
+    | "/activity"
+    | "/projects"
+    | "/sessions"
+    | "/sources"
+    | "/settings";
   title: string;
   /** The question the page answers. */
   purpose: string;
@@ -47,6 +59,15 @@ export const PAGES: readonly Page[] = [
     section: "Analyze",
     icon: ChartColumnStacked,
     shortcut: "u",
+    scoped: true,
+  },
+  {
+    to: "/cost",
+    title: "Cost",
+    purpose: "What does it cost: estimated, actual, subscription?",
+    section: "Analyze",
+    icon: Wallet,
+    shortcut: "d",
     scoped: true,
   },
   {
@@ -101,6 +122,15 @@ export const PAGES: readonly Page[] = [
     section: "System",
     icon: Database,
     shortcut: "h",
+    scoped: false,
+  },
+  {
+    to: "/settings",
+    title: "Settings",
+    purpose: "Subscriptions, charges and budgets.",
+    section: "System",
+    icon: Settings,
+    shortcut: "t",
     scoped: false,
   },
 ];

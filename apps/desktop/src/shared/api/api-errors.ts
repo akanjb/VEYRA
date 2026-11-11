@@ -39,3 +39,12 @@ export function toCallError(command: string, reason: unknown): ApiCallError | Tr
   if (isApiError(reason)) return new ApiCallError(command, reason);
   return new TransportError(command, reason instanceof Error ? reason.message : String(reason));
 }
+
+/**
+ * What to tell the user about a failed command: the core's own message where it gave
+ * one (a refused input, an unknown record), else the error's summary.
+ */
+export function userMessage(error: Error): string {
+  if (error instanceof ApiCallError && "message" in error.error) return error.error.message;
+  return error.message;
+}

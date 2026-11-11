@@ -14,7 +14,8 @@ key: string | null, label: string,
  */
 provider: string | null, measures: Measures, 
 /**
- * Share of the scope's tokens (0–1).
+ * Share (0–1) of the scope's total of the measure the ranking is ordered by: tokens,
+ * or API-equivalent cost on the Cost page.
  */
 share: number, 
 /**

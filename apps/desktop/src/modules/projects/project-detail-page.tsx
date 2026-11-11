@@ -1,14 +1,19 @@
-import type { ProjectDetail, SessionRow } from "@veyra/contracts";
+import type { ProjectDetail } from "@veyra/contracts";
 import { Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { useCommand, useCommandMutation } from "@/shared/api";
-import { DataTable, RankTable, Ranking, useChartTheme } from "@/shared/charts";
+import { RankTable, Ranking, useChartTheme } from "@/shared/charts";
 import { useFilters, withDay } from "@/shared/filters";
-import { MEASURE, MISSING, fmt } from "@/shared/format";
-import { useOpenSession } from "@/shared/links";
+import { MEASURE, fmt } from "@/shared/format";
 import { rankItems } from "@/shared/rankings";
-import { KpiStrip, ModelMixCard, TrendCard, hasUsage } from "@/shared/summary";
+import {
+  ExpensiveSessionsCard,
+  KpiStrip,
+  ModelMixCard,
+  TrendCard,
+  hasUsage,
+} from "@/shared/summary";
 import {
   Button,
   Card,
@@ -93,41 +98,6 @@ function ProvidersCard({ detail }: { detail: ProjectDetail }) {
   );
 }
 
-function SessionsCard({ sessions }: { sessions: readonly SessionRow[] }) {
-  const open = useOpenSession();
-  return (
-    <Card
-      title="Most expensive sessions"
-      definition="This project's sessions with the highest API-equivalent cost in the period."
-      accuracy="estimated"
-    >
-      <DataTable<SessionRow>
-        caption="Most expensive sessions"
-        rows={sessions}
-        rowKey={(r) => String(r.id)}
-        onRowClick={(r) => {
-          open(r.id);
-        }}
-        columns={[
-          { header: "Started", cell: (r) => fmt.dateTime(r.startedAt) },
-          { header: "Models", cell: (r) => r.models.map((m) => m.label).join(", ") || MISSING },
-          {
-            header: "Tokens",
-            numeric: true,
-            cell: (r) => MEASURE.tokens.format(r.measures.tokens),
-          },
-          {
-            header: "Cost",
-            numeric: true,
-            cell: (r) => MEASURE.cost.exact(r.measures.costNanoUsd),
-          },
-          { header: "Active time", numeric: true, cell: (r) => fmt.duration(r.activeMs) },
-        ]}
-      />
-    </Card>
-  );
-}
-
 /** The project's cache benefit and hit ratio. */
 function CacheTiles({ detail }: { detail: ProjectDetail }) {
   return (
@@ -183,7 +153,10 @@ export function ProjectDetailPage() {
             <ProvidersCard detail={data} />
           </CardGrid>
           <CacheTiles detail={data} />
-          <SessionsCard sessions={data.sessions} />
+          <ExpensiveSessionsCard
+            sessions={data.sessions}
+            definition="This project's sessions with the highest API-equivalent cost in the period."
+          />
         </>
       ) : (
         <NoUsageCard title="Project usage" />

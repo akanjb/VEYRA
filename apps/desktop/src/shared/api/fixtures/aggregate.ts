@@ -15,13 +15,29 @@ export interface Flat {
   event: FixtureEvent;
 }
 
+/** Every real UTC offset is a multiple of 15 minutes, so a local day never splits one. */
+const BUCKET_MS = 900_000;
+const formatters = new Map<string, Intl.DateTimeFormat>();
+const days = new Map<string, string>();
+
+/** The local day (`YYYY-MM-DD`) of an instant, with formatters and results cached. */
 export function localDay(at: number, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(at);
+  const key = `${timeZone}|${String(Math.floor(at / BUCKET_MS))}`;
+  const known = days.get(key);
+  if (known !== undefined) return known;
+  let formatter = formatters.get(timeZone);
+  if (formatter === undefined) {
+    formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    formatters.set(timeZone, formatter);
+  }
+  const day = formatter.format(at);
+  days.set(key, day);
+  return day;
 }
 
 export function localHourWeekday(at: number, timeZone: string): { weekday: number; hour: number } {
@@ -118,16 +134,17 @@ export function kpi(value: number | null, previous: number | null, definition: s
   };
 }
 
-/** Top `n` groups by tokens plus an exact "Other". */
+/** Top `n` groups by a measure (tokens unless given) plus an exact "Other". */
 export function rank(
   groups: Map<string, { label: string; provider: string | null; events: FixtureEvent[] }>,
   n: number,
-  scopeTokens: number,
+  scopeTotal: number,
+  pick: (m: Measures) => number = (m) => m.tokens,
 ): RankRow[] {
   const rows = [...groups.entries()]
     .map(([key, g]) => ({ key, ...g, measures: measuresOf(g.events) }))
-    .sort((a, b) => b.measures.tokens - a.measures.tokens);
-  const share = (m: Measures) => (scopeTokens === 0 ? 0 : m.tokens / scopeTokens);
+    .sort((a, b) => pick(b.measures) - pick(a.measures));
+  const share = (m: Measures) => (scopeTotal === 0 ? 0 : pick(m) / scopeTotal);
   const top: RankRow[] = rows.slice(0, n).map((r) => ({
     key: r.key,
     label: r.label,

@@ -42,3 +42,19 @@ export const MEASURE: Readonly<Record<Measure, MeasureMeta>> = {
     estimated: false,
   },
 };
+
+/**
+ * Money the user recorded (subscriptions and charges): exact amounts, so never marked as
+ * estimates. A separate cost kind: never added to API-equivalent cost (ADR-004).
+ */
+export const RECORDED_MONEY = {
+  format: (v: number | null) => usd(v, { compact: true }),
+  exact: (v: number | null) => usd(v),
+} as const;
+
+/** A change in API-equivalent cost with its sign, e.g. "+≈$4.20" or "-≈$1.10". */
+export function signedCost(v: number | null): string {
+  if (v === null) return usd(v);
+  const sign = v > 0 ? "+" : v < 0 ? "-" : "";
+  return sign + usd(Math.abs(v), { estimated: true });
+}

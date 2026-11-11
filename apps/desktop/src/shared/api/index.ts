@@ -1,5 +1,5 @@
 export type { ApiClient, CommandRequest, CommandResponse, Unsubscribe } from "./api-client";
-export { ApiCallError, TransportError, isApiError } from "./api-errors";
+export { ApiCallError, TransportError, isApiError, userMessage } from "./api-errors";
 export { ApiClientProvider, useApiClient } from "./api-context";
 export {
   commandKey,

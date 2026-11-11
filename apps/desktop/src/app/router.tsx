@@ -35,6 +35,12 @@ const usageRoute = createRoute({
   component: lazyRouteComponent(() => import("@/modules/usage"), "UsagePage"),
 });
 
+const costRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/cost",
+  component: lazyRouteComponent(() => import("@/modules/cost"), "CostPage"),
+});
+
 const cacheRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/cache",
@@ -78,6 +84,12 @@ const sessionRoute = createRoute({
   component: lazyRouteComponent(() => import("@/modules/sessions"), "SessionDetailPage"),
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: lazyRouteComponent(() => import("@/modules/settings"), "SettingsPage"),
+});
+
 const sourcesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/sources",
@@ -87,6 +99,7 @@ const sourcesRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   overviewRoute,
   usageRoute,
+  costRoute,
   cacheRoute,
   modelsRoute,
   activityRoute,
@@ -95,6 +108,7 @@ const routeTree = rootRoute.addChildren([
   sessionsRoute,
   sessionRoute,
   sourcesRoute,
+  settingsRoute,
 ]);
 
 export const router = createRouter({ routeTree, defaultPreload: "intent" });

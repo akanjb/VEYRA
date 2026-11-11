@@ -5,10 +5,13 @@
 //! each formula exists exactly once and aggregates are never averages of averages.
 
 pub mod activity;
+pub mod billing;
+pub mod change;
 pub mod composition;
 pub mod concentration;
 pub mod dimension;
 pub mod engine;
+pub mod forecast;
 pub mod metrics;
 pub mod port;
 pub mod query;

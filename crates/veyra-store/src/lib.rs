@@ -5,6 +5,7 @@
 //! (WAL mode). The store persists what it is given: pricing and normalisation happen
 //! upstream, and analytics derives metrics from the additive sums it returns.
 
+mod billing;
 mod connection;
 mod error;
 mod fingerprint;
@@ -24,7 +25,8 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
-use rusqlite::Connection;
+use rusqlite::{Connection, Row, Transaction};
+use veyra_domain::source::PortError;
 
 pub use error::StoreError;
 pub use migrations::LATEST_SCHEMA_VERSION;
@@ -135,6 +137,33 @@ impl Store {
 
     fn lock_writer(&self) -> Result<MutexGuard<'_, Connection>, StoreError> {
         self.writer.lock().map_err(|_| StoreError::Poisoned)
+    }
+
+    /// Every row of a query without parameters.
+    fn read_all<T>(
+        &self,
+        sql: &str,
+        map: fn(&Row<'_>) -> rusqlite::Result<T>,
+    ) -> Result<Vec<T>, PortError> {
+        Ok(self.with_reader(|connection| {
+            let mut statement = connection.prepare_cached(sql)?;
+            let rows = statement.query_map([], map)?;
+            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        })?)
+    }
+
+    /// Runs a user's change in one write transaction, then marks the data as changed so
+    /// cached views refresh.
+    fn change<T>(
+        &self,
+        change: impl FnOnce(&Transaction<'_>) -> Result<T, PortError>,
+    ) -> Result<T, PortError> {
+        let mut writer = self.lock_writer()?;
+        let transaction = writer.transaction().map_err(StoreError::from)?;
+        let result = change(&transaction)?;
+        transaction.commit().map_err(StoreError::from)?;
+        self.data_version.fetch_add(1, Ordering::AcqRel);
+        Ok(result)
     }
 
     /// Runs `f` on a read-only connection.

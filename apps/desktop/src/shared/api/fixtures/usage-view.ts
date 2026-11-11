@@ -59,7 +59,8 @@ function sizeBins(sizes: readonly number[]): SizeBinCount[] {
     .map(([bin, requests]) => ({ lower: lower(bin), upper: lower(bin + 1), requests }));
 }
 
-const KEYS: Readonly<
+/** How each dimension keys and names a group (shared with the Cost view). */
+export const KEYS: Readonly<
   Record<BreakdownDimension, (f: Flat) => { key: string; label: string; provider: string | null }>
 > = {
   model: (f) => ({

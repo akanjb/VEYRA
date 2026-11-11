@@ -2,7 +2,9 @@
 //! own; every metric comes from the analytics crate.
 
 pub(crate) mod activity;
+pub(crate) mod billing;
 pub(crate) mod cache;
+pub(crate) mod cost;
 mod kpis;
 pub(crate) mod models;
 pub(crate) mod overview;

@@ -9,6 +9,8 @@ export const TEST_THEME: ChartTheme = {
   surface: "#ffffff",
   raised: "#ffffff",
   accent: "#0000ff",
+  warning: "#b35c00",
+  danger: "#c92a2a",
   font: "Inter",
   data: [
     "#d0602a",

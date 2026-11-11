@@ -11,7 +11,7 @@ use veyra_analytics::sums::BaseSums;
 use veyra_domain::accuracy::Accuracy;
 
 use super::kpis::{kpi, metric_kpi, token_accuracy};
-use super::rankings::{Labeller, dimension_ranking, groups_of};
+use super::rankings::{Labeller, RankBy, dimension_ranking, groups_of};
 use super::time_grids::{calendar, hours};
 use super::{accuracy_class, activity_of, evaluated, local_date, measures};
 use crate::DataServices;
@@ -156,7 +156,14 @@ pub(crate) fn top(
 ) -> Result<Vec<RankRow>, ApiError> {
     let labeller = Labeller::new(data, dimension)?;
     let groups = groups_of(data, scope, &labeller)?;
-    Ok(dimension_ranking(data, groups, &labeller, n, scope_tokens))
+    Ok(dimension_ranking(
+        data,
+        groups,
+        &labeller,
+        n,
+        RankBy::Tokens,
+        scope_tokens,
+    ))
 }
 
 /// Builds the Overview for a scope.

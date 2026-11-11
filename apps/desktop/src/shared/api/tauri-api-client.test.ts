@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiCallError, TransportError } from "./api-errors";
+import { ApiCallError, TransportError, userMessage } from "./api-errors";
 import { createTauriApiClient, type InvokeFn, type ListenFn } from "./tauri-api-client";
 
 const appInfo = {
@@ -69,5 +69,17 @@ describe("createTauriApiClient", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(unlisten).toHaveBeenCalledOnce();
+  });
+});
+
+describe("userMessage", () => {
+  it("shows the core's message for a refused input, and the summary otherwise", () => {
+    const refused = new ApiCallError("save_budget", { kind: "validation", message: "too long" });
+    expect(userMessage(refused)).toBe("too long");
+    const internal = new ApiCallError("get_cost", { kind: "internal", correlationId: "c-1" });
+    expect(userMessage(internal)).toBe("get_cost failed: internal");
+    expect(userMessage(new TransportError("get_cost", "closed"))).toBe(
+      "get_cost could not be delivered: closed",
+    );
   });
 });

@@ -6,7 +6,6 @@
 //! every view changes at once and nothing recorded is lost.
 
 use std::collections::BTreeSet;
-use std::sync::atomic::Ordering;
 
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, params};
 use veyra_domain::project::{
@@ -63,34 +62,16 @@ fn reassign(
     Ok(())
 }
 
-impl Store {
-    /// Runs a project change in one write transaction, then marks the data as changed.
-    fn change_projects<T>(
-        &self,
-        change: impl FnOnce(&Transaction<'_>) -> Result<T, PortError>,
-    ) -> Result<T, PortError> {
-        let mut writer = self.lock_writer()?;
-        let transaction = writer.transaction().map_err(StoreError::from)?;
-        let result = change(&transaction)?;
-        transaction.commit().map_err(StoreError::from)?;
-        self.data_version.fetch_add(1, Ordering::AcqRel);
-        Ok(result)
-    }
-}
-
 impl ProjectRepository for Store {
     fn list_projects(&self) -> Result<Vec<ProjectRecord>, PortError> {
-        Ok(self.with_reader(|connection| {
-            let mut statement = connection.prepare_cached(&format!(
-                "SELECT {PROJECT_COLUMNS} FROM projects ORDER BY key"
-            ))?;
-            let rows = statement.query_map([], project_from)?;
-            Ok(rows.collect::<Result<Vec<_>, _>>()?)
-        })?)
+        self.read_all(
+            &format!("SELECT {PROJECT_COLUMNS} FROM projects ORDER BY key"),
+            project_from,
+        )
     }
 
     fn rename_project(&self, id: i64, name: Option<&str>) -> Result<ProjectRecord, PortError> {
-        self.change_projects(|transaction| {
+        self.change(|transaction| {
             existing(transaction, id)?;
             transaction
                 .execute(
@@ -103,7 +84,7 @@ impl ProjectRepository for Store {
     }
 
     fn merge_project(&self, from: i64, into: i64) -> Result<(), PortError> {
-        self.change_projects(|transaction| {
+        self.change(|transaction| {
             existing(transaction, from)?;
             // Merging into a merged project means merging into its target.
             let target = existing(transaction, into)?;
@@ -135,7 +116,7 @@ impl ProjectRepository for Store {
     }
 
     fn unmerge_project(&self, id: i64) -> Result<(), PortError> {
-        self.change_projects(|transaction| {
+        self.change(|transaction| {
             if existing(transaction, id)?.merged_into.is_none() {
                 return Err(ProjectChangeError::NotMerged(id).into());
             }

@@ -5,6 +5,7 @@ import {
   CalendarComponent,
   GridComponent,
   LegendComponent,
+  MarkLineComponent,
   TooltipComponent,
   VisualMapComponent,
 } from "echarts/components";
@@ -22,6 +23,7 @@ echarts.use([
   CalendarComponent,
   GridComponent,
   LegendComponent,
+  MarkLineComponent,
   TooltipComponent,
   VisualMapComponent,
   CanvasRenderer,

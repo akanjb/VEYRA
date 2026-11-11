@@ -14,7 +14,7 @@ use veyra_analytics::sums::BaseSums;
 use veyra_domain::time::UtcMillis;
 
 use super::kpis::{metric_kpi, token_accuracy};
-use super::rankings::{Labeller, dimension_ranking, groups_of};
+use super::rankings::{Labeller, RankBy, dimension_ranking, groups_of};
 use super::{evaluated, internal, local_date, measures};
 use crate::DataServices;
 use crate::dto::{
@@ -76,7 +76,14 @@ fn breakdown(
     let labeller = Labeller::new(data, grouped)?;
     let groups = groups_of(data, scope, &labeller)?;
     let tokens: Vec<u64> = groups.iter().map(|g| measures(&g.totals).tokens).collect();
-    let rows = dimension_ranking(data, groups, &labeller, TOP_ROWS, scope_tokens);
+    let rows = dimension_ranking(
+        data,
+        groups,
+        &labeller,
+        TOP_ROWS,
+        RankBy::Tokens,
+        scope_tokens,
+    );
     let ranked: Vec<u64> = rows.iter().map(|r| r.measures.tokens).collect();
     Ok(Breakdown {
         dimension,

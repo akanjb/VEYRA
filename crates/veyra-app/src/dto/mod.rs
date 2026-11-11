@@ -6,7 +6,9 @@
 mod activity;
 mod analytics;
 mod app_info;
+mod billing;
 mod cache;
+mod cost;
 mod models;
 mod projects;
 mod sessions;
@@ -19,7 +21,16 @@ pub use analytics::{
     Measures, Overview, OverviewKpis, OverviewRequest, RankRow, Scope, ScopeFilters,
 };
 pub use app_info::{AppInfo, AppInfoRequest, BuildProfile};
+pub use billing::{
+    BillingChanged, BillingEntryInfo, BillingEntryInput, BillingKind, BillingRecurrence,
+    BillingRequest, BillingSettings, BudgetInfo, BudgetInput, DeleteBillingEntryRequest,
+    DeleteBudgetRequest, SaveBillingEntryRequest, SaveBudgetRequest,
+};
 pub use cache::{Cache, CacheKpis, CachePoint, CacheRequest, CacheSession, RatioRow, TtlRow};
+pub use cost::{
+    BudgetLevel, BudgetStatus, Cost, CostBreakdown, CostDay, CostDefinitions, CostKpis, CostMix,
+    CostRequest, MonthOutlook, OutlookDay, RateRow, Waterfall, WaterfallStep,
+};
 pub use models::{Matrix, ModelLane, ModelRow, Models, ModelsRequest, ShareDay};
 pub use projects::{
     MergeProjectRequest, ProjectAlias, ProjectDetail, ProjectInfo, ProjectList, ProjectRequest,

@@ -33,3 +33,4 @@ Each record documents one significant decision: its context, the decision itself
 | [025](0025-reading-modes-and-capabilities.md) | Reading modes, side files and capability matrices for connectors | Accepted |
 | [026](0026-request-size-bins.md) | Request-size distributions from additive size bins | Accepted |
 | [027](0027-project-identity-and-merges.md) | Project identity, renaming and merging | Accepted |
+| [028](0028-billing-entries-and-budgets.md) | Billing entries, budgets and the month forecast | Accepted |

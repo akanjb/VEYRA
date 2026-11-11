@@ -51,6 +51,8 @@ test("every page and overlay runs without a CSP violation", async ({ page }) => 
 
   await visit(page, "Usage", "Token composition");
 
+  await visit(page, "Cost", "Daily cost");
+
   await visit(page, "Cache", "Cache reads and writes");
 
   await visit(page, "Models & Providers", "Model leaderboard");
@@ -81,6 +83,14 @@ test("every page and overlay runs without a CSP violation", async ({ page }) => 
     .getByRole("link", { name: "Sources & Health" })
     .click();
   await expect(page.getByRole("switch", { name: "Read Claude Code usage" })).toBeVisible();
+
+  await page
+    .getByRole("navigation", { name: "Pages" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("button", { name: "Add budget" }).click();
+  await expect(page.getByRole("dialog", { name: "Add budget" })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   expect(await violations()).toEqual([]);
 });

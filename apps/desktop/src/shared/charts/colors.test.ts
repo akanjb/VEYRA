@@ -1,31 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { categoryColor, modelColors, providerColor, readableOn, tint } from "./colors";
-import type { ChartTheme } from "./theme";
+import { TEST_THEME } from "./test-theme";
 
-const theme: ChartTheme = {
-  text: "#000000",
-  muted: "#111111",
-  subtle: "#222222",
-  border: "#333333",
-  surface: "#ffffff",
-  raised: "#ffffff",
-  accent: "#0000ff",
-  font: "Inter",
-  data: [
-    "#d0602a",
-    "#0e8f7e",
-    "#3567d6",
-    "#b5179e",
-    "#8f5b00",
-    "#5d6b80",
-    "#0a84a3",
-    "#448a26",
-    "#8550e6",
-    "#b33f3f",
-  ],
-  seq: [],
-};
+const theme = { ...TEST_THEME, subtle: "#222222" };
 
 describe("identity colours", () => {
   it("gives each provider a fixed hue", () => {

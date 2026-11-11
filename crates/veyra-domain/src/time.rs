@@ -86,6 +86,21 @@ impl CivilDate {
         Self::new(year, month, day).map_err(|_| error())
     }
 
+    #[must_use]
+    pub const fn year(self) -> i32 {
+        self.year
+    }
+
+    #[must_use]
+    pub const fn month(self) -> u8 {
+        self.month
+    }
+
+    #[must_use]
+    pub const fn day(self) -> u8 {
+        self.day
+    }
+
     /// The instant this date begins, at 00:00 UTC.
     #[must_use]
     pub fn start_utc(self) -> UtcMillis {

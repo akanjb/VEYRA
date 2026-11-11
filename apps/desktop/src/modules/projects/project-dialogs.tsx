@@ -3,39 +3,9 @@ import type { ProjectInfo } from "@veyra/contracts";
 import { useId, useState } from "react";
 
 import { useCommandMutation } from "@/shared/api";
-import { Button, Modal } from "@/shared/ui";
+import { FormActions, FormError, Modal } from "@/shared/ui";
 
 import { MAX_NAME_CHARS, mergeTargets } from "./projects-model";
-
-function ErrorLine({ error }: { error: Error | null }) {
-  if (error === null) return null;
-  return (
-    <p role="alert" className="text-xs text-danger">
-      {error.message}
-    </p>
-  );
-}
-
-function Actions({
-  busy,
-  submit,
-  onCancel,
-}: {
-  busy: boolean;
-  submit: string;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="flex justify-end gap-2">
-      <Button type="button" variant="ghost" onClick={onCancel}>
-        Cancel
-      </Button>
-      <Button type="submit" variant="primary" disabled={busy}>
-        {submit}
-      </Button>
-    </div>
-  );
-}
 
 export function RenameDialog({ project, onClose }: { project: ProjectInfo; onClose: () => void }) {
   const rename = useCommandMutation("rename_project");
@@ -72,8 +42,8 @@ export function RenameDialog({ project, onClose }: { project: ProjectInfo; onClo
             className="h-8 rounded-control border border-border bg-surface px-2"
           />
         </label>
-        <ErrorLine error={rename.error} />
-        <Actions busy={rename.isPending} submit="Save" onCancel={onClose} />
+        <FormError error={rename.error} />
+        <FormActions busy={rename.isPending} submit="Save" onCancel={onClose} />
       </form>
     </Modal>
   );
@@ -129,8 +99,8 @@ export function MergeDialog({
           {target?.label ?? "the chosen project"}. Nothing is deleted, and the merge can be undone
           from that project's page.
         </p>
-        <ErrorLine error={merge.error} />
-        <Actions busy={merge.isPending || into === null} submit="Merge" onCancel={onClose} />
+        <FormError error={merge.error} />
+        <FormActions busy={merge.isPending || into === null} submit="Merge" onCancel={onClose} />
       </form>
     </Modal>
   );

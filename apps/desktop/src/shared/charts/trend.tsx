@@ -17,6 +17,12 @@ export interface TrendSeries {
 /** The series id of an overlay: a line drawn over the stack, not part of its total. */
 const OVERLAY = "overlay";
 
+/**
+ * Where an overlay is scaled: on the stack's axis, or on its own axis at the right (for a
+ * running total that would dwarf the bars).
+ */
+export type OverlayAxis = "shared" | "own";
+
 interface AxisParam {
   axisValue?: string;
   color?: string;
@@ -56,9 +62,10 @@ function stackedSeries(s: TrendSeries, area: boolean) {
   };
 }
 
-function overlaySeries(s: TrendSeries) {
+function overlaySeries(s: TrendSeries, axis: OverlayAxis) {
   return {
     id: OVERLAY,
+    yAxisIndex: axis === "own" ? 1 : 0,
     name: s.name,
     type: "line",
     data: s.values,
@@ -75,6 +82,7 @@ function trendOption(
   series: readonly TrendSeries[],
   format: (v: number) => string,
   overlay: TrendSeries | undefined,
+  overlayAxis: OverlayAxis,
 ): ChartOption {
   const area = dates.length > 31;
   const named = series.length + (overlay === undefined ? 0 : 1);
@@ -83,7 +91,13 @@ function trendOption(
     legend: named > 1 ? legendStyle(theme, "roundRect") : { show: false },
     grid: { left: 4, right: 8, top: named > 1 ? 32 : 12, bottom: 4, containLabel: true },
     xAxis: dateAxis(theme, dates),
-    yAxis: valueAxis(theme, format),
+    yAxis:
+      overlay !== undefined && overlayAxis === "own"
+        ? [
+            valueAxis(theme, format),
+            { ...valueAxis(theme, format), position: "right", splitLine: { show: false } },
+          ]
+        : valueAxis(theme, format),
     tooltip: {
       ...tooltipStyle(theme),
       trigger: "axis",
@@ -91,7 +105,7 @@ function trendOption(
     },
     series: [
       ...series.map((s) => stackedSeries(s, area)),
-      ...(overlay === undefined ? [] : [overlaySeries(overlay)]),
+      ...(overlay === undefined ? [] : [overlaySeries(overlay, overlayAxis)]),
     ],
   };
 }
@@ -106,6 +120,7 @@ export function StackedTrend({
   format,
   label,
   overlay,
+  overlayAxis = "shared",
   onSelectDate,
 }: {
   dates: readonly string[];
@@ -113,12 +128,13 @@ export function StackedTrend({
   format: (v: number) => string;
   label: string;
   overlay?: TrendSeries | undefined;
+  overlayAxis?: OverlayAxis;
   onSelectDate?: (date: string) => void;
 }) {
   const theme = useChartTheme();
   const option = useMemo(
-    () => trendOption(theme, dates, series, format, overlay),
-    [theme, dates, series, format, overlay],
+    () => trendOption(theme, dates, series, format, overlay, overlayAxis),
+    [theme, dates, series, format, overlay, overlayAxis],
   );
   return (
     <Chart

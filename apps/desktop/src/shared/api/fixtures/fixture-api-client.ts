@@ -17,7 +17,9 @@ import { ApiCallError } from "../api-errors";
 import { sessionRow, tokensOf, type Flat } from "./aggregate";
 import { FIXTURE_PROJECTS, fixtureLabel, generateSessions } from "./dataset";
 import { activity } from "./activity-view";
+import { FixtureBilling } from "./billing-view";
 import { cache } from "./cache-view";
+import { costView } from "./cost-view";
 import { models } from "./models-view";
 import { FixtureProjects } from "./projects-view";
 import { usage } from "./usage-view";
@@ -59,6 +61,11 @@ class FixtureState {
   }
 
   readonly projects = new FixtureProjects();
+  readonly billing = new FixtureBilling();
+
+  get now(): number {
+    return this.options.now;
+  }
 
   /** Every event with its session, counted toward the project it is merged into. */
   flat(): Flat[] {
@@ -147,6 +154,25 @@ class FixtureState {
 
 type Handlers = { [C in CommandName]: (request: CommandRequest<C>) => CommandResponse<C> };
 
+type BillingCommand =
+  "get_billing" | "save_billing_entry" | "delete_billing_entry" | "save_budget" | "delete_budget";
+
+function billingHandlers(billing: FixtureBilling): Pick<Handlers, BillingCommand> {
+  return {
+    get_billing: () => billing.settings(),
+    save_billing_entry: (r) => billing.saveEntry(r.id, r.entry),
+    delete_billing_entry: (r) => {
+      billing.deleteEntry(r.id);
+      return {};
+    },
+    save_budget: (r) => billing.saveBudget(r.id, r.budget),
+    delete_budget: (r) => {
+      billing.deleteBudget(r.id);
+      return {};
+    },
+  };
+}
+
 /** Creates the fixture client. */
 export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient {
   const state = new FixtureState({ fresh: options.fresh ?? false, now: options.now ?? Date.now() });
@@ -168,6 +194,7 @@ export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient 
     },
     get_overview: (r) => overview(state.flat(), r.scope),
     get_usage: (r) => usage(state.flat(), r.scope),
+    get_cost: (r) => costView(state.flat(), r.scope, state.billing, state.now),
     get_cache: (r) => cache(state.flat(), r.scope),
     get_models: (r) => models(state.flat(), r.scope),
     get_activity: (r) => activity(state.flat(), r.scope),
@@ -182,6 +209,7 @@ export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient 
       state.projects.unmerge(r.id);
       return {};
     },
+    ...billingHandlers(state.billing),
     list_sessions: (r) => sessions(state.flat(), r),
     get_session: (r) => state.detail(r.id),
   };

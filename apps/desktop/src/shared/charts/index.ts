@@ -12,7 +12,11 @@ export { DataTable, type Column } from "./table";
 export { categoryColor, modelColors, otherColor, providerColor, readableOn, tint } from "./colors";
 export { useChartTheme, type ChartTheme } from "./theme";
 export { Timeline, type TimelinePoint } from "./timeline";
-export { StackedTrend, TrendTable, type TrendSeries } from "./trend";
+export { StackedTrend, TrendTable, type OverlayAxis, type TrendSeries } from "./trend";
+export { LineTable, LineTrend, type LineSeries, type Threshold } from "./lines";
+export { WaterfallChart, WaterfallTable, waterfallRanges, type WaterfallBar } from "./waterfall";
+export { ShareBars, ShareTable, rowShares, type SharePart, type ShareRow } from "./share-bars";
+export { DotPlot, DotTable } from "./dot-plot";
 export { BandTable, BandTrend, type BandPoint } from "./band";
 export {
   Histogram,

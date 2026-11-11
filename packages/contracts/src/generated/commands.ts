@@ -3,8 +3,17 @@ import type { Activity } from "./Activity";
 import type { ActivityRequest } from "./ActivityRequest";
 import type { AppInfo } from "./AppInfo";
 import type { AppInfoRequest } from "./AppInfoRequest";
+import type { BillingChanged } from "./BillingChanged";
+import type { BillingEntryInfo } from "./BillingEntryInfo";
+import type { BillingRequest } from "./BillingRequest";
+import type { BillingSettings } from "./BillingSettings";
+import type { BudgetInfo } from "./BudgetInfo";
 import type { Cache } from "./Cache";
 import type { CacheRequest } from "./CacheRequest";
+import type { Cost } from "./Cost";
+import type { CostRequest } from "./CostRequest";
+import type { DeleteBillingEntryRequest } from "./DeleteBillingEntryRequest";
+import type { DeleteBudgetRequest } from "./DeleteBudgetRequest";
 import type { ListSourcesRequest } from "./ListSourcesRequest";
 import type { MergeProjectRequest } from "./MergeProjectRequest";
 import type { Models } from "./Models";
@@ -20,6 +29,8 @@ import type { ProjectsRequest } from "./ProjectsRequest";
 import type { RenameProjectRequest } from "./RenameProjectRequest";
 import type { RescanAccepted } from "./RescanAccepted";
 import type { RescanRequest } from "./RescanRequest";
+import type { SaveBillingEntryRequest } from "./SaveBillingEntryRequest";
+import type { SaveBudgetRequest } from "./SaveBudgetRequest";
 import type { SessionDetail } from "./SessionDetail";
 import type { SessionList } from "./SessionList";
 import type { SessionRequest } from "./SessionRequest";
@@ -39,6 +50,7 @@ export interface CommandMap {
   request_rescan: { request: RescanRequest; response: RescanAccepted };
   get_overview: { request: OverviewRequest; response: Overview };
   get_usage: { request: UsageRequest; response: Usage };
+  get_cost: { request: CostRequest; response: Cost };
   get_cache: { request: CacheRequest; response: Cache };
   get_models: { request: ModelsRequest; response: Models };
   get_activity: { request: ActivityRequest; response: Activity };
@@ -47,6 +59,11 @@ export interface CommandMap {
   rename_project: { request: RenameProjectRequest; response: ProjectInfo };
   merge_project: { request: MergeProjectRequest; response: ProjectsChanged };
   unmerge_project: { request: UnmergeProjectRequest; response: ProjectsChanged };
+  get_billing: { request: BillingRequest; response: BillingSettings };
+  save_billing_entry: { request: SaveBillingEntryRequest; response: BillingEntryInfo };
+  delete_billing_entry: { request: DeleteBillingEntryRequest; response: BillingChanged };
+  save_budget: { request: SaveBudgetRequest; response: BudgetInfo };
+  delete_budget: { request: DeleteBudgetRequest; response: BillingChanged };
   list_sessions: { request: SessionsRequest; response: SessionList };
   get_session: { request: SessionRequest; response: SessionDetail };
 }
@@ -60,6 +77,7 @@ export const COMMAND_NAMES = [
   "request_rescan",
   "get_overview",
   "get_usage",
+  "get_cost",
   "get_cache",
   "get_models",
   "get_activity",
@@ -68,6 +86,11 @@ export const COMMAND_NAMES = [
   "rename_project",
   "merge_project",
   "unmerge_project",
+  "get_billing",
+  "save_billing_entry",
+  "delete_billing_entry",
+  "save_budget",
+  "delete_budget",
   "list_sessions",
   "get_session",
 ] as const satisfies readonly CommandName[];

@@ -57,6 +57,7 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
     Ok(DataServices {
         sources: Arc::clone(&store) as _,
         projects: Arc::clone(&store) as _,
+        billing: Arc::clone(&store) as _,
         analytics: store,
         connectors: descriptors,
         names,

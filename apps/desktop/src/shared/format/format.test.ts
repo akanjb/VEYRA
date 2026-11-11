@@ -10,6 +10,7 @@ import {
   day,
   duration,
   integer,
+  month,
   percent,
   shortId,
   times,
@@ -71,6 +72,8 @@ describe("format", () => {
 
   it("formats calendar days without shifting them across time zones", () => {
     expect(day("2026-11-08", L)).toBe("Nov 8, 2026");
+    expect(month("2026-11", L)).toBe("November 2026");
+    expect(month("not a month", L)).toBe("not a month");
     expect(dateTime(Date.UTC(2026, 10, 8, 14, 32), "UTC", L)).toBe("Nov 8, 2026, 02:32 PM");
   });
 });

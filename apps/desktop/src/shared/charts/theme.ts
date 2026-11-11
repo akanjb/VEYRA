@@ -12,6 +12,9 @@ export interface ChartTheme {
   surface: string;
   raised: string;
   accent: string;
+  /** Semantic state colours, only for states such as budget thresholds (§5). */
+  warning: string;
+  danger: string;
   font: string;
   data: string[];
   seq: string[];
@@ -28,6 +31,8 @@ function read(): ChartTheme {
     surface: v("surface"),
     raised: v("surface-raised"),
     accent: v("accent"),
+    warning: v("warning"),
+    danger: v("danger"),
     font: v("font-sans") || "system-ui",
     data: Array.from({ length: 10 }, (_, i) => v(`data-${String(i + 1)}`)),
     seq: Array.from({ length: 7 }, (_, i) => v(`seq-${String(i)}`)),

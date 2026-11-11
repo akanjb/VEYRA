@@ -4,17 +4,20 @@ use std::sync::{Arc, OnceLock};
 
 use veyra_analytics::port::{ActivityReader, BaseSumsReader, LabelReader, SizeReader};
 use veyra_analytics::sessions::SessionReader;
+use veyra_domain::billing::BillingRepository;
 use veyra_domain::project::ProjectRepository;
 use veyra_domain::source::{ConnectorDescriptor, IngestControl, SourceRepository};
 use veyra_domain::time::UtcMillis;
 
 use crate::dto::{
-    Activity, ActivityRequest, AppInfo, AppInfoRequest, BuildProfile, Cache, CacheRequest,
-    ListSourcesRequest, MergeProjectRequest, Models, ModelsRequest, Overview, OverviewRequest,
-    ProjectDetail, ProjectInfo, ProjectList, ProjectRequest, ProjectsChanged, ProjectsRequest,
-    RenameProjectRequest, RescanAccepted, RescanRequest, SessionDetail, SessionList,
-    SessionRequest, SessionsRequest, SetSourceEnabledRequest, SourceList, SourceSummary,
-    UnmergeProjectRequest, Usage, UsageRequest,
+    Activity, ActivityRequest, AppInfo, AppInfoRequest, BillingChanged, BillingEntryInfo,
+    BillingRequest, BillingSettings, BudgetInfo, BuildProfile, Cache, CacheRequest, Cost,
+    CostRequest, DeleteBillingEntryRequest, DeleteBudgetRequest, ListSourcesRequest,
+    MergeProjectRequest, Models, ModelsRequest, Overview, OverviewRequest, ProjectDetail,
+    ProjectInfo, ProjectList, ProjectRequest, ProjectsChanged, ProjectsRequest,
+    RenameProjectRequest, RescanAccepted, RescanRequest, SaveBillingEntryRequest,
+    SaveBudgetRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
+    SetSourceEnabledRequest, SourceList, SourceSummary, UnmergeProjectRequest, Usage, UsageRequest,
 };
 use crate::error::ApiError;
 use crate::names::DisplayNames;
@@ -43,6 +46,7 @@ impl<T> AnalyticsReader for T where
 pub struct DataServices {
     pub sources: Arc<dyn SourceRepository>,
     pub projects: Arc<dyn ProjectRepository>,
+    pub billing: Arc<dyn BillingRepository>,
     pub analytics: Arc<dyn AnalyticsReader>,
     /// Descriptors of every connector in this build.
     pub connectors: Vec<ConnectorDescriptor>,
@@ -175,6 +179,83 @@ impl Api {
         let UsageRequest { scope: requested } = request;
         let resolved = scope::resolve(&requested)?;
         views::usage::usage(self.data()?, &resolved)
+    }
+
+    /// The Cost page for a scope: API-equivalent cost with its trend, month outlook,
+    /// budgets, breakdowns, composition, effective rates and period change, beside the
+    /// subscription spend and charges the user recorded (never added together).
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn get_cost(&self, request: CostRequest) -> Result<Cost, ApiError> {
+        let CostRequest { scope: requested } = request;
+        let resolved = scope::resolve(&requested)?;
+        views::cost::cost(self.data()?, &resolved, UtcMillis::now())
+    }
+
+    /// Every billing entry and budget, for editing.
+    ///
+    /// # Errors
+    /// [`ApiError::Busy`] while starting; [`ApiError::Internal`] on database failure.
+    pub fn get_billing(&self, request: BillingRequest) -> Result<BillingSettings, ApiError> {
+        let BillingRequest {} = request;
+        views::billing::settings(self.data()?)
+    }
+
+    /// Records a subscription or charge, or replaces one.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid entry; [`ApiError::NotFound`] for an unknown
+    /// id; [`ApiError::Busy`] while starting; [`ApiError::Internal`] on database failure.
+    pub fn save_billing_entry(
+        &self,
+        request: SaveBillingEntryRequest,
+    ) -> Result<BillingEntryInfo, ApiError> {
+        let SaveBillingEntryRequest { id, entry } = request;
+        views::billing::save_entry(self.data()?, id, entry)
+    }
+
+    /// Deletes a billing entry.
+    ///
+    /// # Errors
+    /// [`ApiError::NotFound`] for an unknown id; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn delete_billing_entry(
+        &self,
+        request: DeleteBillingEntryRequest,
+    ) -> Result<BillingChanged, ApiError> {
+        let DeleteBillingEntryRequest { id } = request;
+        self.data()?
+            .billing
+            .delete_billing_entry(id)
+            .map_err(|e| views::billing::billing_error(&e))?;
+        Ok(BillingChanged {})
+    }
+
+    /// Creates a monthly budget, or replaces one.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid budget; [`ApiError::NotFound`] for an
+    /// unknown id or project; [`ApiError::Busy`] while starting; [`ApiError::Internal`] on
+    /// database failure.
+    pub fn save_budget(&self, request: SaveBudgetRequest) -> Result<BudgetInfo, ApiError> {
+        let SaveBudgetRequest { id, budget } = request;
+        views::billing::save_budget(self.data()?, id, budget)
+    }
+
+    /// Deletes a budget.
+    ///
+    /// # Errors
+    /// [`ApiError::NotFound`] for an unknown id; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn delete_budget(&self, request: DeleteBudgetRequest) -> Result<BillingChanged, ApiError> {
+        let DeleteBudgetRequest { id } = request;
+        self.data()?
+            .billing
+            .delete_budget(id)
+            .map_err(|e| views::billing::billing_error(&e))?;
+        Ok(BillingChanged {})
     }
 
     /// The Cache page for a scope: net benefit, savings and overhead with their price
@@ -366,6 +447,7 @@ mod tests {
             api.attach(Ok(DataServices {
                 sources: Arc::clone(&store) as _,
                 projects: Arc::clone(&store) as _,
+                billing: Arc::clone(&store) as _,
                 analytics: Arc::clone(&store) as _,
                 connectors: veyra_connectors::all()
                     .iter()

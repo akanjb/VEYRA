@@ -18,6 +18,7 @@ macro_rules! for_each_command {
             request_rescan($crate::dto::RescanRequest) -> $crate::dto::RescanAccepted;
             get_overview($crate::dto::OverviewRequest) -> $crate::dto::Overview;
             get_usage($crate::dto::UsageRequest) -> $crate::dto::Usage;
+            get_cost($crate::dto::CostRequest) -> $crate::dto::Cost;
             get_cache($crate::dto::CacheRequest) -> $crate::dto::Cache;
             get_models($crate::dto::ModelsRequest) -> $crate::dto::Models;
             get_activity($crate::dto::ActivityRequest) -> $crate::dto::Activity;
@@ -26,6 +27,11 @@ macro_rules! for_each_command {
             rename_project($crate::dto::RenameProjectRequest) -> $crate::dto::ProjectInfo;
             merge_project($crate::dto::MergeProjectRequest) -> $crate::dto::ProjectsChanged;
             unmerge_project($crate::dto::UnmergeProjectRequest) -> $crate::dto::ProjectsChanged;
+            get_billing($crate::dto::BillingRequest) -> $crate::dto::BillingSettings;
+            save_billing_entry($crate::dto::SaveBillingEntryRequest) -> $crate::dto::BillingEntryInfo;
+            delete_billing_entry($crate::dto::DeleteBillingEntryRequest) -> $crate::dto::BillingChanged;
+            save_budget($crate::dto::SaveBudgetRequest) -> $crate::dto::BudgetInfo;
+            delete_budget($crate::dto::DeleteBudgetRequest) -> $crate::dto::BillingChanged;
             list_sessions($crate::dto::SessionsRequest) -> $crate::dto::SessionList;
             get_session($crate::dto::SessionRequest) -> $crate::dto::SessionDetail;
         }

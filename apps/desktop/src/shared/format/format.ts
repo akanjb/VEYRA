@@ -103,6 +103,17 @@ export function day(isoDate: string, locale?: string): string {
   }).format(Date.UTC(y, m - 1, d));
 }
 
+/** A calendar month (`YYYY-MM`) as "November 2026". */
+export function month(isoMonth: string, locale?: string): string {
+  const [y, m] = isoMonth.split("-").map(Number);
+  if (y === undefined || m === undefined || Number.isNaN(m)) return isoMonth;
+  return new Intl.DateTimeFormat(locale, {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(Date.UTC(y, m - 1, 1));
+}
+
 /** An instant as local date and time: "8 Nov 2026, 14:32". */
 export function dateTime(epochMs: number, timeZone?: string, locale?: string): string {
   return new Intl.DateTimeFormat(locale, {

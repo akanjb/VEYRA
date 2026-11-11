@@ -128,7 +128,8 @@ pub struct RankRow {
     /// Provider of a model row, for its identity colour.
     pub provider: Option<String>,
     pub measures: Measures,
-    /// Share of the scope's tokens (0–1).
+    /// Share (0–1) of the scope's total of the measure the ranking is ordered by: tokens,
+    /// or API-equivalent cost on the Cost page.
     pub share: f64,
     /// Groups merged into this row (1 for a single group).
     #[ts(type = "number")]

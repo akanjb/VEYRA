@@ -1,9 +1,10 @@
-//! Rankings: the largest groups by tokens and an exact "Other", labelled for display.
+//! Rankings: the largest groups by tokens or cost and an exact "Other", labelled for
+//! display.
 
 use std::collections::BTreeMap;
 
 use veyra_analytics::concentration::share;
-use veyra_analytics::dimension::Dimension;
+use veyra_analytics::dimension::{Dimension, DimensionValue};
 use veyra_analytics::engine::GroupResult;
 use veyra_analytics::metrics::MetricId;
 use veyra_analytics::query::TimeGrain;
@@ -11,7 +12,7 @@ use veyra_analytics::top_n::top_n;
 
 use super::{evaluated, internal, measures};
 use crate::DataServices;
-use crate::dto::RankRow;
+use crate::dto::{Measures, RankRow};
 use crate::error::ApiError;
 use crate::scope::Resolved;
 
@@ -22,14 +23,41 @@ pub(crate) struct RowLabel {
     pub provider: Option<String>,
 }
 
-/// A ranking by tokens: the top `n` groups and an exact "Other".
+/// The measure a ranking orders groups by, and that its shares are of.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RankBy {
+    Tokens,
+    /// API-equivalent cost.
+    Cost,
+}
+
+impl RankBy {
+    const fn metric(self) -> MetricId {
+        match self {
+            Self::Tokens => MetricId::TotalTokens,
+            Self::Cost => MetricId::ApiEquivalentCost,
+        }
+    }
+
+    /// The ranked amount of a group (negative cost counts as none).
+    pub(crate) fn amount(self, measures: &Measures) -> u64 {
+        match self {
+            Self::Tokens => measures.tokens,
+            Self::Cost => u64::try_from(measures.cost_nano_usd).unwrap_or(0),
+        }
+    }
+}
+
+/// A ranking: the top `n` groups by `by` and an exact "Other". Shares are of
+/// `scope_total`, the scope's amount of the same measure.
 pub(crate) fn ranking(
     groups: Vec<GroupResult>,
     n: usize,
-    scope_tokens: u64,
+    by: RankBy,
+    scope_total: u64,
     label: impl Fn(&GroupResult) -> RowLabel,
 ) -> Vec<RankRow> {
-    let ranked = top_n(groups, MetricId::TotalTokens, n);
+    let ranked = top_n(groups, by.metric(), n);
     let mut rows: Vec<RankRow> = ranked
         .top
         .iter()
@@ -45,7 +73,7 @@ pub(crate) fn ranking(
                 label,
                 provider,
                 measures,
-                share: share(measures.tokens, scope_tokens),
+                share: share(by.amount(&measures), scope_total),
                 group_count: 1,
                 is_other: false,
             }
@@ -58,17 +86,12 @@ pub(crate) fn ranking(
             label: "Other".to_owned(),
             provider: None,
             measures,
-            share: share(measures.tokens, scope_tokens),
+            share: share(by.amount(&measures), scope_total),
             group_count: u64::try_from(other.group_count).unwrap_or(u64::MAX),
             is_other: true,
         });
     }
     rows
-}
-
-/// The first key of a group (its value of the single grouped dimension).
-pub(crate) fn first_key(group: &GroupResult) -> Option<String> {
-    group.key.first().cloned().flatten()
 }
 
 /// Project id → what the project is called (its name, or else its path).
@@ -111,11 +134,16 @@ impl Labeller {
     }
 
     pub(crate) fn label(&self, data: &DataServices, group: &GroupResult) -> RowLabel {
+        self.label_key(data, &group.key)
+    }
+
+    /// Labels a group key (aligned with [`Self::group_by`]).
+    pub(crate) fn label_key(&self, data: &DataServices, group: &[DimensionValue]) -> RowLabel {
         let names = &data.names;
-        let key = first_key(group);
+        let key = group.first().cloned().flatten();
         let (key, label, provider) = match self.dimension {
             Dimension::Model => {
-                let model = group.key.get(1).cloned().flatten();
+                let model = group.get(1).cloned().flatten();
                 let label = model
                     .as_deref()
                     .map_or_else(|| "Unknown model".to_owned(), |id| names.model(id));
@@ -172,9 +200,12 @@ pub(crate) fn dimension_ranking(
     groups: Vec<GroupResult>,
     labeller: &Labeller,
     n: usize,
-    scope_tokens: u64,
+    by: RankBy,
+    scope_total: u64,
 ) -> Vec<RankRow> {
-    ranking(groups, n, scope_tokens, |group| labeller.label(data, group))
+    ranking(groups, n, by, scope_total, |group| {
+        labeller.label(data, group)
+    })
 }
 
 /// Groups of a scope by one dimension, totals only.
