@@ -17,8 +17,8 @@ use veyra_analytics::engine::evaluate;
 use veyra_analytics::metrics::{MetricId, MetricValue};
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_app::dto::{
-    Comparison, Labelled, OverviewRequest, Scope, ScopeFilters, SessionRequest, SessionSort,
-    SessionsRequest, UsageRequest,
+    CacheRequest, Comparison, Labelled, OverviewRequest, Scope, ScopeFilters, SessionRequest,
+    SessionSort, SessionsRequest, UsageRequest,
 };
 use veyra_app::{Api, AppMetadata, DataServices, DisplayNames};
 use veyra_domain::source::{DiscoveryEnv, IngestControl};
@@ -309,5 +309,75 @@ fn usage_numbers_equal_the_metric_engine_and_add_up() {
     assert_eq!(
         usage.request_definition,
         veyra_analytics::sizes::REQUEST_PERCENTILES_DEFINITION
+    );
+}
+
+#[test]
+fn cache_numbers_equal_the_metric_engine_and_add_up() {
+    let data = ingested();
+    let cache = api(&data.store)
+        .get_cache(CacheRequest { scope: scope() })
+        .unwrap();
+    let k = &cache.kpis;
+    for (kpi, metric) in [
+        (&k.net_benefit_nano_usd, MetricId::NetCacheBenefit),
+        (&k.gross_saving_nano_usd, MetricId::GrossCacheSaving),
+        (&k.write_overhead_nano_usd, MetricId::CacheWriteOverhead),
+        (&k.hit_ratio, MetricId::CacheHitRatio),
+        (&k.reuse_ratio, MetricId::CacheReuseRatio),
+    ] {
+        assert_eq!(kpi.value, engine_value(&data.store, metric), "{metric:?}");
+        assert_eq!(kpi.definition, metric.definition().description);
+    }
+    assert_eq!(
+        cache.pricing_coverage,
+        engine_value(&data.store, MetricId::PricingCoverage)
+    );
+
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "comparing with f64 engine values"
+    )]
+    let as_f64 = |n: u64| Some(n as f64);
+    let reads: u64 = cache.daily.iter().map(|d| d.reads).sum();
+    let writes: u64 = cache.daily.iter().map(|d| d.writes).sum();
+    assert_eq!(
+        as_f64(reads),
+        engine_value(&data.store, MetricId::CacheReadTokens)
+    );
+    assert_eq!(
+        as_f64(writes),
+        engine_value(&data.store, MetricId::CacheWriteTokens)
+    );
+
+    // The hit-ratio rankings cover every input token once.
+    for rows in [&cache.by_model, &cache.by_project] {
+        let input: u64 = rows.iter().map(|r| r.input_tokens).sum();
+        assert_eq!(
+            as_f64(input),
+            engine_value(&data.store, MetricId::InputTokens)
+        );
+    }
+    let written: u64 = cache
+        .writes_by_model
+        .iter()
+        .map(|r| r.short + r.long + r.unspecified)
+        .sum();
+    assert_eq!(
+        as_f64(written),
+        engine_value(&data.store, MetricId::CacheWriteTokens)
+    );
+
+    // Listed sessions lost money on caching, largest loss first.
+    assert!(cache.inefficient.iter().all(|s| s.net_benefit_nano_usd < 0));
+    assert!(
+        cache
+            .inefficient
+            .windows(2)
+            .all(|w| w[0].net_benefit_nano_usd <= w[1].net_benefit_nano_usd)
+    );
+    assert_eq!(
+        cache.inefficient_definition,
+        veyra_analytics::metrics::CACHE_LOSS_DEFINITION
     );
 }

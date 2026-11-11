@@ -15,7 +15,12 @@ export interface RankItem {
   /** Share of the whole (0–1). */
   share: number;
   color: string;
+  /** Shown in the tooltip instead of the share, e.g. what a ratio is made of. */
+  detail?: string;
 }
+
+/** What the label at the end of each bar shows. */
+export type BarLabel = "share" | "value";
 
 type Format = (v: number) => string;
 
@@ -32,7 +37,11 @@ function itemTooltip(theme: ChartTheme, items: readonly RankItem[], format: Form
       const item = items[(p as ItemParam).dataIndex ?? -1];
       if (item === undefined) return "";
       return tooltipContent(item.label, [
-        { label: format(item.value), value: fmt.percent(item.share), color: item.color },
+        {
+          label: format(item.value),
+          value: item.detail ?? fmt.percent(item.share),
+          color: item.color,
+        },
       ]);
     },
   };
@@ -52,6 +61,7 @@ export function rankingOption(
   theme: ChartTheme,
   ordered: readonly RankItem[],
   format: Format,
+  barLabel: BarLabel = "share",
 ): ChartOption {
   return {
     ...baseOption(theme),
@@ -77,8 +87,11 @@ export function rankingOption(
           show: true,
           position: "right",
           color: theme.muted,
-          formatter: (p: unknown) =>
-            fmt.percent(ordered[(p as ItemParam).dataIndex ?? -1]?.share ?? 0),
+          formatter: (p: unknown) => {
+            const item = ordered[(p as ItemParam).dataIndex ?? -1];
+            if (item === undefined) return "";
+            return barLabel === "share" ? fmt.percent(item.share) : format(item.value);
+          },
         },
       },
     ],
@@ -124,11 +137,23 @@ interface RankChartProps {
   onSelect?: (key: string) => void;
 }
 
-/** Horizontal ranking bars with share, largest first; better read than a donut (§4). */
-export function Ranking({ items, format, label, onSelect }: RankChartProps) {
+/**
+ * Horizontal ranking bars, largest first; better read than a donut (§4). Each bar ends
+ * with its share, or with its value for rankings of ratios.
+ */
+export function Ranking({
+  items,
+  format,
+  label,
+  onSelect,
+  barLabel = "share",
+}: RankChartProps & { barLabel?: BarLabel }) {
   const theme = useChartTheme();
   const ordered = useMemo(() => [...items].reverse(), [items]);
-  const option = useMemo(() => rankingOption(theme, ordered, format), [theme, ordered, format]);
+  const option = useMemo(
+    () => rankingOption(theme, ordered, format, barLabel),
+    [theme, ordered, format, barLabel],
+  );
   const height = Math.max(120, items.length * 30 + 16);
   return (
     <Chart

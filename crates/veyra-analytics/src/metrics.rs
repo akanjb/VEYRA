@@ -151,6 +151,18 @@ fn net_cache_benefit(s: &BaseSums) -> Option<MetricValue> {
     Some(MetricValue::Money(NanoUsd(saving.0 - overhead.0)))
 }
 
+/// What a loss-making cache session is.
+pub const CACHE_LOSS_DEFINITION: &str = "Sessions whose cache writes cost more at API prices than their cache reads saved (a negative net cache benefit), among the sessions that write the most to the cache.";
+
+/// The net cache benefit in nano-USD; `None` when it cannot be computed.
+#[must_use]
+pub fn net_cache_benefit_nano_usd(sums: &BaseSums) -> Option<i64> {
+    match MetricId::NetCacheBenefit.compute(sums) {
+        Some(MetricValue::Money(money)) => Some(money.0),
+        _ => None,
+    }
+}
+
 /// The registry. Token totals reuse the domain's canonical formulas (`TokenCounts`).
 pub const METRICS: &[MetricDefinition] = &[
     MetricDefinition {

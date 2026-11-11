@@ -5,13 +5,14 @@
 import {
   Activity,
   ChartColumnStacked,
+  DatabaseZap,
   Database,
   LayoutDashboard,
   type LucideIcon,
 } from "lucide-react";
 
 export interface Page {
-  to: "/" | "/usage" | "/sessions" | "/sources";
+  to: "/" | "/usage" | "/cache" | "/sessions" | "/sources";
   title: string;
   /** The question the page answers. */
   purpose: string;
@@ -43,6 +44,15 @@ export const PAGES: readonly Page[] = [
     section: "Analyze",
     icon: ChartColumnStacked,
     shortcut: "u",
+    scoped: true,
+  },
+  {
+    to: "/cache",
+    title: "Cache",
+    purpose: "Is caching working, and what does it save?",
+    section: "Analyze",
+    icon: DatabaseZap,
+    shortcut: "c",
     scoped: true,
   },
   {

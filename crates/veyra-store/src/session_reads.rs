@@ -109,6 +109,9 @@ fn order_expression(sort: SessionSort) -> String {
         SessionSort::Tokens => format!("COALESCE(SUM({EVENT_TOTAL_TOKENS}), 0)"),
         SessionSort::Cost => "COALESCE(SUM(c.total_nusd), 0)".to_owned(),
         SessionSort::Events => "COUNT(*)".to_owned(),
+        SessionSort::CacheWrites => "COALESCE(SUM(COALESCE(e.cache_write_short, 0) \
+             + COALESCE(e.cache_write_long, 0) + COALESCE(e.cache_write_unspecified, 0)), 0)"
+            .to_owned(),
     }
 }
 

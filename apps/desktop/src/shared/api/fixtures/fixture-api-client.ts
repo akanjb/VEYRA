@@ -16,6 +16,7 @@ import type { ApiClient, CommandRequest, CommandResponse } from "../api-client";
 import { ApiCallError } from "../api-errors";
 import { sessionRow, tokensOf, type Flat } from "./aggregate";
 import { FIXTURE_PROJECTS, fixtureLabel, generateSessions } from "./dataset";
+import { cache } from "./cache-view";
 import { usage } from "./usage-view";
 import { overview, sessions } from "./views";
 
@@ -157,6 +158,7 @@ export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient 
     },
     get_overview: (r) => overview(state.flat(), r.scope),
     get_usage: (r) => usage(state.flat(), r.scope),
+    get_cache: (r) => cache(state.flat(), r.scope),
     list_sessions: (r) => sessions(state.flat(), r),
     get_session: (r) => state.detail(r.id),
   };

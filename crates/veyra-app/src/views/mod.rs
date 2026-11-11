@@ -1,6 +1,7 @@
 //! View builders: turn analytics results into DTOs. They contain no formulas of their
 //! own; every metric comes from the analytics crate.
 
+pub(crate) mod cache;
 mod kpis;
 pub(crate) mod overview;
 mod rankings;

@@ -8,7 +8,7 @@ import { fmt } from "@/shared/format";
 import { Button, Card, EmptyState, ErrorState, Segmented, Skeleton } from "@/shared/ui";
 
 import { SESSION_COLUMNS } from "./session-columns";
-import { useOpenSession } from "./session-links";
+import { useOpenSession } from "@/shared/links";
 import {
   PAGE_SIZE,
   SESSIONS_SEARCH_KEYS,

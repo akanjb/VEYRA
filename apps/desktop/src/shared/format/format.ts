@@ -61,6 +61,16 @@ export function percent(ratio: Num, locale?: string): string {
   );
 }
 
+/** A multiple, such as a reuse ratio: "2.4×". */
+export function times(value: Num, locale?: string): string {
+  if (isMissing(value)) return MISSING;
+  return (
+    new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(
+      value,
+    ) + "×"
+  );
+}
+
 /** A relative change with an explicit sign: "+38%", "−4.2%". */
 export function change(relative: Num, locale?: string): string {
   if (isMissing(relative)) return MISSING;

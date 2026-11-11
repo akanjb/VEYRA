@@ -8,9 +8,9 @@ use veyra_domain::source::{ConnectorDescriptor, IngestControl, SourceRepository}
 use veyra_domain::time::UtcMillis;
 
 use crate::dto::{
-    AppInfo, AppInfoRequest, BuildProfile, ListSourcesRequest, Overview, OverviewRequest,
-    RescanAccepted, RescanRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
-    SetSourceEnabledRequest, SourceList, SourceSummary, Usage, UsageRequest,
+    AppInfo, AppInfoRequest, BuildProfile, Cache, CacheRequest, ListSourcesRequest, Overview,
+    OverviewRequest, RescanAccepted, RescanRequest, SessionDetail, SessionList, SessionRequest,
+    SessionsRequest, SetSourceEnabledRequest, SourceList, SourceSummary, Usage, UsageRequest,
 };
 use crate::error::ApiError;
 use crate::names::DisplayNames;
@@ -170,6 +170,19 @@ impl Api {
         let UsageRequest { scope: requested } = request;
         let resolved = scope::resolve(&requested)?;
         views::usage::usage(self.data()?, &resolved)
+    }
+
+    /// The Cache page for a scope: net benefit, savings and overhead with their price
+    /// coverage, reads and writes over time, hit ratios, writes per TTL and the sessions
+    /// whose cache writes cost more than they saved.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn get_cache(&self, request: CacheRequest) -> Result<Cache, ApiError> {
+        let CacheRequest { scope: requested } = request;
+        let resolved = scope::resolve(&requested)?;
+        views::cache::cache(self.data()?, &resolved)
     }
 
     /// One page of sessions with activity in the scope, in the requested order.

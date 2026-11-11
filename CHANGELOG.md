@@ -5,6 +5,10 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Cache page.**
+  - Command `get_cache`: net cache benefit, gross saving, write overhead, hit ratio and reuse with comparisons, and the share of tokens the money figures cover; cache reads and writes per day; hit ratio by model and by project; cache writes per lifetime next to reads; the sessions whose cache writes cost more than their reads saved.
+  - Sessions can be ordered by cache writes.
+  - Chart primitives: a mirrored trend and grouped bars, each with a table twin; rankings can label bars with their value and explain each bar in its tooltip.
 - **Usage page.**
   - Command `get_usage`: headline tokens by kind with comparisons, daily token composition with reasoning shown where reported, breakdowns by model, provider, application, interface, project and device with a Pareto line and a concentration index, tokens per request and per session (mean, median and 90th percentile per day), and the distribution of request sizes.
   - Request counts per size bin kept as a rollup, so request-size percentiles stay within the query budgets (ADR-026). Session sizes are exact.

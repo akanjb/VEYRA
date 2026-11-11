@@ -564,6 +564,7 @@ mod session_reads {
     use veyra_analytics::sizes::{SizeHistogram, size_bin};
     use veyra_domain::identity::ModelId;
     use veyra_domain::time::UtcMillis;
+    use veyra_domain::tokens::TokenCounts;
     use veyra_domain::tooling::{ToolCall, ToolOutcome};
     use veyra_store::IngestBatch;
 
@@ -817,5 +818,48 @@ mod session_reads {
             .collect();
         sizes.sort_unstable();
         assert_eq!(sizes, [(630, 0), (1_050, 3 * MIN), (5_500, 60 * MIN)]);
+    }
+
+    #[test]
+    fn sessions_order_by_cache_writes() {
+        let db = TempDb::new();
+        let catalog = bundled_catalog();
+        let mut events = Vec::new();
+        for (session, writes) in [("small", 10_u64), ("large", 900), ("none", 0)] {
+            let mut written = event(
+                &format!("{session}-0"),
+                NOV_8,
+                TokenCounts {
+                    input_uncached: Some(5),
+                    cache_write_short: Some(writes),
+                    output_total: Some(1),
+                    ..TokenCounts::default()
+                },
+            );
+            written.context.session_key = Some(format!("claude-code:{session}"));
+            events.push(priced(written, &catalog));
+        }
+        db.store
+            .commit(
+                &IngestBatch {
+                    events,
+                    tool_outcomes: vec![],
+                    checkpoint: None,
+                },
+                now(),
+            )
+            .unwrap();
+        let keys: Vec<String> = db
+            .store
+            .sessions(&day_query(SessionSort::CacheWrites))
+            .unwrap()
+            .sessions
+            .into_iter()
+            .map(|s| s.key)
+            .collect();
+        assert_eq!(
+            keys,
+            ["claude-code:large", "claude-code:small", "claude-code:none"]
+        );
     }
 }

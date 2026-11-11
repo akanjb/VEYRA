@@ -17,7 +17,7 @@ import {
 } from "@/shared/ui";
 
 import { SUBAGENT_COLUMNS } from "./session-columns";
-import { useOpenSession } from "./session-links";
+import { useOpenSession } from "@/shared/links";
 import { modelNames, timelinePoints, toolCounts, type ToolCount } from "./session-model";
 
 const EVENT_COLUMNS: readonly Column<TimelineEvent>[] = [

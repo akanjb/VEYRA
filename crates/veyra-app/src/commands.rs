@@ -18,6 +18,7 @@ macro_rules! for_each_command {
             request_rescan($crate::dto::RescanRequest) -> $crate::dto::RescanAccepted;
             get_overview($crate::dto::OverviewRequest) -> $crate::dto::Overview;
             get_usage($crate::dto::UsageRequest) -> $crate::dto::Usage;
+            get_cache($crate::dto::CacheRequest) -> $crate::dto::Cache;
             list_sessions($crate::dto::SessionsRequest) -> $crate::dto::SessionList;
             get_session($crate::dto::SessionRequest) -> $crate::dto::SessionDetail;
         }

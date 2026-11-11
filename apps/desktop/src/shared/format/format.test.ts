@@ -12,6 +12,7 @@ import {
   integer,
   percent,
   shortId,
+  times,
   usd,
 } from "./format";
 
@@ -26,6 +27,7 @@ describe("format", () => {
       percent(Number.NaN, L),
       change(null, L),
       duration(undefined),
+      times(null, L),
     ]) {
       expect(formatted).toBe(MISSING);
     }
@@ -36,6 +38,7 @@ describe("format", () => {
     expect(compact(12_400, L)).toBe("12.4K");
     expect(compact(3_120_000, L)).toBe("3.1M");
     expect(integer(12_400_315, L)).toBe("12,400,315");
+    expect(times(2.44, L)).toBe("2.4×");
   });
 
   it("formats nano-USD, marking estimates and sub-cent amounts", () => {
