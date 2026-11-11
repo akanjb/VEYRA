@@ -6,10 +6,18 @@ import type { AppInfoRequest } from "./AppInfoRequest";
 import type { Cache } from "./Cache";
 import type { CacheRequest } from "./CacheRequest";
 import type { ListSourcesRequest } from "./ListSourcesRequest";
+import type { MergeProjectRequest } from "./MergeProjectRequest";
 import type { Models } from "./Models";
 import type { ModelsRequest } from "./ModelsRequest";
 import type { Overview } from "./Overview";
 import type { OverviewRequest } from "./OverviewRequest";
+import type { ProjectDetail } from "./ProjectDetail";
+import type { ProjectInfo } from "./ProjectInfo";
+import type { ProjectList } from "./ProjectList";
+import type { ProjectRequest } from "./ProjectRequest";
+import type { ProjectsChanged } from "./ProjectsChanged";
+import type { ProjectsRequest } from "./ProjectsRequest";
+import type { RenameProjectRequest } from "./RenameProjectRequest";
 import type { RescanAccepted } from "./RescanAccepted";
 import type { RescanRequest } from "./RescanRequest";
 import type { SessionDetail } from "./SessionDetail";
@@ -19,6 +27,7 @@ import type { SessionsRequest } from "./SessionsRequest";
 import type { SetSourceEnabledRequest } from "./SetSourceEnabledRequest";
 import type { SourceList } from "./SourceList";
 import type { SourceSummary } from "./SourceSummary";
+import type { UnmergeProjectRequest } from "./UnmergeProjectRequest";
 import type { Usage } from "./Usage";
 import type { UsageRequest } from "./UsageRequest";
 
@@ -33,6 +42,11 @@ export interface CommandMap {
   get_cache: { request: CacheRequest; response: Cache };
   get_models: { request: ModelsRequest; response: Models };
   get_activity: { request: ActivityRequest; response: Activity };
+  list_projects: { request: ProjectsRequest; response: ProjectList };
+  get_project: { request: ProjectRequest; response: ProjectDetail };
+  rename_project: { request: RenameProjectRequest; response: ProjectInfo };
+  merge_project: { request: MergeProjectRequest; response: ProjectsChanged };
+  unmerge_project: { request: UnmergeProjectRequest; response: ProjectsChanged };
   list_sessions: { request: SessionsRequest; response: SessionList };
   get_session: { request: SessionRequest; response: SessionDetail };
 }
@@ -49,6 +63,11 @@ export const COMMAND_NAMES = [
   "get_cache",
   "get_models",
   "get_activity",
+  "list_projects",
+  "get_project",
+  "rename_project",
+  "merge_project",
+  "unmerge_project",
   "list_sessions",
   "get_session",
 ] as const satisfies readonly CommandName[];

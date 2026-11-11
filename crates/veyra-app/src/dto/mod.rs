@@ -8,6 +8,7 @@ mod analytics;
 mod app_info;
 mod cache;
 mod models;
+mod projects;
 mod sessions;
 mod sources;
 mod usage;
@@ -20,6 +21,10 @@ pub use analytics::{
 pub use app_info::{AppInfo, AppInfoRequest, BuildProfile};
 pub use cache::{Cache, CacheKpis, CachePoint, CacheRequest, CacheSession, RatioRow, TtlRow};
 pub use models::{Matrix, ModelLane, ModelRow, Models, ModelsRequest, ShareDay};
+pub use projects::{
+    MergeProjectRequest, ProjectAlias, ProjectDetail, ProjectInfo, ProjectList, ProjectRequest,
+    ProjectRow, ProjectsChanged, ProjectsRequest, RenameProjectRequest, UnmergeProjectRequest,
+};
 pub use sessions::{
     SessionDetail, SessionList, SessionRequest, SessionRow, SessionSort, SessionsRequest,
     TimelineEvent, TokenBreakdown, ToolCallSummary,

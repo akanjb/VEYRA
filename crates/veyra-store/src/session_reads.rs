@@ -246,20 +246,63 @@ impl SessionReader for Store {
     }
 }
 
+/// Selected columns of matching events with a session, in the given order; `extra` is
+/// one more condition, or empty.
+fn timed_events<T>(
+    connection: &Connection,
+    query: &RangeQuery,
+    columns: &str,
+    extra: &str,
+    order: &str,
+    map: impl Fn(&Row<'_>) -> rusqlite::Result<T>,
+) -> Result<Vec<T>, StoreError> {
+    let mut values = Vec::new();
+    let mut clauses = event_clauses(query.from, query.until, &query.filters, &mut values);
+    if !extra.is_empty() {
+        clauses.push(extra.to_owned());
+    }
+    let mut statement = connection.prepare(&format!(
+        "SELECT {columns} FROM usage_events e WHERE {} ORDER BY {order}",
+        clauses.join(" AND ")
+    ))?;
+    let rows = statement.query_map(params_from_iter(values), map)?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
 impl ActivityReader for Store {
     fn event_times(&self, query: &RangeQuery) -> Result<Vec<(i64, UtcMillis)>, ReadError> {
         self.with_reader(|connection| {
-            let mut values = Vec::new();
-            let where_sql =
-                event_clauses(query.from, query.until, &query.filters, &mut values).join(" AND ");
-            let mut statement = connection.prepare(&format!(
-                "SELECT e.session_id, e.occurred_at FROM usage_events e WHERE {where_sql} \
-                 ORDER BY e.session_id, e.occurred_at"
-            ))?;
-            let rows = statement.query_map(params_from_iter(values), |row| {
-                Ok((row.get::<_, i64>(0)?, UtcMillis(row.get(1)?)))
-            })?;
-            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+            timed_events(
+                connection,
+                query,
+                "e.session_id, e.occurred_at",
+                "",
+                "e.session_id, e.occurred_at",
+                |row| Ok((row.get::<_, i64>(0)?, UtcMillis(row.get(1)?))),
+            )
+        })
+        .map_err(|e| read_error(&e))
+    }
+
+    fn project_event_times(
+        &self,
+        query: &RangeQuery,
+    ) -> Result<Vec<(i64, i64, UtcMillis)>, ReadError> {
+        self.with_reader(|connection| {
+            timed_events(
+                connection,
+                query,
+                "e.project_id, e.session_id, e.occurred_at",
+                "e.project_id IS NOT NULL",
+                "e.project_id, e.session_id, e.occurred_at",
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, i64>(1)?,
+                        UtcMillis(row.get(2)?),
+                    ))
+                },
+            )
         })
         .map_err(|e| read_error(&e))
     }
@@ -268,12 +311,13 @@ impl ActivityReader for Store {
 impl LabelReader for Store {
     fn projects(&self) -> Result<Vec<ProjectLabel>, ReadError> {
         self.with_reader(|connection| {
-            let mut statement =
-                connection.prepare_cached("SELECT id, key FROM projects ORDER BY key")?;
+            let mut statement = connection
+                .prepare_cached("SELECT id, key, display_name FROM projects ORDER BY key")?;
             let rows = statement.query_map([], |row| {
                 Ok(ProjectLabel {
                     id: row.get(0)?,
                     path: row.get(1)?,
+                    name: row.get(2)?,
                 })
             })?;
             Ok(rows.collect::<Result<Vec<_>, _>>()?)

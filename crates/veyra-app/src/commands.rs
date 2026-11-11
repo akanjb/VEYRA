@@ -21,6 +21,11 @@ macro_rules! for_each_command {
             get_cache($crate::dto::CacheRequest) -> $crate::dto::Cache;
             get_models($crate::dto::ModelsRequest) -> $crate::dto::Models;
             get_activity($crate::dto::ActivityRequest) -> $crate::dto::Activity;
+            list_projects($crate::dto::ProjectsRequest) -> $crate::dto::ProjectList;
+            get_project($crate::dto::ProjectRequest) -> $crate::dto::ProjectDetail;
+            rename_project($crate::dto::RenameProjectRequest) -> $crate::dto::ProjectInfo;
+            merge_project($crate::dto::MergeProjectRequest) -> $crate::dto::ProjectsChanged;
+            unmerge_project($crate::dto::UnmergeProjectRequest) -> $crate::dto::ProjectsChanged;
             list_sessions($crate::dto::SessionsRequest) -> $crate::dto::SessionList;
             get_session($crate::dto::SessionRequest) -> $crate::dto::SessionDetail;
         }

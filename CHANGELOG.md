@@ -5,6 +5,10 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Projects pages.**
+  - Command `list_projects`: every project with tokens, cost, sessions, active time, top model, last activity and daily tokens; search by name, path or merged folder.
+  - Command `get_project`: one project's headline figures, daily trend, model mix, providers, cache benefit and most expensive sessions.
+  - Commands `rename_project`, `merge_project` and `unmerge_project`. A name is a label; merging moves usage to another project, including usage recorded later, and unmerging restores it exactly. Rollups are rebuilt in the same transaction (ADR-027).
 - **Activity page.**
   - Command `get_activity`: active time, wall time, sessions and active days with comparisons; active and wall time per day; sessions per length range by either measure; the longest sessions; the activity calendar and hours of the week.
   - Wall time is defined once next to active time: each session from its first request to its last, idle gaps included, overlapping sessions counted once. Per-day figures split time at day boundaries, so the days add up to the period.

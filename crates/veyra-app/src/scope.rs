@@ -96,6 +96,17 @@ impl Resolved {
         }
     }
 
+    /// This scope narrowed to one project, whatever project filter it had.
+    pub fn for_project(&self, id: i64) -> Self {
+        Self {
+            filters: self
+                .filters
+                .clone()
+                .only(Dimension::Project, [Some(id.to_string())]),
+            ..self.clone()
+        }
+    }
+
     /// The events of `period` that match this scope's filters.
     pub fn range(&self, period: Period) -> RangeQuery {
         RangeQuery {

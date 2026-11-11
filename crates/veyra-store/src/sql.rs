@@ -35,7 +35,7 @@ pub static EVENT_SUMS_SELECT: LazyLock<String> = LazyLock::new(|| {
 });
 
 /// Every stored column of `usage_events` except `id` and `dedup_key`, in binding order.
-pub const EVENT_COLUMNS: [&str; 36] = [
+pub const EVENT_COLUMNS: [&str; 37] = [
     "fingerprint",
     "occurred_at",
     "bucket_start",
@@ -72,6 +72,7 @@ pub const EVENT_COLUMNS: [&str; 36] = [
     "acc_cost",
     "ingested_at",
     "precedence",
+    "source_project_id",
 ];
 
 /// Each analytics dimension: its stable name in `rollup_15m_by_dimension`, its column in

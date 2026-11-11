@@ -66,13 +66,15 @@ fn valid_request(cmd: &str) -> Value {
     });
     match cmd {
         "set_source_enabled" => json!({ "sourceId": 1, "enabled": false }),
-        "get_overview" | "get_usage" | "get_cache" | "get_models" | "get_activity" => {
-            json!({ "scope": scope })
-        }
+        "get_overview" | "get_usage" | "get_cache" | "get_models" | "get_activity"
+        | "list_projects" => json!({ "scope": scope }),
         "list_sessions" => {
             json!({ "scope": scope, "sort": "lastActive", "page": 0, "pageSize": 50 })
         }
-        "get_session" => json!({ "id": 1 }),
+        "get_session" | "unmerge_project" => json!({ "id": 1 }),
+        "get_project" => json!({ "scope": scope, "id": 1 }),
+        "rename_project" => json!({ "id": 1, "name": "Veyra" }),
+        "merge_project" => json!({ "from": 1, "into": 2 }),
         _ => json!({}),
     }
 }

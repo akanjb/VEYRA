@@ -1,10 +1,10 @@
-import type { Overview, OverviewKpis } from "@veyra/contracts";
+import type { OverviewKpis } from "@veyra/contracts";
 
-import type { Measure } from "@/shared/filters";
-import { MEASURE, fmt } from "@/shared/format";
-import { KpiGrid, KpiTile } from "@/shared/ui";
+import type { Measure } from "../filters";
+import { MEASURE, fmt } from "../format";
+import { KpiGrid, KpiTile } from "../ui";
 
-import { dailyTotals } from "./overview-model";
+import { dailyTotals, type UsageSummary } from "./summary-model";
 
 type KpiKey = keyof OverviewKpis;
 
@@ -57,7 +57,7 @@ const ORDER: readonly KpiKey[] = [
 ];
 
 /** One hero number for the selected measure, then the supporting tiles (§3). */
-export function KpiStrip({ overview, measure }: { overview: Overview; measure: Measure }) {
+export function KpiStrip({ summary, measure }: { summary: UsageSummary; measure: Measure }) {
   const hero = HERO[measure];
   const tile = (key: KpiKey, isHero: boolean) => {
     const meta = TILES[key];
@@ -65,12 +65,12 @@ export function KpiStrip({ overview, measure }: { overview: Overview; measure: M
       <KpiTile
         key={key}
         label={meta.label}
-        kpi={overview.kpis[key]}
+        kpi={summary.kpis[key]}
         format={meta.format}
         {...(meta.exact === undefined ? {} : { exact: meta.exact })}
         {...(meta.derived === true ? { accuracy: "derived" as const } : {})}
         hero={isHero}
-        {...(isHero ? { trend: dailyTotals(overview, measure) } : {})}
+        {...(isHero ? { trend: dailyTotals(summary, measure) } : {})}
       />
     );
   };

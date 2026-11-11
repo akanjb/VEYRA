@@ -71,14 +71,14 @@ pub(crate) fn first_key(group: &GroupResult) -> Option<String> {
     group.key.first().cloned().flatten()
 }
 
-/// Project id → normalised path.
-pub(crate) fn project_paths(data: &DataServices) -> Result<BTreeMap<String, String>, ApiError> {
+/// Project id → what the project is called (its name, or else its path).
+pub(crate) fn project_labels(data: &DataServices) -> Result<BTreeMap<String, String>, ApiError> {
     Ok(data
         .analytics
         .projects()
         .map_err(|e| internal(&e))?
         .into_iter()
-        .map(|p| (p.id.to_string(), p.path))
+        .map(|p| (p.id.to_string(), p.label().to_owned()))
         .collect())
 }
 
@@ -92,7 +92,7 @@ pub(crate) struct Labeller {
 impl Labeller {
     pub(crate) fn new(data: &DataServices, dimension: Dimension) -> Result<Self, ApiError> {
         let projects = if dimension == Dimension::Project {
-            project_paths(data)?
+            project_labels(data)?
         } else {
             BTreeMap::new()
         };

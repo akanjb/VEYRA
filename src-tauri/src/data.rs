@@ -56,6 +56,7 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
     let ingest = veyra_ingest::spawn(worker).map_err(|e| format!("cannot start ingestion: {e}"))?;
     Ok(DataServices {
         sources: Arc::clone(&store) as _,
+        projects: Arc::clone(&store) as _,
         analytics: store,
         connectors: descriptors,
         names,

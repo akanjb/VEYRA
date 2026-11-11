@@ -10,6 +10,7 @@ pub mod event;
 pub mod identity;
 pub mod money;
 pub mod pricing;
+pub mod project;
 pub mod source;
 pub mod time;
 pub mod tokens;

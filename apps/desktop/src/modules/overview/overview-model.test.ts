@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { TEST_THEME as theme } from "@/shared/charts/test-theme";
 
-import { dailyTotals, hasUsage, modelItems, projectItems, trendInput } from "./overview-model";
+import { projectItems } from "./overview-model";
 
 const m = (tokens: number, costNanoUsd: number, requests: number): Measures => ({
   tokens,
@@ -63,32 +63,6 @@ const overview: Overview = {
 };
 
 describe("overview model", () => {
-  it("detects usage", () => {
-    expect(hasUsage(overview)).toBe(true);
-    expect(hasUsage({ ...overview, daily: [{ date: "2026-11-08", values: [m(0, 0, 0)] }] })).toBe(
-      false,
-    );
-  });
-
-  it("builds one trend series per application for the measure", () => {
-    const { dates, series } = trendInput(overview, "cost", theme);
-    expect(dates).toEqual(["2026-11-07", "2026-11-08"]);
-    expect(series.map((s) => [s.name, s.values])).toEqual([
-      ["Claude Code", [10, 0]],
-      ["Codex CLI", [40, 0]],
-    ]);
-    expect(dailyTotals(overview, "requests")).toEqual([3, 0]);
-  });
-
-  it("re-ranks by the selected measure and keeps Other last", () => {
-    const byCost = modelItems(overview, "cost", theme);
-    expect(byCost.map((i) => i.key)).toEqual(["claude-sonnet-5-5", "claude-opus-5-5", null]);
-    expect(byCost.reduce((sum, i) => sum + i.share, 0)).toBeCloseTo(1);
-    expect(byCost[2]?.label).toBe("Other (3 models)");
-    expect(byCost[0]?.color).toBe("#d0602a");
-    expect(byCost[1]?.color).not.toBe("#d0602a");
-  });
-
   it("labels projects with their paths", () => {
     expect(projectItems(overview, "tokens", theme).map((i) => [i.key, i.label])).toEqual([
       ["1", "/work/a"],

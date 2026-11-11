@@ -367,7 +367,10 @@ fn bind_cost(
 #[derive(Debug, Clone, Copy, Default)]
 struct ContextIds {
     session: Option<i64>,
+    /// The project usage counts toward (the one it is merged into, if any).
     project: Option<i64>,
+    /// The project the event was recorded in.
+    source_project: Option<i64>,
     device: Option<i64>,
 }
 
@@ -377,6 +380,8 @@ struct KeyCache {
     ids: HashMap<&'static str, HashMap<String, i64>>,
     /// Session links already applied in this batch: (session, parent, is subagent).
     linked: HashSet<(i64, Option<i64>, bool)>,
+    /// Project id → the project its usage counts toward.
+    effective_projects: HashMap<i64, i64>,
 }
 
 impl KeyCache {
@@ -402,6 +407,22 @@ impl KeyCache {
             .or_default()
             .insert(key.to_owned(), id);
         Ok(id)
+    }
+
+    /// The project `id`'s usage counts toward: the one it is merged into, or itself.
+    fn effective_project(
+        &mut self,
+        transaction: &Transaction<'_>,
+        id: i64,
+    ) -> Result<i64, StoreError> {
+        if let Some(effective) = self.effective_projects.get(&id) {
+            return Ok(*effective);
+        }
+        let effective: i64 = transaction
+            .prepare_cached("SELECT COALESCE(merged_into, id) FROM projects WHERE id = ?1")?
+            .query_row([id], |row| row.get(0))?;
+        self.effective_projects.insert(id, effective);
+        Ok(effective)
     }
 }
 
@@ -433,13 +454,17 @@ fn resolve_context(
                 .execute(params![session, parent, i64::from(context.is_subagent)])?;
         }
     }
+    let source_project = context
+        .project_key
+        .as_deref()
+        .map(|key| keys.resolve(transaction, "projects", key))
+        .transpose()?;
     Ok(ContextIds {
         session,
-        project: context
-            .project_key
-            .as_deref()
-            .map(|key| keys.resolve(transaction, "projects", key))
+        project: source_project
+            .map(|id| keys.effective_project(transaction, id))
             .transpose()?,
+        source_project,
         device: context
             .device_key
             .as_deref()
@@ -498,5 +523,6 @@ fn event_values(
         text(acc.cost.as_str()),
         Value::Integer(now.0),
         Value::Integer(priced.precedence),
+        opt_int(ids.source_project),
     ])
 }

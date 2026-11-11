@@ -4,14 +4,17 @@ use std::sync::{Arc, OnceLock};
 
 use veyra_analytics::port::{ActivityReader, BaseSumsReader, LabelReader, SizeReader};
 use veyra_analytics::sessions::SessionReader;
+use veyra_domain::project::ProjectRepository;
 use veyra_domain::source::{ConnectorDescriptor, IngestControl, SourceRepository};
 use veyra_domain::time::UtcMillis;
 
 use crate::dto::{
     Activity, ActivityRequest, AppInfo, AppInfoRequest, BuildProfile, Cache, CacheRequest,
-    ListSourcesRequest, Models, ModelsRequest, Overview, OverviewRequest, RescanAccepted,
-    RescanRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
-    SetSourceEnabledRequest, SourceList, SourceSummary, Usage, UsageRequest,
+    ListSourcesRequest, MergeProjectRequest, Models, ModelsRequest, Overview, OverviewRequest,
+    ProjectDetail, ProjectInfo, ProjectList, ProjectRequest, ProjectsChanged, ProjectsRequest,
+    RenameProjectRequest, RescanAccepted, RescanRequest, SessionDetail, SessionList,
+    SessionRequest, SessionsRequest, SetSourceEnabledRequest, SourceList, SourceSummary,
+    UnmergeProjectRequest, Usage, UsageRequest,
 };
 use crate::error::ApiError;
 use crate::names::DisplayNames;
@@ -39,6 +42,7 @@ impl<T> AnalyticsReader for T where
 /// The database and ingestion ports, attached once they have started.
 pub struct DataServices {
     pub sources: Arc<dyn SourceRepository>,
+    pub projects: Arc<dyn ProjectRepository>,
     pub analytics: Arc<dyn AnalyticsReader>,
     /// Descriptors of every connector in this build.
     pub connectors: Vec<ConnectorDescriptor>,
@@ -210,6 +214,78 @@ impl Api {
         views::activity::activity(self.data()?, &resolved)
     }
 
+    /// Every project that is not merged into another, with its usage in the scope.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn list_projects(&self, request: ProjectsRequest) -> Result<ProjectList, ApiError> {
+        let ProjectsRequest { scope: requested } = request;
+        let resolved = scope::resolve(&requested)?;
+        views::projects::list(self.data()?, &resolved)
+    }
+
+    /// One project over the scope: headline numbers, daily trend, model and provider mix
+    /// and its most expensive sessions.
+    ///
+    /// # Errors
+    /// [`ApiError::NotFound`] for an unknown project; [`ApiError::Validation`] for an
+    /// invalid scope; [`ApiError::Busy`] while starting; [`ApiError::Internal`] on
+    /// database failure.
+    pub fn get_project(&self, request: ProjectRequest) -> Result<ProjectDetail, ApiError> {
+        let ProjectRequest {
+            scope: requested,
+            id,
+        } = request;
+        let resolved = scope::resolve(&requested)?;
+        views::projects::detail(self.data()?, &resolved, id)
+    }
+
+    /// Sets or clears a project's name.
+    ///
+    /// # Errors
+    /// [`ApiError::NotFound`] for an unknown project; [`ApiError::Validation`] for a name
+    /// that is too long; [`ApiError::Busy`] while starting; [`ApiError::Internal`] on
+    /// database failure.
+    pub fn rename_project(&self, request: RenameProjectRequest) -> Result<ProjectInfo, ApiError> {
+        let RenameProjectRequest { id, name } = request;
+        views::projects::rename(self.data()?, id, name.as_deref())
+    }
+
+    /// Merges a project into another: its usage, past and future, counts toward the
+    /// other one, until the merge is undone.
+    ///
+    /// # Errors
+    /// [`ApiError::NotFound`] for an unknown project; [`ApiError::Validation`] for a merge
+    /// into itself; [`ApiError::Busy`] while starting; [`ApiError::Internal`] on database
+    /// failure.
+    pub fn merge_project(&self, request: MergeProjectRequest) -> Result<ProjectsChanged, ApiError> {
+        let MergeProjectRequest { from, into } = request;
+        self.data()?
+            .projects
+            .merge_project(from, into)
+            .map_err(|e| views::projects::project_error(&e))?;
+        Ok(ProjectsChanged {})
+    }
+
+    /// Undoes a merge: the project's usage counts as its own again.
+    ///
+    /// # Errors
+    /// [`ApiError::NotFound`] for an unknown project; [`ApiError::Validation`] for a project
+    /// that is not merged; [`ApiError::Busy`] while starting; [`ApiError::Internal`] on
+    /// database failure.
+    pub fn unmerge_project(
+        &self,
+        request: UnmergeProjectRequest,
+    ) -> Result<ProjectsChanged, ApiError> {
+        let UnmergeProjectRequest { id } = request;
+        self.data()?
+            .projects
+            .unmerge_project(id)
+            .map_err(|e| views::projects::project_error(&e))?;
+        Ok(ProjectsChanged {})
+    }
+
     /// One page of sessions with activity in the scope, in the requested order.
     ///
     /// # Errors
@@ -289,6 +365,7 @@ mod tests {
         assert!(
             api.attach(Ok(DataServices {
                 sources: Arc::clone(&store) as _,
+                projects: Arc::clone(&store) as _,
                 analytics: Arc::clone(&store) as _,
                 connectors: veyra_connectors::all()
                     .iter()

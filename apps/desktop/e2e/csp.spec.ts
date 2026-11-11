@@ -26,6 +26,13 @@ async function hoverChart(page: Page): Promise<void> {
   if (box !== null) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 }
 
+/** Opens a page from the sidebar, waits for one of its headings and hovers a chart. */
+async function visit(page: Page, link: string, heading: string): Promise<void> {
+  await page.getByRole("navigation", { name: "Pages" }).getByRole("link", { name: link }).click();
+  await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+  await hoverChart(page);
+}
+
 test("every page and overlay runs without a CSP violation", async ({ page }) => {
   const violations = await recordViolations(page);
 
@@ -42,33 +49,24 @@ test("every page and overlay runs without a CSP violation", async ({ page }) => 
   await expect(page.getByRole("menuitemradio").first()).toBeVisible();
   await page.keyboard.press("Escape");
 
-  await page
-    .getByRole("navigation", { name: "Pages" })
-    .getByRole("link", { name: "Usage" })
-    .click();
-  await expect(page.getByRole("heading", { name: "Token composition" })).toBeVisible();
-  await hoverChart(page);
+  await visit(page, "Usage", "Token composition");
+
+  await visit(page, "Cache", "Cache reads and writes");
+
+  await visit(page, "Models & Providers", "Model leaderboard");
+
+  await visit(page, "Activity", "Longest sessions");
 
   await page
     .getByRole("navigation", { name: "Pages" })
-    .getByRole("link", { name: "Cache" })
+    .getByRole("link", { name: "Projects" })
     .click();
-  await expect(page.getByRole("heading", { name: "Cache reads and writes" })).toBeVisible();
+  await page.getByRole("table", { name: "Projects" }).locator("tbody tr").first().click();
+  await expect(page.getByRole("heading", { name: "Most expensive sessions" })).toBeVisible();
   await hoverChart(page);
-
-  await page
-    .getByRole("navigation", { name: "Pages" })
-    .getByRole("link", { name: "Models & Providers" })
-    .click();
-  await expect(page.getByRole("heading", { name: "Model leaderboard" })).toBeVisible();
-  await hoverChart(page);
-
-  await page
-    .getByRole("navigation", { name: "Pages" })
-    .getByRole("link", { name: "Activity" })
-    .click();
-  await expect(page.getByRole("heading", { name: "Longest sessions" })).toBeVisible();
-  await hoverChart(page);
+  await page.getByRole("button", { name: "Rename" }).click();
+  await expect(page.getByRole("dialog", { name: "Rename project" })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await page
     .getByRole("navigation", { name: "Pages" })

@@ -32,3 +32,4 @@ Each record documents one significant decision: its context, the decision itself
 | [024](0024-dashboard-frontend.md) | Dashboard frontend: stack, design system and deviations from the plan | Accepted |
 | [025](0025-reading-modes-and-capabilities.md) | Reading modes, side files and capability matrices for connectors | Accepted |
 | [026](0026-request-size-bins.md) | Request-size distributions from additive size bins | Accepted |
+| [027](0027-project-identity-and-merges.md) | Project identity, renaming and merging | Accepted |

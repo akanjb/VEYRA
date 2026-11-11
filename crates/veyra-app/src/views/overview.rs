@@ -43,7 +43,7 @@ pub(crate) fn composition(sums: &BaseSums) -> Composition {
 }
 
 /// Headline tiles with comparisons. Sessions and active time come from event times.
-fn kpis(
+pub(crate) fn kpis(
     data: &DataServices,
     scope: &Resolved,
     current: &BaseSums,
@@ -83,7 +83,7 @@ fn kpis(
 }
 
 /// The daily trend by application, largest application first.
-fn daily(
+pub(crate) fn daily(
     data: &DataServices,
     scope: &Resolved,
 ) -> Result<(Vec<Labelled>, Vec<DailyPoint>), ApiError> {
@@ -147,7 +147,7 @@ fn providers(data: &DataServices, scope: &Resolved) -> Result<Vec<Labelled>, Api
 }
 
 /// The top groups of one dimension by tokens, plus "Other".
-fn top(
+pub(crate) fn top(
     data: &DataServices,
     scope: &Resolved,
     dimension: Dimension,

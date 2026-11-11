@@ -559,10 +559,13 @@ mod ingestion {
 mod session_reads {
     use veyra_analytics::activity::{DEFAULT_IDLE_THRESHOLD_MS, activity};
     use veyra_analytics::dimension::{Dimension, Filters};
-    use veyra_analytics::port::{ActivityReader, LabelReader, RangeQuery, SizeReader};
+    use veyra_analytics::port::{
+        ActivityReader, BaseSumsReader, LabelReader, RangeQuery, SizeReader,
+    };
     use veyra_analytics::sessions::{SessionQuery, SessionReader, SessionSort};
     use veyra_analytics::sizes::{SizeHistogram, size_bin};
     use veyra_domain::identity::ModelId;
+    use veyra_domain::project::{ProjectChangeError, ProjectRepository};
     use veyra_domain::time::UtcMillis;
     use veyra_domain::tokens::TokenCounts;
     use veyra_domain::tooling::{ToolCall, ToolOutcome};
@@ -861,5 +864,129 @@ mod session_reads {
             keys,
             ["claude-code:large", "claude-code:small", "claude-code:none"]
         );
+    }
+
+    /// Tokens per project id, as the rollups and the event reads see them.
+    fn tokens_by_project(db: &TempDb) -> Vec<(Option<String>, u64)> {
+        let mut rows: Vec<(Option<String>, u64)> = db
+            .store
+            .read_base_sums(&veyra_analytics::port::BaseSumsQuery {
+                from: UtcMillis(NOV_8),
+                until: UtcMillis(NOV_8 + 24 * 60 * MIN),
+                filters: Filters::new(),
+                group_by: vec![Dimension::Project],
+                by_bucket: false,
+            })
+            .unwrap()
+            .into_iter()
+            .map(|r| (r.key[0].clone(), r.sums.tokens.total().unwrap()))
+            .collect();
+        rows.sort();
+        rows
+    }
+
+    fn project_id(db: &TempDb, path: &str) -> i64 {
+        db.store
+            .list_projects()
+            .unwrap()
+            .into_iter()
+            .find(|p| p.path == path)
+            .unwrap()
+            .id
+    }
+
+    #[test]
+    fn merging_moves_usage_and_unmerging_restores_it_exactly() {
+        let db = seeded();
+        let (veyra, other) = (
+            project_id(&db, "/work/veyra"),
+            project_id(&db, "/work/other"),
+        );
+        let before = tokens_by_project(&db);
+        assert_eq!(before.len(), 2);
+
+        db.store.merge_project(other, veyra).unwrap();
+        let merged = tokens_by_project(&db);
+        assert_eq!(merged, [(Some(veyra.to_string()), 630 + 1_050 + 5_500)]);
+        // Event reads filter by the merged project too.
+        let filtered = RangeQuery {
+            filters: Filters::new().with(Dimension::Project, [Some(veyra.to_string())]),
+            ..day()
+        };
+        assert_eq!(db.store.event_times(&filtered).unwrap().len(), 5);
+
+        // Usage recorded in the merged project afterwards counts toward its target.
+        let mut late = event("s2-late", NOV_8 + 90 * MIN, tokens(7, 3));
+        late.context.session_key = Some("claude-code:s2".to_owned());
+        late.context.project_key = Some("/work/other".to_owned());
+        db.store
+            .commit(
+                &IngestBatch {
+                    events: vec![priced(late, &bundled_catalog())],
+                    tool_outcomes: vec![],
+                    checkpoint: None,
+                },
+                now(),
+            )
+            .unwrap();
+        assert_eq!(
+            tokens_by_project(&db),
+            [(Some(veyra.to_string()), 630 + 1_050 + 5_500 + 10)]
+        );
+
+        db.store.unmerge_project(other).unwrap();
+        let mut restored = before;
+        restored
+            .iter_mut()
+            .filter(|(id, _)| *id == Some(other.to_string()))
+            .for_each(|(_, tokens)| *tokens += 10);
+        assert_eq!(tokens_by_project(&db), restored);
+        assert!(
+            db.store
+                .list_projects()
+                .unwrap()
+                .iter()
+                .all(|p| p.merged_into.is_none())
+        );
+    }
+
+    #[test]
+    fn merges_stay_one_level_deep_and_bad_changes_are_refused() {
+        let db = seeded();
+        let (veyra, other) = (
+            project_id(&db, "/work/veyra"),
+            project_id(&db, "/work/other"),
+        );
+        db.store.merge_project(other, veyra).unwrap();
+        // Merging into a merged project merges into its target.
+        let refused = db.store.merge_project(veyra, other).unwrap_err();
+        assert_eq!(
+            refused.downcast_ref::<ProjectChangeError>(),
+            Some(&ProjectChangeError::SelfMerge)
+        );
+        let refused = db.store.unmerge_project(veyra).unwrap_err();
+        assert_eq!(
+            refused.downcast_ref::<ProjectChangeError>(),
+            Some(&ProjectChangeError::NotMerged(veyra))
+        );
+        let refused = db.store.merge_project(999, veyra).unwrap_err();
+        assert_eq!(
+            refused.downcast_ref::<ProjectChangeError>(),
+            Some(&ProjectChangeError::NotFound(999))
+        );
+    }
+
+    #[test]
+    fn renaming_sets_and_clears_a_display_name() {
+        let db = seeded();
+        let veyra = project_id(&db, "/work/veyra");
+        let renamed = db
+            .store
+            .rename_project(veyra, Some("  Veyra app "))
+            .unwrap();
+        assert_eq!(renamed.display_name.as_deref(), Some("Veyra app"));
+        let cleared = db.store.rename_project(veyra, Some("")).unwrap();
+        assert_eq!(cleared.display_name, None);
+        assert_eq!(cleared.path, "/work/veyra");
     }
 }

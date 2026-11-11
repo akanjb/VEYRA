@@ -10,6 +10,7 @@ mod error;
 mod fingerprint;
 mod mapping;
 mod migrations;
+mod projects;
 mod reader;
 mod reprice;
 mod rollup;

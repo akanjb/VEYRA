@@ -1,11 +1,10 @@
 import { useCommand } from "@/shared/api";
 import { toggleValue, useFilters, withDay } from "@/shared/filters";
+import { KpiStrip, ModelMixCard, TrendCard, hasUsage } from "@/shared/summary";
 import { CalendarCard, HoursCard } from "@/shared/time-cards";
 import { CardGrid, ErrorState, NoUsageCard, PageSkeleton } from "@/shared/ui";
 
-import { KpiStrip } from "./kpi-strip";
-import { ModelMixCard, ProjectsCard, TrendCard } from "./overview-cards";
-import { hasUsage } from "./overview-model";
+import { ProjectsCard } from "./overview-cards";
 
 /** "How am I using AI overall?" (docs/planning/03-ux.md §4, Overview). */
 export function OverviewPage() {
@@ -22,13 +21,13 @@ export function OverviewPage() {
   };
   return (
     <div className="grid gap-4">
-      <KpiStrip overview={data} measure={state.measure} />
+      <KpiStrip summary={data} measure={state.measure} />
       {hasUsage(data) ? (
         <>
-          <TrendCard overview={data} measure={state.measure} onSelectDate={selectDay} />
+          <TrendCard summary={data} measure={state.measure} onSelectDate={selectDay} />
           <CardGrid>
             <ModelMixCard
-              overview={data}
+              summary={data}
               measure={state.measure}
               onSelect={(m) => {
                 setState(toggleValue(state, "models", m));

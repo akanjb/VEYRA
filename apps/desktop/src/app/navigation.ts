@@ -9,12 +9,13 @@ import {
   Cpu,
   DatabaseZap,
   Database,
+  FolderGit2,
   LayoutDashboard,
   type LucideIcon,
 } from "lucide-react";
 
 export interface Page {
-  to: "/" | "/usage" | "/cache" | "/models" | "/activity" | "/sessions" | "/sources";
+  to: "/" | "/usage" | "/cache" | "/models" | "/activity" | "/projects" | "/sessions" | "/sources";
   title: string;
   /** The question the page answers. */
   purpose: string;
@@ -73,6 +74,15 @@ export const PAGES: readonly Page[] = [
     section: "Analyze",
     icon: CalendarClock,
     shortcut: "a",
+    scoped: true,
+  },
+  {
+    to: "/projects",
+    title: "Projects",
+    purpose: "Which projects drive usage, and what happened in them?",
+    section: "Explore",
+    icon: FolderGit2,
+    shortcut: "p",
     scoped: true,
   },
   {

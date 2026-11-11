@@ -17,8 +17,9 @@ use veyra_analytics::engine::evaluate;
 use veyra_analytics::metrics::{MetricId, MetricValue};
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_app::dto::{
-    ActivityRequest, CacheRequest, Comparison, Labelled, ModelsRequest, OverviewRequest, Scope,
-    ScopeFilters, SessionRequest, SessionSort, SessionsRequest, UsageRequest,
+    ActivityRequest, CacheRequest, Comparison, Labelled, MergeProjectRequest, ModelsRequest,
+    OverviewRequest, ProjectRequest, ProjectsRequest, RenameProjectRequest, Scope, ScopeFilters,
+    SessionRequest, SessionSort, SessionsRequest, UsageRequest,
 };
 use veyra_app::{Api, AppMetadata, DataServices, DisplayNames};
 use veyra_domain::source::{DiscoveryEnv, IngestControl};
@@ -90,6 +91,7 @@ fn api(store: &Arc<Store>) -> Api {
     );
     assert!(api.attach(Ok(DataServices {
         sources: Arc::clone(store) as _,
+        projects: Arc::clone(store) as _,
         analytics: Arc::clone(store) as _,
         connectors,
         names,
@@ -485,4 +487,71 @@ fn activity_days_add_up_to_the_period_and_match_the_overview() {
             .all(|w| w[0].wall_ms >= w[1].wall_ms)
     );
     assert!(activity.longest.iter().all(|s| s.active_ms <= s.wall_ms));
+}
+
+#[test]
+fn projects_match_the_overview_and_can_be_renamed() {
+    let data = ingested();
+    let api = api(&data.store);
+    let list = api
+        .list_projects(ProjectsRequest { scope: scope() })
+        .unwrap();
+    let overview = api
+        .get_overview(OverviewRequest { scope: scope() })
+        .unwrap();
+    assert_eq!(list.rows.len(), 1);
+    let row = &list.rows[0];
+    assert_eq!(row.measures, overview.projects[0].measures);
+    assert_eq!(row.daily_tokens.iter().sum::<u64>(), row.measures.tokens);
+    assert_eq!(row.daily_tokens.len(), list.dates.len());
+    #[allow(clippy::cast_precision_loss, reason = "comparing with an f64 KPI")]
+    let sessions = Some(row.sessions as f64);
+    assert_eq!(sessions, overview.kpis.sessions.value);
+    assert!(row.top_model.is_some() && row.last_active_at.is_some());
+
+    let detail = api
+        .get_project(ProjectRequest {
+            scope: scope(),
+            id: row.project.id,
+        })
+        .unwrap();
+    assert_eq!(detail.kpis.tokens.value, overview.kpis.tokens.value);
+    assert_eq!(detail.models, overview.models);
+    assert_eq!(detail.sessions.len(), 2);
+
+    let renamed = api
+        .rename_project(RenameProjectRequest {
+            id: row.project.id,
+            name: Some("Demo".to_owned()),
+        })
+        .unwrap();
+    assert_eq!(renamed.label, "Demo");
+    let relabelled = api
+        .get_overview(OverviewRequest { scope: scope() })
+        .unwrap();
+    assert_eq!(
+        relabelled.projects[0].label, "Demo",
+        "rankings use the name"
+    );
+    assert!(matches!(
+        api.rename_project(RenameProjectRequest {
+            id: row.project.id,
+            name: Some("x".repeat(81)),
+        }),
+        Err(veyra_app::ApiError::Validation { .. })
+    ));
+    assert!(matches!(
+        api.merge_project(MergeProjectRequest {
+            from: row.project.id,
+            into: row.project.id,
+        }),
+        Err(veyra_app::ApiError::Validation { .. })
+    ));
+    assert!(matches!(
+        api.get_project(ProjectRequest {
+            scope: scope(),
+            id: 9_999,
+        }),
+        Err(veyra_app::ApiError::NotFound { .. })
+    ));
 }

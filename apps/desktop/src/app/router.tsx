@@ -53,6 +53,18 @@ const activityRoute = createRoute({
   component: lazyRouteComponent(() => import("@/modules/activity"), "ActivityPage"),
 });
 
+const projectsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/projects",
+  component: lazyRouteComponent(() => import("@/modules/projects"), "ProjectsPage"),
+});
+
+const projectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/projects/$projectId",
+  component: lazyRouteComponent(() => import("@/modules/projects"), "ProjectDetailPage"),
+});
+
 const sessionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/sessions",
@@ -78,6 +90,8 @@ const routeTree = rootRoute.addChildren([
   cacheRoute,
   modelsRoute,
   activityRoute,
+  projectsRoute,
+  projectRoute,
   sessionsRoute,
   sessionRoute,
   sourcesRoute,

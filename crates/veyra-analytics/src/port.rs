@@ -55,6 +55,16 @@ pub trait ActivityReader {
     /// # Errors
     /// Returns [`ReadError`] when the underlying store fails.
     fn event_times(&self, query: &RangeQuery) -> Result<Vec<(i64, UtcMillis)>, ReadError>;
+
+    /// `(project id, session id, occurred_at)` of matching events with both a project and
+    /// a session, ordered by project, session and then time.
+    ///
+    /// # Errors
+    /// Returns [`ReadError`] when the underlying store fails.
+    fn project_event_times(
+        &self,
+        query: &RangeQuery,
+    ) -> Result<Vec<(i64, i64, UtcMillis)>, ReadError>;
 }
 
 /// Request and session sizes (implemented by the data layer).
@@ -74,11 +84,21 @@ pub trait SizeReader {
     fn session_sizes(&self, query: &RangeQuery) -> Result<Vec<SessionSize>, ReadError>;
 }
 
-/// A project as stored: its id (the analytics dimension value) and normalised path.
+/// A project as stored: its id (the analytics dimension value), normalised path and the
+/// name the user gave it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectLabel {
     pub id: i64,
     pub path: String,
+    pub name: Option<String>,
+}
+
+impl ProjectLabel {
+    /// What the project is called: its name, or else its path.
+    #[must_use]
+    pub fn label(&self) -> &str {
+        self.name.as_deref().unwrap_or(&self.path)
+    }
 }
 
 /// Human-readable labels for dimension values stored as ids.

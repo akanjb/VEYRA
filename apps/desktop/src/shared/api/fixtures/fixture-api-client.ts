@@ -19,6 +19,7 @@ import { FIXTURE_PROJECTS, fixtureLabel, generateSessions } from "./dataset";
 import { activity } from "./activity-view";
 import { cache } from "./cache-view";
 import { models } from "./models-view";
+import { FixtureProjects } from "./projects-view";
 import { usage } from "./usage-view";
 import { overview, sessions } from "./views";
 
@@ -57,9 +58,16 @@ class FixtureState {
     this.consentedAt = options.fresh ? null : options.now - 90 * 86_400_000;
   }
 
+  readonly projects = new FixtureProjects();
+
+  /** Every event with its session, counted toward the project it is merged into. */
   flat(): Flat[] {
     if (!this.enabled) return [];
-    return this.all.flatMap((session) => session.events.map((event) => ({ session, event })));
+    return this.all.flatMap((original) => {
+      const projectId = this.projects.effective(original.projectId);
+      const session = projectId === original.projectId ? original : { ...original, projectId };
+      return session.events.map((event) => ({ session, event }));
+    });
   }
 
   source(): SourceSummary {
@@ -163,6 +171,17 @@ export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient 
     get_cache: (r) => cache(state.flat(), r.scope),
     get_models: (r) => models(state.flat(), r.scope),
     get_activity: (r) => activity(state.flat(), r.scope),
+    list_projects: (r) => state.projects.list(state.flat(), r.scope),
+    get_project: (r) => state.projects.detail(state.flat(), r.scope, r.id),
+    rename_project: (r) => state.projects.rename(r.id, r.name),
+    merge_project: (r) => {
+      state.projects.merge(r.from, r.into);
+      return {};
+    },
+    unmerge_project: (r) => {
+      state.projects.unmerge(r.id);
+      return {};
+    },
     list_sessions: (r) => sessions(state.flat(), r),
     get_session: (r) => state.detail(r.id),
   };

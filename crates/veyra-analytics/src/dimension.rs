@@ -54,6 +54,17 @@ impl Filters {
         self
     }
 
+    /// Restricts a dimension to exactly these values, replacing any earlier restriction.
+    #[must_use]
+    pub fn only(
+        mut self,
+        dimension: Dimension,
+        values: impl IntoIterator<Item = DimensionValue>,
+    ) -> Self {
+        self.values.insert(dimension, values.into_iter().collect());
+        self
+    }
+
     /// Restricted dimensions and their allowed values.
     pub fn iter(&self) -> impl Iterator<Item = (Dimension, &BTreeSet<DimensionValue>)> {
         self.values.iter().map(|(d, v)| (*d, v))
