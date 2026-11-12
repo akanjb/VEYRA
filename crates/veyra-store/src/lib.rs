@@ -17,8 +17,10 @@ mod reader;
 mod reprice;
 mod rollup;
 mod session_reads;
+mod session_source;
 mod size_reads;
 mod sources;
+mod spans;
 mod sql;
 mod write;
 

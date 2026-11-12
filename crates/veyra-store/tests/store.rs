@@ -451,13 +451,41 @@ fn every_rollup_level_agrees() {
 
     let from_totals = total(&read(vec![], Filters::new(), true));
     let from_dimension = total(&read(vec![Dimension::Model], Filters::new(), true));
-    let from_full = total(&read(
+    let from_services = total(&read(
         vec![Dimension::Model, Dimension::App],
         Filters::new(),
         true,
     ));
+    let from_full = total(&read(
+        vec![Dimension::Model, Dimension::Project],
+        Filters::new(),
+        true,
+    ));
     assert_eq!(from_totals, from_dimension);
+    assert_eq!(from_totals, from_services);
     assert_eq!(from_totals, from_full);
+
+    // Groups by several service dimensions equal the full rollup's, group by group.
+    let services = read(
+        vec![Dimension::Model, Dimension::App],
+        Filters::new(),
+        false,
+    );
+    // A filter on every project, unknown included, sends the same query to rollup_15m.
+    let every_project = read(vec![Dimension::Project], Filters::new(), false)
+        .into_iter()
+        .map(|row| row.key[0].clone())
+        .chain([None]);
+    let via_full = read(
+        vec![Dimension::Model, Dimension::App],
+        Filters::new().with(Dimension::Project, every_project),
+        false,
+    );
+    let sorted = |mut rows: Vec<veyra_analytics::port::BaseSumsRow>| {
+        rows.sort_by(|a, b| a.key.cmp(&b.key));
+        rows
+    };
+    assert_eq!(sorted(services), sorted(via_full));
 
     // Per model (including unknown): by-dimension rows equal full-rollup filtered sums.
     for model in [Some("gpt-6.1-sol".to_owned()), None] {
@@ -762,18 +790,19 @@ mod session_reads {
     }
 
     #[test]
-    fn event_times_feed_session_count_and_active_time() {
+    fn spans_feed_session_count_and_active_time() {
         let db = seeded();
-        let times = db
+        let spans = db
             .store
-            .event_times(&RangeQuery {
+            .spans(&RangeQuery {
                 from: UtcMillis(NOV_8),
                 until: UtcMillis(NOV_8 + 24 * 60 * MIN),
                 filters: Filters::new(),
             })
             .unwrap();
-        assert_eq!(times.len(), 5);
-        let result = activity(&times, DEFAULT_IDLE_THRESHOLD_MS);
+        // s1 has requests in two buckets (0 and 2 minutes, then 40); s1:a and s2 in one.
+        assert_eq!(spans.len(), 4);
+        let result = activity(&spans, DEFAULT_IDLE_THRESHOLD_MS);
         assert_eq!(result.sessions, 3);
         // s1: 0→2 (2 min) and 2→40 (capped at 5 min); s1:a and s2 have one event each.
         assert_eq!(result.active_ms, 7 * MIN);
@@ -960,7 +989,8 @@ mod session_reads {
             filters: Filters::new().with(Dimension::Project, [Some(veyra.to_string())]),
             ..day()
         };
-        assert_eq!(db.store.event_times(&filtered).unwrap().len(), 5);
+        let spans = db.store.spans(&filtered).unwrap();
+        assert_eq!(activity(&spans, DEFAULT_IDLE_THRESHOLD_MS).sessions, 3);
 
         // Usage recorded in the merged project afterwards counts toward its target.
         let mut late = event("s2-late", NOV_8 + 90 * MIN, tokens(7, 3));

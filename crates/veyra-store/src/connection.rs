@@ -46,6 +46,7 @@ pub(crate) fn register_functions(connection: &Connection) -> Result<(), StoreErr
             Ok(i64::from(size_bin(tokens)))
         },
     )?;
+    crate::spans::register(connection)?;
     Ok(())
 }
 

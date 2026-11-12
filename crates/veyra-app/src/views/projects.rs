@@ -2,19 +2,19 @@
 //! Every number comes from the analytics engine (ADR-008).
 
 use std::collections::BTreeMap;
+use std::thread;
 
-use veyra_analytics::activity::{DEFAULT_IDLE_THRESHOLD_MS, activity};
+use veyra_analytics::activity::{DEFAULT_IDLE_THRESHOLD_MS, Span, activity};
 use veyra_analytics::dimension::Dimension;
 use veyra_analytics::engine::GroupResult;
 use veyra_analytics::metrics::MetricId;
 use veyra_analytics::query::TimeGrain;
 use veyra_domain::project::{MAX_PROJECT_NAME_CHARS, ProjectChangeError, ProjectRecord};
 use veyra_domain::source::PortError;
-use veyra_domain::time::UtcMillis;
 
 use super::kpis::metric_kpi;
 use super::overview::{composition, daily, kpis, top};
-use super::{evaluated, internal, local_date, measures};
+use super::{evaluated, internal, joined, local_date, measures, tokens_by};
 use crate::DataServices;
 use crate::dto::{
     AccuracyClass, Labelled, ProjectAlias, ProjectDetail, ProjectInfo, ProjectList, ProjectRow,
@@ -78,15 +78,11 @@ fn top_models(
     data: &DataServices,
     scope: &Resolved,
 ) -> Result<BTreeMap<String, Labelled>, ApiError> {
-    let groups = evaluated(
+    let groups = tokens_by(
         data,
-        &scope.spec(
-            vec![Dimension::Project, Dimension::Provider, Dimension::Model],
-            TimeGrain::Total,
-            false,
-        ),
-    )?
-    .groups;
+        scope,
+        vec![Dimension::Project, Dimension::Provider, Dimension::Model],
+    )?;
     let mut best: BTreeMap<String, (u64, Labelled)> = BTreeMap::new();
     for group in &groups {
         let (Some(project), Some(model)) = (
@@ -95,7 +91,7 @@ fn top_models(
         ) else {
             continue;
         };
-        let tokens = measures(&group.totals).tokens;
+        let tokens = group.tokens;
         if best.get(&project).is_none_or(|(most, _)| tokens > *most) {
             best.insert(project, (tokens, data.names.label_model(model)));
         }
@@ -108,19 +104,19 @@ fn project_activity(
     data: &DataServices,
     scope: &Resolved,
 ) -> Result<BTreeMap<i64, (u64, i64, i64)>, ApiError> {
-    let times = data
+    let spans = data
         .analytics
-        .project_event_times(&scope.range(scope.period))
+        .project_spans(&scope.range(scope.period))
         .map_err(|e| internal(&e))?;
-    let mut per_project: BTreeMap<i64, Vec<(i64, UtcMillis)>> = BTreeMap::new();
-    for (project, session, at) in times {
-        per_project.entry(project).or_default().push((session, at));
+    let mut per_project: BTreeMap<i64, Vec<Span>> = BTreeMap::new();
+    for (project, span) in spans {
+        per_project.entry(project).or_default().push(span);
     }
     Ok(per_project
         .into_iter()
-        .map(|(project, events)| {
-            let last = events.iter().map(|(_, at)| at.0).max().unwrap_or(0);
-            let result = activity(&events, DEFAULT_IDLE_THRESHOLD_MS);
+        .map(|(project, spans)| {
+            let last = spans.iter().map(|span| span.last).max().unwrap_or(0);
+            let result = activity(&spans, DEFAULT_IDLE_THRESHOLD_MS);
             (project, (result.sessions, result.active_ms, last))
         })
         .collect())
@@ -151,10 +147,16 @@ fn row(
 /// Every project that is not merged into another, with its usage in the scope.
 pub(crate) fn list(data: &DataServices, scope: &Resolved) -> Result<ProjectList, ApiError> {
     let all = records(data)?;
-    let result = evaluated(
-        data,
-        &scope.spec(vec![Dimension::Project], TimeGrain::Day, false),
-    )?;
+    let (result, activity, models) = thread::scope(|s| {
+        let activity = s.spawn(|| project_activity(data, scope));
+        let models = s.spawn(|| top_models(data, scope));
+        let result = evaluated(
+            data,
+            &scope.spec(vec![Dimension::Project], TimeGrain::Day, false),
+        );
+        (result, joined(activity), joined(models))
+    });
+    let (result, activity, models) = (result?, activity?, models?);
     let dates = result
         .series
         .iter()
@@ -165,8 +167,6 @@ pub(crate) fn list(data: &DataServices, scope: &Resolved) -> Result<ProjectList,
         .iter()
         .filter_map(|g| g.key.first().cloned().flatten().map(|k| (k, g)))
         .collect();
-    let activity = project_activity(data, scope)?;
-    let models = top_models(data, scope)?;
     let mut rows: Vec<ProjectRow> = all
         .values()
         .filter(|p| p.merged_into.is_none())

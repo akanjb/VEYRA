@@ -6,7 +6,7 @@ use std::thread;
 
 use veyra_analytics::activity::{
     self as engine, ACTIVE_TIME_DEFINITION, DEFAULT_IDLE_THRESHOLD_MS, DURATION_BOUNDS_MS,
-    SESSIONS_DEFINITION, SessionLength, WALL_TIME_DEFINITION,
+    SESSIONS_DEFINITION, SessionLength, Span, WALL_TIME_DEFINITION,
 };
 use veyra_analytics::engine::period_starts;
 use veyra_analytics::metrics::MetricValue;
@@ -28,9 +28,9 @@ const LONGEST_SHOWN: u32 = 10;
 /// What "active days" means.
 const ACTIVE_DAYS_DEFINITION: &str = "Local days with at least one request.";
 
-/// Event times of a period, and its activity per local day.
+/// Session spans of a period, and its activity per local day.
 struct PeriodTimes {
-    times: Vec<(i64, UtcMillis)>,
+    spans: Vec<Span>,
     days: Vec<engine::Activity>,
 }
 
@@ -39,15 +39,15 @@ fn period_times(
     scope: &Resolved,
     period: Period,
 ) -> Result<(PeriodTimes, Vec<UtcMillis>), ApiError> {
-    let times = data
+    let spans = data
         .analytics
-        .event_times(&scope.range(period))
+        .spans(&scope.range(period))
         .map_err(|e| internal(&e))?;
     let starts =
         period_starts(&period, TimeGrain::Day, &scope.time_zone).map_err(|e| internal(&e))?;
     let days =
-        engine::activity_by_period(&times, DEFAULT_IDLE_THRESHOLD_MS, &starts, period.until());
-    Ok((PeriodTimes { times, days }, starts))
+        engine::activity_by_period(&spans, DEFAULT_IDLE_THRESHOLD_MS, &starts, period.until());
+    Ok((PeriodTimes { spans, days }, starts))
 }
 
 const fn count(n: u64) -> MetricValue {
@@ -63,8 +63,8 @@ fn active_days(days: &[engine::Activity]) -> u64 {
 }
 
 fn kpis(now: &PeriodTimes, before: Option<&PeriodTimes>) -> ActivityKpis {
-    let whole = engine::activity(&now.times, DEFAULT_IDLE_THRESHOLD_MS);
-    let earlier = before.map(|b| (engine::activity(&b.times, DEFAULT_IDLE_THRESHOLD_MS), b));
+    let whole = engine::activity(&now.spans, DEFAULT_IDLE_THRESHOLD_MS);
+    let earlier = before.map(|b| (engine::activity(&b.spans, DEFAULT_IDLE_THRESHOLD_MS), b));
     // Durations are derived from request times; they carry no token accuracy.
     ActivityKpis {
         active_ms: kpi(
@@ -154,7 +154,7 @@ pub(crate) fn activity(data: &DataServices, scope: &Resolved) -> Result<Activity
         let before = s.spawn(|| {
             scope
                 .previous
-                .map(|period| period_times(data, scope, period).map(|(times, _)| times))
+                .map(|period| period_times(data, scope, period).map(|(spans, _)| spans))
                 .transpose()
         });
         let calendar = s.spawn(|| calendar(data, scope));
@@ -172,7 +172,7 @@ pub(crate) fn activity(data: &DataServices, scope: &Resolved) -> Result<Activity
                 })
             })
             .collect::<Result<Vec<_>, ApiError>>()?;
-        let lengths = engine::session_lengths(&now.times, DEFAULT_IDLE_THRESHOLD_MS);
+        let lengths = engine::session_lengths(&now.spans, DEFAULT_IDLE_THRESHOLD_MS);
         let longest = longest(data, scope, &lengths)?;
         Ok(Activity {
             kpis: kpis(&now, joined(before)?.as_ref()),

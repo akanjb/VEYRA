@@ -4,7 +4,9 @@ use veyra_domain::money::NanoUsd;
 use veyra_domain::pricing::{Assumptions, CostStatus};
 use veyra_domain::time::UtcMillis;
 
+use crate::activity::Span;
 use crate::dimension::{Dimension, DimensionValue, Filters};
+use crate::metrics::{MetricId, MetricValue};
 use crate::sizes::{SessionSize, SizeRow};
 use crate::sums::BaseSums;
 
@@ -32,6 +34,14 @@ pub struct BaseSumsRow {
 #[error("analytics read failed: {0}")]
 pub struct ReadError(pub String);
 
+/// The total tokens of one group, aligned with [`BaseSumsQuery::group_by`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TokenRow {
+    pub bucket_start: Option<UtcMillis>,
+    pub key: Vec<DimensionValue>,
+    pub tokens: u64,
+}
+
 /// Implemented by the data layer to serve analytics queries.
 pub trait BaseSumsReader {
     /// Returns sums grouped as requested.
@@ -39,6 +49,27 @@ pub trait BaseSumsReader {
     /// # Errors
     /// Returns [`ReadError`] when the underlying store fails.
     fn read_base_sums(&self, query: &BaseSumsQuery) -> Result<Vec<BaseSumsRow>, ReadError>;
+
+    /// Total tokens ([`MetricId::TotalTokens`], zero when none were reported) grouped as
+    /// requested, for cards that show tokens only. A store may answer this more cheaply
+    /// than [`read_base_sums`](Self::read_base_sums), with the same values.
+    ///
+    /// # Errors
+    /// Returns [`ReadError`] when the underlying store fails.
+    fn read_tokens(&self, query: &BaseSumsQuery) -> Result<Vec<TokenRow>, ReadError> {
+        Ok(self
+            .read_base_sums(query)?
+            .into_iter()
+            .map(|row| TokenRow {
+                tokens: match MetricId::TotalTokens.compute(&row.sums) {
+                    Some(MetricValue::Count(n)) => n,
+                    _ => 0,
+                },
+                bucket_start: row.bucket_start,
+                key: row.key,
+            })
+            .collect())
+    }
 }
 
 /// Events in `[from, until)` matching the filters, for activity metrics.
@@ -49,24 +80,28 @@ pub struct RangeQuery {
     pub filters: Filters,
 }
 
-/// Event timestamps per session (implemented by the data layer).
+/// Session activity as spans, one per session and 15-minute bucket (implemented by the
+/// data layer), with the idle threshold [`crate::activity::DEFAULT_IDLE_THRESHOLD_MS`].
 pub trait ActivityReader {
-    /// `(session id, occurred_at)` of matching events, ordered by session and then time.
-    /// Events without a session are omitted.
+    /// Spans of matching events, ordered by session and then time. Events without a
+    /// session are omitted.
     ///
     /// # Errors
     /// Returns [`ReadError`] when the underlying store fails.
-    fn event_times(&self, query: &RangeQuery) -> Result<Vec<(i64, UtcMillis)>, ReadError>;
+    fn spans(&self, query: &RangeQuery) -> Result<Vec<Span>, ReadError>;
 
-    /// `(project id, session id, occurred_at)` of matching events with both a project and
-    /// a session, ordered by project, session and then time.
+    /// The spans of the given sessions only, ordered by session and then time.
     ///
     /// # Errors
     /// Returns [`ReadError`] when the underlying store fails.
-    fn project_event_times(
-        &self,
-        query: &RangeQuery,
-    ) -> Result<Vec<(i64, i64, UtcMillis)>, ReadError>;
+    fn session_spans(&self, query: &RangeQuery, sessions: &[i64]) -> Result<Vec<Span>, ReadError>;
+
+    /// `(project id, span)` of matching events with both a project and a session,
+    /// ordered by project, session and then time.
+    ///
+    /// # Errors
+    /// Returns [`ReadError`] when the underlying store fails.
+    fn project_spans(&self, query: &RangeQuery) -> Result<Vec<(i64, Span)>, ReadError>;
 }
 
 /// Request and session sizes (implemented by the data layer).

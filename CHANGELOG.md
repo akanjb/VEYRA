@@ -76,6 +76,15 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
   - Connector documentation and ADR-023.
 
 ### Changed
+- **Pages stay fast at ten million events** (ADR-030). Four new rollup levels:
+  - **Session spans and sums per bucket:** activity, the session list, session sizes and per-project activity no longer read every raw event of the period.
+  - **Sums per provider, model, application and interface:** the Models & Providers page uses these.
+  - **Pricing outcomes per bucket:** the cost assumptions panel uses these.
+  - **Request counts per size bin across every dimension:** unfiltered request sizes use these.
+
+  Cards that show tokens only read them without the other sums.
+
+  Activity is now computed from per-bucket spans with the same results as before. Reads that the new levels cannot answer exactly still use the events. Upgrading fills the new levels once.
 - **Faster dashboard pages** (ADR-029):
   - each page runs its independent reads at the same time, on four reader connections instead of two;
   - readers sort in memory;

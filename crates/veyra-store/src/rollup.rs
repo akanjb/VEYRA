@@ -4,7 +4,9 @@
 //! a bucket's rows are always exactly the aggregation of its events. Three levels exist:
 //! `rollup_15m` (per dimension combination), `rollup_15m_by_dimension` (per value of each
 //! single dimension) and `rollup_15m_totals` (one row per bucket). Beside them,
-//! `rollup_15m_sizes` counts requests per size bin (ADR-026).
+//! `rollup_15m_sizes` counts requests per size bin (ADR-026), and the page rollups of
+//! ADR-030 hold session spans and sums, sums per service (provider, model, application,
+//! interface) and pricing outcomes.
 //!
 //! Rebuilds are set-based: the batch's affected buckets go into a temporary table and
 //! each level is rebuilt for all of them with one statement.
@@ -16,6 +18,7 @@ use rusqlite::Transaction;
 
 use crate::StoreError;
 use crate::connection::SIZE_BIN_FUNCTION;
+use crate::spans::ACTIVE_INTERVALS_FUNCTION;
 use crate::sql::{
     DIMENSIONS, EVENT_SUMS_SELECT, EVENT_TOTAL_TOKENS, ROLLUP_SUM_COLUMNS, rollup_sums_select,
 };
@@ -84,6 +87,83 @@ static REBUILD_SIZES_SQL: LazyLock<String> = LazyLock::new(|| {
     )
 });
 
+/// Aggregates the affected buckets' events per session, project, application and
+/// interface: first and last request, active intervals, models and sums (ADR-030).
+static REBUILD_SESSIONS_SQL: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "INSERT INTO rollup_15m_sessions (bucket_start, slot, session_id, project_id, app_id, \
+         interface, first_at, last_at, active, models, {sums}) \
+         SELECT e.bucket_start, ROW_NUMBER() OVER (PARTITION BY e.bucket_start), e.session_id, \
+         e.project_id, e.app_id, e.interface, MIN(e.occurred_at), MAX(e.occurred_at), \
+         {ACTIVE_INTERVALS_FUNCTION}(e.occurred_at), \
+         GROUP_CONCAT(DISTINCT COALESCE(e.model_id, e.raw_model)), {event_sums} \
+         FROM usage_events e LEFT JOIN event_costs c ON c.event_id = e.id \
+         WHERE e.bucket_start IN {AFFECTED} AND e.session_id IS NOT NULL \
+         GROUP BY e.bucket_start, e.session_id, e.project_id, e.app_id, e.interface",
+        sums = ROLLUP_SUM_COLUMNS.join(", "),
+        event_sums = *EVENT_SUMS_SELECT,
+    )
+});
+
+/// Aggregates the affected buckets' dimension rows per service (ADR-030).
+static REBUILD_SERVICES_SQL: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "INSERT INTO rollup_15m_services (bucket_start, slot, provider_id, model_id, app_id, \
+         interface, {}) \
+         SELECT bucket_start, ROW_NUMBER() OVER (PARTITION BY bucket_start), provider_id, \
+         model_id, app_id, interface, {} FROM rollup_15m WHERE bucket_start IN {AFFECTED} \
+         GROUP BY bucket_start, provider_id, model_id, app_id, interface",
+        ROLLUP_SUM_COLUMNS.join(", "),
+        rollup_sums_select()
+    )
+});
+
+/// Counts the affected buckets' events per provider, model, price rule, outcome and set
+/// of assumptions (ADR-030).
+static REBUILD_PRICING_SQL: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "INSERT INTO rollup_15m_pricing (bucket_start, slot, provider_id, model_id, raw_model, \
+         rule_id, status, assumptions, events, tokens, cost_total_nusd) \
+         SELECT e.bucket_start, ROW_NUMBER() OVER (PARTITION BY e.bucket_start), e.provider_id, \
+         e.model_id, e.raw_model, c.rule_id, c.status, c.assumptions, COUNT(*), \
+         COALESCE(SUM({EVENT_TOTAL_TOKENS}), 0), COALESCE(SUM(c.total_nusd), 0) \
+         FROM usage_events e JOIN event_costs c ON c.event_id = e.id \
+         WHERE e.bucket_start IN {AFFECTED} \
+         GROUP BY e.bucket_start, e.provider_id, e.model_id, e.raw_model, c.rule_id, \
+         c.status, c.assumptions"
+    )
+});
+
+/// Sums the affected buckets' request counts per size bin across every dimension.
+static REBUILD_SIZE_TOTALS_SQL: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "INSERT INTO rollup_15m_size_totals (bucket_start, size_bin, requests) \
+         SELECT bucket_start, size_bin, SUM(requests) FROM rollup_15m_sizes \
+         WHERE bucket_start IN {AFFECTED} GROUP BY bucket_start, size_bin"
+    )
+});
+
+/// Tables keyed by bucket first, emptied for the affected buckets before a rebuild.
+const BUCKET_TABLES: [&str; 7] = [
+    "rollup_15m",
+    "rollup_15m_totals",
+    "rollup_15m_sizes",
+    "rollup_15m_size_totals",
+    "rollup_15m_sessions",
+    "rollup_15m_services",
+    "rollup_15m_pricing",
+];
+
+/// Rebuilds every rollup level for every bucket that holds events, for example after a
+/// migration adds a level.
+pub fn rebuild_all(transaction: &Transaction<'_>) -> Result<usize, StoreError> {
+    let mut statement = transaction.prepare("SELECT DISTINCT bucket_start FROM usage_events")?;
+    let buckets = statement
+        .query_map([], |row| row.get::<_, i64>(0))?
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    rebuild(transaction, &buckets)
+}
+
 /// Rebuilds every rollup level for the given buckets. Returns the number of buckets.
 pub fn rebuild(
     transaction: &Transaction<'_>,
@@ -101,7 +181,7 @@ pub fn rebuild(
         add.execute([bucket])?;
     }
 
-    for table in ["rollup_15m", "rollup_15m_totals", "rollup_15m_sizes"] {
+    for table in BUCKET_TABLES {
         transaction
             .prepare_cached(&format!(
                 "DELETE FROM {table} WHERE bucket_start IN {AFFECTED}"
@@ -126,5 +206,13 @@ pub fn rebuild(
     transaction
         .prepare_cached(&REBUILD_SIZES_SQL)?
         .execute([])?;
+    for sql in [
+        &*REBUILD_SIZE_TOTALS_SQL,
+        &*REBUILD_SESSIONS_SQL,
+        &*REBUILD_SERVICES_SQL,
+        &*REBUILD_PRICING_SQL,
+    ] {
+        transaction.prepare_cached(sql)?.execute([])?;
+    }
     Ok(buckets.len())
 }

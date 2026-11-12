@@ -1,10 +1,9 @@
 //! The session explorer and the session timeline.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use veyra_analytics::activity::{DEFAULT_IDLE_THRESHOLD_MS, session_active_ms};
+use veyra_analytics::activity::{DEFAULT_IDLE_THRESHOLD_MS, session_active_ms, session_lengths};
 use veyra_analytics::composition::AccuracyComposition;
-use veyra_analytics::port::RangeQuery;
 use veyra_analytics::sessions::{self as reads, SessionQuery, SessionSummary};
 use veyra_domain::time::UtcMillis;
 
@@ -81,31 +80,20 @@ pub(crate) fn list(
         })
         .map_err(|e| internal(&e))?;
 
-    // Active time of the listed sessions, from their event times in the period.
-    let wanted: HashSet<i64> = result.sessions.iter().map(|s| s.id).collect();
-    let mut times: HashMap<i64, Vec<UtcMillis>> = HashMap::new();
-    for (session, at) in data
+    // Active time of the listed sessions only, from their spans in the period.
+    let listed: Vec<i64> = result.sessions.iter().map(|s| s.id).collect();
+    let spans = data
         .analytics
-        .event_times(&RangeQuery {
-            from: scope.period.from(),
-            until: scope.period.until(),
-            filters: scope.filters.clone(),
-        })
-        .map_err(|e| internal(&e))?
-    {
-        if wanted.contains(&session) {
-            times.entry(session).or_default().push(at);
-        }
-    }
+        .session_spans(&scope.range(scope.period), &listed)
+        .map_err(|e| internal(&e))?;
+    let active: HashMap<i64, i64> = session_lengths(&spans, DEFAULT_IDLE_THRESHOLD_MS)
+        .into_iter()
+        .map(|length| (length.session, length.active_ms))
+        .collect();
     let rows = result
         .sessions
         .iter()
-        .map(|s| {
-            let active = times
-                .get(&s.id)
-                .map_or(0, |t| session_active_ms(t, DEFAULT_IDLE_THRESHOLD_MS));
-            row(&data.names, s, active)
-        })
+        .map(|s| row(&data.names, s, active.get(&s.id).copied().unwrap_or(0)))
         .collect();
     Ok(SessionList {
         total: result.total,

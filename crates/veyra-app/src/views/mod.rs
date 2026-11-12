@@ -22,8 +22,10 @@ use std::thread::ScopedJoinHandle;
 use jiff::tz::TimeZone;
 use jiff::{Timestamp, Zoned};
 use veyra_analytics::activity::{Activity, DEFAULT_IDLE_THRESHOLD_MS, activity};
+use veyra_analytics::dimension::Dimension;
 use veyra_analytics::engine::{QueryResult, evaluate};
 use veyra_analytics::metrics::{MetricId, MetricValue};
+use veyra_analytics::port::{BaseSumsQuery, TokenRow};
 use veyra_analytics::query::{Period, QuerySpec};
 use veyra_analytics::sums::BaseSums;
 use veyra_domain::accuracy::Accuracy;
@@ -43,6 +45,23 @@ pub(crate) fn joined<T>(part: ScopedJoinHandle<'_, T>) -> T {
         .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
 }
 
+/// Total tokens per group over the scope's period, for cards that show tokens only.
+pub(crate) fn tokens_by(
+    data: &DataServices,
+    scope: &Resolved,
+    group_by: Vec<Dimension>,
+) -> Result<Vec<TokenRow>, ApiError> {
+    data.analytics
+        .read_tokens(&BaseSumsQuery {
+            from: scope.period.from(),
+            until: scope.period.until(),
+            filters: scope.filters.clone(),
+            group_by,
+            by_bucket: false,
+        })
+        .map_err(|e| internal(&e))
+}
+
 /// Evaluates an analytics query.
 pub(crate) fn evaluated(data: &DataServices, spec: &QuerySpec) -> Result<QueryResult, ApiError> {
     evaluate(data.analytics.as_ref(), spec).map_err(|e| internal(&e))
@@ -54,11 +73,11 @@ pub(crate) fn activity_of(
     scope: &Resolved,
     period: Period,
 ) -> Result<Activity, ApiError> {
-    let times = data
+    let spans = data
         .analytics
-        .event_times(&scope.range(period))
+        .spans(&scope.range(period))
         .map_err(|e| internal(&e))?;
-    Ok(activity(&times, DEFAULT_IDLE_THRESHOLD_MS))
+    Ok(activity(&spans, DEFAULT_IDLE_THRESHOLD_MS))
 }
 
 /// The local calendar date (`YYYY-MM-DD`) of an instant.

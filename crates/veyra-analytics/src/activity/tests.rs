@@ -1,8 +1,8 @@
 use veyra_domain::time::UtcMillis;
 
 use super::{
-    Activity, DURATION_BOUNDS_MS, activity, activity_by_period, duration_bin, session_active_ms,
-    session_lengths,
+    Activity, DURATION_BOUNDS_MS, Span, activity, activity_by_period, duration_bin,
+    session_active_ms, session_lengths, span_of, spans_of,
 };
 
 const MIN: i64 = 60_000;
@@ -12,12 +12,16 @@ fn at(minutes: i64) -> UtcMillis {
     UtcMillis(minutes * MIN)
 }
 
+fn spans(events: &[(i64, UtcMillis)]) -> Vec<Span> {
+    spans_of(events, T)
+}
+
 #[test]
 fn caps_gaps_at_the_idle_threshold_but_not_wall_time() {
     // Gaps of 2, 30 and 4 minutes: 2 + 5 + 4 = 11 active minutes, 36 wall minutes.
     let events = [(1, at(0)), (1, at(2)), (1, at(32)), (1, at(36))];
     assert_eq!(
-        activity(&events, T),
+        activity(&spans(&events), T),
         Activity {
             sessions: 1,
             active_ms: 11 * MIN,
@@ -33,7 +37,7 @@ fn parallel_sessions_are_not_double_counted() {
     // Session 1 covers minutes 0–4; session 2 covers minutes 2–6: union 6 minutes.
     let events = [(1, at(0)), (1, at(4)), (2, at(2)), (2, at(6))];
     assert_eq!(
-        activity(&events, T),
+        activity(&spans(&events), T),
         Activity {
             sessions: 2,
             active_ms: 6 * MIN,
@@ -45,7 +49,7 @@ fn parallel_sessions_are_not_double_counted() {
 #[test]
 fn a_single_event_is_a_session_without_active_or_wall_time() {
     assert_eq!(
-        activity(&[(9, at(10))], T),
+        activity(&spans(&[(9, at(10))]), T),
         Activity {
             sessions: 1,
             active_ms: 0,
@@ -67,7 +71,7 @@ fn periods_split_intervals_at_their_boundaries_and_add_up() {
         (2, at(130)),
     ];
     let starts = [at(0), at(60), at(120)];
-    let periods = activity_by_period(&events, T, &starts, at(180));
+    let periods = activity_by_period(&spans(&events), T, &starts, at(180));
     assert_eq!(
         periods,
         [
@@ -89,7 +93,7 @@ fn periods_split_intervals_at_their_boundaries_and_add_up() {
         ]
     );
     // The periods' times add up to the whole; sessions count once per period they touch.
-    let whole = activity(&events, T);
+    let whole = activity(&spans(&events), T);
     assert_eq!(
         periods.iter().map(|p| p.active_ms).sum::<i64>(),
         whole.active_ms
@@ -103,7 +107,7 @@ fn periods_split_intervals_at_their_boundaries_and_add_up() {
 #[test]
 fn session_lengths_and_their_bins() {
     let events = [(1, at(0)), (1, at(2)), (1, at(32)), (2, at(5))];
-    let lengths = session_lengths(&events, T);
+    let lengths = session_lengths(&spans(&events), T);
     assert_eq!(
         lengths
             .iter()
@@ -116,4 +120,60 @@ fn session_lengths_and_their_bins() {
     assert_eq!(duration_bin(MIN), 1);
     assert_eq!(duration_bin(32 * MIN), 4);
     assert_eq!(duration_bin(10 * 3_600_000), DURATION_BOUNDS_MS.len() - 1);
+}
+
+#[test]
+fn a_span_holds_the_merged_gaps_inside_its_bucket() {
+    let span = span_of(4, &[0, 2 * MIN, 9 * MIN, 9 * MIN], T).unwrap();
+    assert_eq!(
+        span,
+        Span {
+            session: 4,
+            first: 0,
+            last: 9 * MIN,
+            // 0 → 2 minutes, then 2 → 7 (a 7-minute gap capped at 5); the repeat adds nothing.
+            active: vec![(0, 7 * MIN)],
+        }
+    );
+    assert_eq!(span_of(4, &[], T), None);
+}
+
+/// A small deterministic generator, so the property test needs no dependency.
+fn pseudo_random(seed: &mut u64) -> i64 {
+    *seed ^= *seed << 13;
+    *seed ^= *seed >> 7;
+    *seed ^= *seed << 17;
+    i64::try_from(*seed % 1_000_000).unwrap()
+}
+
+#[test]
+fn bucket_spans_give_the_same_activity_as_one_span_per_request() {
+    let mut seed = 0x5eed_u64;
+    for _ in 0..50 {
+        let mut events: Vec<(i64, UtcMillis)> = (0..60)
+            .map(|_| {
+                let session = pseudo_random(&mut seed) % 4;
+                // Up to three hours, at second resolution, so gaps vary around T.
+                let at = (pseudo_random(&mut seed) % 10_800) * 1_000;
+                (session, UtcMillis(at))
+            })
+            .collect();
+        events.sort_unstable();
+        let per_request: Vec<Span> = events
+            .iter()
+            .filter_map(|(session, at)| span_of(*session, &[at.0], T))
+            .collect();
+        let per_bucket = spans(&events);
+        assert!(per_bucket.len() <= per_request.len());
+        let starts = [at(0), at(45), at(90), at(135)];
+        assert_eq!(activity(&per_bucket, T), activity(&per_request, T));
+        assert_eq!(
+            activity_by_period(&per_bucket, T, &starts, at(180)),
+            activity_by_period(&per_request, T, &starts, at(180))
+        );
+        assert_eq!(
+            session_lengths(&per_bucket, T),
+            session_lengths(&per_request, T)
+        );
+    }
 }

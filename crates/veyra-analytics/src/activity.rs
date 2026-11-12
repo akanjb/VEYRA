@@ -52,109 +52,147 @@ pub struct SessionLength {
     pub wall_ms: i64,
 }
 
-/// Per-session intervals of events given as `(session id, time)`, ordered by session and
-/// then time.
-struct Intervals {
-    sessions: Vec<(i64, Vec<i64>)>,
+/// A session's requests within one 15-minute bucket: the first and last request times
+/// and the active intervals between consecutive requests inside the bucket, merged.
+///
+/// Activity is computed from spans, so it can be read from a per-bucket rollup or built
+/// from raw request times with the same result: every period boundary falls on a bucket
+/// boundary, and the gap between two spans of a session is the gap between the last
+/// request of one and the first of the next.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Span {
+    pub session: i64,
+    pub first: i64,
+    pub last: i64,
+    /// Disjoint, ordered intervals `[tᵢ, tᵢ + min(tᵢ₊₁ − tᵢ, T)]` inside the bucket.
+    pub active: Vec<(i64, i64)>,
 }
 
-impl Intervals {
-    fn of(events: &[(i64, UtcMillis)]) -> Self {
-        let mut sessions: Vec<(i64, Vec<i64>)> = Vec::new();
-        for &(session, UtcMillis(at)) in events {
-            match sessions.last_mut() {
-                Some((last, times)) if *last == session => times.push(at),
-                _ => sessions.push((session, vec![at])),
-            }
-        }
-        Self { sessions }
-    }
-
-    /// Each gap between consecutive events, capped at the idle threshold.
-    fn active(&self, idle_threshold_ms: i64) -> Vec<(i64, i64)> {
-        self.sessions
-            .iter()
-            .flat_map(|(_, times)| {
-                times.windows(2).filter_map(move |pair| {
-                    let end = pair[0] + (pair[1] - pair[0]).clamp(0, idle_threshold_ms);
-                    (end > pair[0]).then_some((pair[0], end))
-                })
-            })
-            .collect()
-    }
-
-    /// Each session from its first event to its last.
-    fn wall(&self) -> Vec<(i64, i64)> {
-        self.sessions
-            .iter()
-            .filter_map(|(_, times)| {
-                let (first, last) = (times.first()?, times.last()?);
-                (last > first).then_some((*first, *last))
-            })
-            .collect()
-    }
+/// The interval each gap between consecutive times counts as active, capped at the idle
+/// threshold. Zero-length gaps are left out.
+fn gap_interval(from: i64, to: i64, idle_threshold_ms: i64) -> Option<(i64, i64)> {
+    let end = from + (to - from).clamp(0, idle_threshold_ms);
+    (end > from).then_some((from, end))
 }
 
-/// Activity of events given as `(session id, time)`, ordered by session and then time.
+/// The span of one session's request times within a bucket (ascending); `None` when
+/// there are none.
 #[must_use]
-pub fn activity(events: &[(i64, UtcMillis)], idle_threshold_ms: i64) -> Activity {
-    let intervals = Intervals::of(events);
+pub fn span_of(session: i64, times: &[i64], idle_threshold_ms: i64) -> Option<Span> {
+    let (first, last) = (*times.first()?, *times.last()?);
+    let gaps = times
+        .windows(2)
+        .filter_map(|pair| gap_interval(pair[0], pair[1], idle_threshold_ms))
+        .collect();
+    Some(Span {
+        session,
+        first,
+        last,
+        active: merged(gaps),
+    })
+}
+
+/// One span per session and 15-minute bucket, from events given as `(session id, time)`
+/// ordered by session and then time.
+#[must_use]
+pub fn spans_of(events: &[(i64, UtcMillis)], idle_threshold_ms: i64) -> Vec<Span> {
+    let mut spans = Vec::new();
+    for group in events.chunk_by(|a, b| a.0 == b.0 && a.1.bucket_start() == b.1.bucket_start()) {
+        let times: Vec<i64> = group.iter().map(|(_, at)| at.0).collect();
+        spans.extend(span_of(group[0].0, &times, idle_threshold_ms));
+    }
+    spans
+}
+
+/// Spans grouped by session, from spans ordered by session and then time.
+fn by_session(spans: &[Span]) -> Vec<&[Span]> {
+    spans.chunk_by(|a, b| a.session == b.session).collect()
+}
+
+/// Every active interval: inside each span, and across the gap to the session's next span.
+fn active_intervals(sessions: &[&[Span]], idle_threshold_ms: i64) -> Vec<(i64, i64)> {
+    sessions
+        .iter()
+        .flat_map(|spans| {
+            let inside = spans.iter().flat_map(|span| span.active.iter().copied());
+            let across = spans.windows(2).filter_map(move |pair| {
+                gap_interval(pair[0].last, pair[1].first, idle_threshold_ms)
+            });
+            inside.chain(across)
+        })
+        .collect()
+}
+
+/// Each session from its first request to its last.
+fn wall_intervals(sessions: &[&[Span]]) -> Vec<(i64, i64)> {
+    sessions
+        .iter()
+        .filter_map(|spans| {
+            let (first, last) = (spans.first()?.first, spans.last()?.last);
+            (last > first).then_some((first, last))
+        })
+        .collect()
+}
+
+/// Activity of spans ordered by session and then time.
+#[must_use]
+pub fn activity(spans: &[Span], idle_threshold_ms: i64) -> Activity {
+    let sessions = by_session(spans);
     Activity {
-        sessions: u64::try_from(intervals.sessions.len()).unwrap_or(u64::MAX),
-        active_ms: total_length(&merged(intervals.active(idle_threshold_ms))),
-        wall_ms: total_length(&merged(intervals.wall())),
+        sessions: u64::try_from(sessions.len()).unwrap_or(u64::MAX),
+        active_ms: total_length(&merged(active_intervals(&sessions, idle_threshold_ms))),
+        wall_ms: total_length(&merged(wall_intervals(&sessions))),
     }
 }
 
 /// Activity of each local period `[starts[i], starts[i + 1])`, the last ending at `until`.
-/// Intervals spanning a boundary are split at it; a session counts in every period
-/// where it has an event.
+/// Every boundary must fall on a bucket boundary. Intervals spanning a boundary are split
+/// at it; a session counts in every period where it has a request.
 #[must_use]
 pub fn activity_by_period(
-    events: &[(i64, UtcMillis)],
+    spans: &[Span],
     idle_threshold_ms: i64,
     starts: &[UtcMillis],
     until: UtcMillis,
 ) -> Vec<Activity> {
-    let intervals = Intervals::of(events);
+    let sessions = by_session(spans);
     let bounds: Vec<i64> = starts.iter().map(|s| s.0).chain([until.0]).collect();
-    let active = split_lengths(&merged(intervals.active(idle_threshold_ms)), &bounds);
-    let wall = split_lengths(&merged(intervals.wall()), &bounds);
-    let mut sessions = vec![0_u64; starts.len()];
-    for (_, times) in &intervals.sessions {
+    let active = split_lengths(
+        &merged(active_intervals(&sessions, idle_threshold_ms)),
+        &bounds,
+    );
+    let wall = split_lengths(&merged(wall_intervals(&sessions)), &bounds);
+    let mut counts = vec![0_u64; starts.len()];
+    for spans in &sessions {
         let mut last_period = None;
-        for at in times {
-            let period = bounds.partition_point(|b| *b <= *at).checked_sub(1);
+        for span in *spans {
+            let period = bounds.partition_point(|b| *b <= span.first).checked_sub(1);
             if period != last_period
                 && let Some(index) = period.filter(|i| *i < starts.len())
             {
-                sessions[index] += 1;
+                counts[index] += 1;
             }
             last_period = period;
         }
     }
     (0..starts.len())
         .map(|i| Activity {
-            sessions: sessions[i],
+            sessions: counts[i],
             active_ms: active[i],
             wall_ms: wall[i],
         })
         .collect()
 }
 
-/// Each session's active and wall time.
+/// Each session's active and wall time, from spans ordered by session and then time.
 #[must_use]
-pub fn session_lengths(events: &[(i64, UtcMillis)], idle_threshold_ms: i64) -> Vec<SessionLength> {
-    Intervals::of(events)
-        .sessions
-        .iter()
-        .map(|(session, times)| SessionLength {
-            session: *session,
-            active_ms: times
-                .windows(2)
-                .map(|pair| (pair[1] - pair[0]).clamp(0, idle_threshold_ms))
-                .sum(),
-            wall_ms: times.last().copied().unwrap_or(0) - times.first().copied().unwrap_or(0),
+pub fn session_lengths(spans: &[Span], idle_threshold_ms: i64) -> Vec<SessionLength> {
+    by_session(spans)
+        .into_iter()
+        .map(|spans| SessionLength {
+            session: spans[0].session,
+            active_ms: total_length(&active_intervals(&[spans], idle_threshold_ms)),
+            wall_ms: spans[spans.len() - 1].last - spans[0].first,
         })
         .collect()
 }

@@ -1,16 +1,17 @@
-//! Session-level reads: activity timestamps, the session explorer, timelines and project
-//! labels. Totals use the same SQL as the rollups ([`EVENT_SUMS_SELECT`]), so a session's
-//! numbers always add up to the dashboard's.
+//! Session-level reads: activity spans, the session explorer, timelines and project
+//! labels. Rows come from `rollup_15m_sessions` when it answers a query exactly and from
+//! the events otherwise (ADR-030); both sum like the rollups, so a session's numbers
+//! always add up to the dashboard's.
 
 use std::collections::HashMap;
 
 use rusqlite::types::Value;
 use rusqlite::{Connection, Row, params_from_iter};
+use veyra_analytics::activity::{DEFAULT_IDLE_THRESHOLD_MS, Span, spans_of};
 use veyra_analytics::dimension::Filters;
 use veyra_analytics::port::{ActivityReader, LabelReader, ProjectLabel, RangeQuery, ReadError};
 use veyra_analytics::sessions::{
-    SessionDetail, SessionEvent, SessionPage, SessionQuery, SessionReader, SessionSort,
-    SessionSummary, ToolUse,
+    SessionDetail, SessionEvent, SessionPage, SessionQuery, SessionReader, SessionSummary, ToolUse,
 };
 use veyra_domain::money::NanoUsd;
 use veyra_domain::time::UtcMillis;
@@ -18,13 +19,12 @@ use veyra_domain::tokens::TokenCounts;
 
 use crate::mapping::accuracy;
 use crate::reader::{filter_clause, sums_from};
-use crate::sql::{EVENT_SUMS_SELECT, EVENT_TOTAL_TOKENS, count_from, dimension_info};
-use crate::{Store, StoreError};
+use crate::session_source::{SessionSource, event_source, session_source};
+use crate::sql::{count_from, dimension_info};
+use crate::{Store, StoreError, spans};
 
-/// Session metadata selected before the sums; the sums start at [`SUMS_START`].
-const SUMMARY_COLUMNS: &str = "e.session_id, MIN(e.occurred_at), MAX(e.occurred_at), s.key, \
-     s.parent_session_id, s.is_subagent, MAX(e.app_id), MAX(p.key), \
-     GROUP_CONCAT(DISTINCT COALESCE(e.model_id, e.raw_model))";
+/// The column of the models list in a summary row; the sums start at [`SUMS_START`].
+const MODELS_COLUMN: usize = 8;
 const SUMS_START: usize = 9;
 
 fn read_error(error: &StoreError) -> ReadError {
@@ -74,11 +74,13 @@ pub(crate) fn event_clauses(
 }
 
 fn summary_from(row: &Row<'_>) -> Result<SessionSummary, StoreError> {
+    // Rollup rows list their own models, so a session's list may repeat names.
     let mut models: Vec<String> = row
-        .get::<_, Option<String>>(8)?
+        .get::<_, Option<String>>(MODELS_COLUMN)?
         .map(|joined| joined.split(',').map(str::to_owned).collect())
         .unwrap_or_default();
     models.sort();
+    models.dedup();
     Ok(SessionSummary {
         id: row.get(0)?,
         first_at: UtcMillis(row.get(1)?),
@@ -93,20 +95,25 @@ fn summary_from(row: &Row<'_>) -> Result<SessionSummary, StoreError> {
     })
 }
 
-/// Session summaries for events matching `where_sql`, then `tail` (ordering, paging).
+/// Session summaries from `source` for rows matching `where_sql`, then `tail` (ordering).
 fn summaries(
     connection: &Connection,
+    source: &SessionSource,
     where_sql: &str,
     values: Vec<Value>,
     tail: &str,
 ) -> Result<Vec<SessionSummary>, StoreError> {
     let sql = format!(
-        "SELECT {SUMMARY_COLUMNS}, {sums} FROM usage_events e \
-         LEFT JOIN event_costs c ON c.event_id = e.id \
+        "SELECT e.session_id, {first}, {last}, s.key, s.parent_session_id, s.is_subagent, \
+         MAX(e.app_id), MAX(p.key), {models}, {sums} FROM {from} \
          JOIN sessions s ON s.id = e.session_id \
          LEFT JOIN projects p ON p.id = e.project_id \
          WHERE {where_sql} GROUP BY e.session_id {tail}",
-        sums = *EVENT_SUMS_SELECT,
+        first = source.first_at,
+        last = source.last_at,
+        models = source.models,
+        sums = source.sums,
+        from = source.from,
     );
     let mut statement = connection.prepare(&sql)?;
     let rows = statement.query_map(params_from_iter(values), |row| Ok(summary_from(row)))?;
@@ -114,36 +121,21 @@ fn summaries(
         .collect()
 }
 
-fn order_expression(sort: SessionSort) -> String {
-    match sort {
-        SessionSort::LastActive => "MAX(e.occurred_at)".to_owned(),
-        SessionSort::Tokens => format!("COALESCE(SUM({EVENT_TOTAL_TOKENS}), 0)"),
-        SessionSort::Cost => "COALESCE(SUM(c.total_nusd), 0)".to_owned(),
-        SessionSort::Events => "COUNT(*)".to_owned(),
-        SessionSort::CacheWrites => "COALESCE(SUM(COALESCE(e.cache_write_short, 0) \
-             + COALESCE(e.cache_write_long, 0) + COALESCE(e.cache_write_unspecified, 0)), 0)"
-            .to_owned(),
-        SessionSort::Duration => "MAX(e.occurred_at) - MIN(e.occurred_at)".to_owned(),
-    }
-}
-
 /// The ids of one page of sessions, in display order. Ranking needs only each
 /// session's sort key, so the full sums are computed for the page's sessions alone.
 fn page_ids(
     connection: &Connection,
+    source: &SessionSource,
     where_sql: &str,
     values: &[Value],
     query: &SessionQuery,
 ) -> Result<Vec<i64>, StoreError> {
-    let costs = if query.sort == SessionSort::Cost {
-        "LEFT JOIN event_costs c ON c.event_id = e.id"
-    } else {
-        ""
-    };
     let n = values.len();
     let mut statement = connection.prepare(&format!(
-        "SELECT e.session_id FROM usage_events e {costs} WHERE {where_sql}          GROUP BY e.session_id ORDER BY {} DESC, e.session_id DESC LIMIT ?{} OFFSET ?{}",
-        order_expression(query.sort),
+        "SELECT e.session_id FROM {} WHERE {where_sql} \
+         GROUP BY e.session_id ORDER BY {} DESC, e.session_id DESC LIMIT ?{} OFFSET ?{}",
+        source.from,
+        source.order(query.sort),
         n + 1,
         n + 2
     ))?;
@@ -159,28 +151,24 @@ fn page_ids(
 
 fn page(connection: &Connection, query: &SessionQuery) -> Result<SessionPage, StoreError> {
     let mut values = Vec::new();
-    let where_sql =
-        event_clauses(query.from, query.until, &query.filters, &mut values).join(" AND ");
+    let (source, clauses) = session_source(query.from, query.until, &query.filters, &mut values);
+    let where_sql = clauses.join(" AND ");
     let total: i64 = connection.query_row(
-        &format!("SELECT COUNT(DISTINCT e.session_id) FROM usage_events e WHERE {where_sql}"),
+        &format!(
+            "SELECT COUNT(DISTINCT e.session_id) FROM {} WHERE {where_sql}",
+            source.from
+        ),
         params_from_iter(values.iter()),
         |row| row.get(0),
     )?;
-    let ids = page_ids(connection, &where_sql, &values, query)?;
-    let first = values.len() + 1;
-    let placeholders: Vec<String> = (first..first + ids.len())
-        .map(|i| format!("?{i}"))
-        .collect();
-    values.extend(ids.iter().map(|id| Value::Integer(*id)));
+    let ids = page_ids(connection, &source, &where_sql, &values, query)?;
     let mut sessions = if ids.is_empty() {
         Vec::new()
     } else {
         summaries(
             connection,
-            &format!(
-                "{where_sql} AND e.session_id IN ({})",
-                placeholders.join(", ")
-            ),
+            &source,
+            &format!("{where_sql} AND {}", sessions_in(&ids)),
             values,
             "",
         )?
@@ -228,6 +216,7 @@ fn event_from(row: &Row<'_>) -> Result<(i64, SessionEvent), StoreError> {
 fn detail(connection: &Connection, id: i64) -> Result<Option<SessionDetail>, StoreError> {
     let Some(summary) = summaries(
         connection,
+        &event_source(),
         "e.session_id = ?1",
         vec![Value::Integer(id)],
         "",
@@ -275,6 +264,7 @@ fn detail(connection: &Connection, id: i64) -> Result<Option<SessionDetail>, Sto
 
     let subagents = summaries(
         connection,
+        &event_source(),
         "s.parent_session_id = ?1",
         vec![Value::Integer(id)],
         "ORDER BY MIN(e.occurred_at)",
@@ -298,63 +288,186 @@ impl SessionReader for Store {
     }
 }
 
-/// Selected columns of matching events with a session, in the given order; `extra` is
-/// one more condition, or empty.
-fn timed_events<T>(
+/// The SQL condition selecting the given sessions. Ids are integers read from the
+/// database, so they are written into the SQL directly.
+pub(crate) fn sessions_in(sessions: &[i64]) -> String {
+    let ids: Vec<String> = sessions.iter().map(i64::to_string).collect();
+    format!("e.session_id IN ({})", ids.join(", "))
+}
+
+/// Which spans to read: per project or not, and for some sessions only.
+#[derive(Clone, Copy)]
+struct SpanRequest<'a> {
+    by_project: bool,
+    sessions: Option<&'a [i64]>,
+}
+
+impl SpanRequest<'_> {
+    /// The project column, or a constant when spans are not split by project.
+    fn project(self) -> &'static str {
+        if self.by_project {
+            "e.project_id"
+        } else {
+            "NULL"
+        }
+    }
+
+    fn conditions(self) -> Vec<String> {
+        let mut conditions = Vec::new();
+        if self.by_project {
+            conditions.push("e.project_id IS NOT NULL".to_owned());
+        }
+        if let Some(sessions) = self.sessions {
+            conditions.push(sessions_in(sessions));
+        }
+        conditions
+    }
+}
+
+/// `(project, span)` from raw events matching the query, `request` and `extra`.
+fn event_spans(
     connection: &Connection,
     query: &RangeQuery,
-    columns: &str,
-    extra: &str,
-    order: &str,
-    map: impl Fn(&Row<'_>) -> rusqlite::Result<T>,
-) -> Result<Vec<T>, StoreError> {
+    request: SpanRequest<'_>,
+    extra: &[String],
+) -> Result<Vec<(Option<i64>, Span)>, StoreError> {
     let mut values = Vec::new();
     let mut clauses = event_clauses(query.from, query.until, &query.filters, &mut values);
-    if !extra.is_empty() {
-        clauses.push(extra.to_owned());
-    }
+    clauses.extend(request.conditions());
+    clauses.extend_from_slice(extra);
     let mut statement = connection.prepare(&format!(
-        "SELECT {columns} FROM usage_events e WHERE {} ORDER BY {order}",
+        "SELECT {}, e.session_id, e.occurred_at FROM usage_events e WHERE {} ORDER BY 1, 2, 3",
+        request.project(),
         clauses.join(" AND ")
     ))?;
-    let rows = statement.query_map(params_from_iter(values), map)?;
-    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    let rows = statement
+        .query_map(params_from_iter(values), |row| {
+            Ok((
+                row.get::<_, Option<i64>>(0)?,
+                (row.get::<_, i64>(1)?, UtcMillis(row.get(2)?)),
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows
+        .chunk_by(|a, b| a.0 == b.0)
+        .flat_map(|group| {
+            let events: Vec<(i64, UtcMillis)> = group.iter().map(|(_, event)| *event).collect();
+            spans_of(&events, DEFAULT_IDLE_THRESHOLD_MS)
+                .into_iter()
+                .map(move |span| (group[0].0, span))
+        })
+        .collect())
+}
+
+/// One row of `rollup_15m_sessions`: project, session, bucket, first, last, active.
+type SpanRow = (Option<i64>, i64, i64, i64, i64, String);
+
+/// `(project, span)` from `rollup_15m_sessions`. A session's bucket usually has one row;
+/// when it has several (the session changed project, application or interface within
+/// the bucket), its span is rebuilt from that bucket's events so it stays exact.
+fn rollup_spans(
+    connection: &Connection,
+    query: &RangeQuery,
+    request: SpanRequest<'_>,
+    mut values: Vec<Value>,
+    mut clauses: Vec<String>,
+) -> Result<Vec<(Option<i64>, Span)>, StoreError> {
+    clauses.extend(request.conditions());
+    let mut statement = connection.prepare(&format!(
+        "SELECT {}, e.session_id, e.bucket_start, e.first_at, e.last_at, e.active \
+         FROM rollup_15m_sessions e WHERE {} ORDER BY 1, 2, 3, 4",
+        request.project(),
+        clauses.join(" AND ")
+    ))?;
+    let rows: Vec<SpanRow> = statement
+        .query_map(params_from_iter(values.drain(..)), |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+            ))
+        })?
+        .collect::<Result<_, _>>()?;
+    let mut spans = Vec::with_capacity(rows.len());
+    for group in rows.chunk_by(|a, b| (a.0, a.1, a.2) == (b.0, b.1, b.2)) {
+        let (project, session, bucket, first, last, active) = &group[0];
+        if group.len() == 1 {
+            let span = Span {
+                session: *session,
+                first: *first,
+                last: *last,
+                active: spans::decode(active)?,
+            };
+            spans.push((*project, span));
+        } else {
+            let mut extra = vec![
+                format!("e.session_id = {session}"),
+                format!("e.bucket_start = {bucket}"),
+            ];
+            if let Some(project) = project {
+                extra.push(format!("e.project_id = {project}"));
+            }
+            spans.extend(event_spans(connection, query, request, &extra)?);
+        }
+    }
+    Ok(spans)
+}
+
+/// `(project, span)` of matching sessions, from the rollup when it answers exactly.
+fn read_spans(
+    connection: &Connection,
+    query: &RangeQuery,
+    request: SpanRequest<'_>,
+) -> Result<Vec<(Option<i64>, Span)>, StoreError> {
+    let mut values = Vec::new();
+    let (source, clauses) = session_source(query.from, query.until, &query.filters, &mut values);
+    if source.is_rollup {
+        rollup_spans(connection, query, request, values, clauses)
+    } else {
+        event_spans(connection, query, request, &[])
+    }
+}
+
+fn without_projects(spans: Vec<(Option<i64>, Span)>) -> Vec<Span> {
+    spans.into_iter().map(|(_, span)| span).collect()
 }
 
 impl ActivityReader for Store {
-    fn event_times(&self, query: &RangeQuery) -> Result<Vec<(i64, UtcMillis)>, ReadError> {
-        self.with_reader(|connection| {
-            timed_events(
-                connection,
-                query,
-                "e.session_id, e.occurred_at",
-                "",
-                "e.session_id, e.occurred_at",
-                |row| Ok((row.get::<_, i64>(0)?, UtcMillis(row.get(1)?))),
-            )
-        })
-        .map_err(|e| read_error(&e))
+    fn spans(&self, query: &RangeQuery) -> Result<Vec<Span>, ReadError> {
+        let request = SpanRequest {
+            by_project: false,
+            sessions: None,
+        };
+        self.with_reader(|connection| read_spans(connection, query, request).map(without_projects))
+            .map_err(|e| read_error(&e))
     }
 
-    fn project_event_times(
-        &self,
-        query: &RangeQuery,
-    ) -> Result<Vec<(i64, i64, UtcMillis)>, ReadError> {
+    fn session_spans(&self, query: &RangeQuery, sessions: &[i64]) -> Result<Vec<Span>, ReadError> {
+        if sessions.is_empty() {
+            return Ok(Vec::new());
+        }
+        let request = SpanRequest {
+            by_project: false,
+            sessions: Some(sessions),
+        };
+        self.with_reader(|connection| read_spans(connection, query, request).map(without_projects))
+            .map_err(|e| read_error(&e))
+    }
+
+    fn project_spans(&self, query: &RangeQuery) -> Result<Vec<(i64, Span)>, ReadError> {
+        let request = SpanRequest {
+            by_project: true,
+            sessions: None,
+        };
         self.with_reader(|connection| {
-            timed_events(
-                connection,
-                query,
-                "e.project_id, e.session_id, e.occurred_at",
-                "e.project_id IS NOT NULL",
-                "e.project_id, e.session_id, e.occurred_at",
-                |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, i64>(1)?,
-                        UtcMillis(row.get(2)?),
-                    ))
-                },
-            )
+            let spans = read_spans(connection, query, request)?;
+            Ok(spans
+                .into_iter()
+                .filter_map(|(project, span)| Some((project?, span)))
+                .collect())
         })
         .map_err(|e| read_error(&e))
     }

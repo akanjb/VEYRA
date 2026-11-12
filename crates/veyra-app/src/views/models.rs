@@ -8,11 +8,12 @@ use veyra_analytics::concentration::share;
 use veyra_analytics::dimension::{Dimension, DimensionValue};
 use veyra_analytics::engine::GroupResult;
 use veyra_analytics::metrics::{MetricId, MetricValue};
+use veyra_analytics::port::TokenRow;
 use veyra_analytics::query::TimeGrain;
 
 use super::kpis::token_accuracy;
 use super::rankings::{Labeller, RowLabel};
-use super::{evaluated, joined, local_date, measures};
+use super::{evaluated, joined, local_date, measures, tokens_by};
 use crate::DataServices;
 use crate::dto::{Labelled, Matrix, ModelLane, ModelRow, Models, ShareDay};
 use crate::error::ApiError;
@@ -136,8 +137,8 @@ fn provider_share(
 fn matrix(
     rows: Vec<(Vec<DimensionValue>, Labelled)>,
     columns: Vec<(DimensionValue, Labelled)>,
-    cells: &[GroupResult],
-    split: impl Fn(&GroupResult) -> (Vec<DimensionValue>, DimensionValue),
+    cells: &[TokenRow],
+    split: impl Fn(&TokenRow) -> (Vec<DimensionValue>, DimensionValue),
 ) -> Matrix {
     let row_index: BTreeMap<&Vec<DimensionValue>, usize> = rows
         .iter()
@@ -153,7 +154,7 @@ fn matrix(
     for cell in cells {
         let (row, column) = split(cell);
         if let (Some(r), Some(c)) = (row_index.get(&row), column_index.get(&column)) {
-            values[*r][*c] += measures(&cell.totals).tokens;
+            values[*r][*c] += cell.tokens;
         }
     }
     Matrix {
@@ -179,19 +180,12 @@ pub(crate) fn models(data: &DataServices, scope: &Resolved) -> Result<Models, Ap
         let app_groups = s.spawn(|| grouped(data, scope, vec![Dimension::App], TimeGrain::Total));
         let provider_groups =
             s.spawn(|| grouped(data, scope, vec![Dimension::Provider], TimeGrain::Total));
-        let provider_cells = s.spawn(|| {
-            grouped(
-                data,
-                scope,
-                vec![Dimension::Provider, Dimension::App],
-                TimeGrain::Total,
-            )
-        });
-        let model_cells = grouped(
+        let provider_cells =
+            s.spawn(|| tokens_by(data, scope, vec![Dimension::Provider, Dimension::App]));
+        let model_cells = tokens_by(
             data,
             scope,
             vec![Dimension::Provider, Dimension::Model, Dimension::App],
-            TimeGrain::Total,
         )?;
         let (providers, provider_share) = joined(share)?;
         let model_groups = joined(model_groups)?;

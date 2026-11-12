@@ -74,16 +74,16 @@ pub fn data_reads(store: &Store) -> Result<(), Box<dyn std::error::Error>> {
             ),
         ),
         (
-            "event times per session",
+            "session spans",
             Box::new(|| {
-                store.event_times(&range)?;
+                store.spans(&range)?;
                 Ok(())
             }),
         ),
         (
-            "event times per project and session",
+            "session spans per project",
             Box::new(|| {
-                store.project_event_times(&range)?;
+                store.project_spans(&range)?;
                 Ok(())
             }),
         ),

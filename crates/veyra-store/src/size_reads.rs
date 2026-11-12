@@ -1,5 +1,6 @@
-//! Request and session sizes: request counts per size bin from `rollup_15m_sizes`, and
-//! each session's tokens from its events.
+//! Request and session sizes: request counts per size bin from `rollup_15m_size_totals`
+//! or `rollup_15m_sizes`, and each session's tokens from `rollup_15m_sessions` or its
+//! events (ADR-030).
 
 use rusqlite::types::Value;
 use rusqlite::{Connection, params_from_iter};
@@ -8,8 +9,8 @@ use veyra_analytics::sizes::{SessionSize, SizeRow};
 use veyra_domain::time::UtcMillis;
 
 use crate::reader::filter_clause;
-use crate::session_reads::event_clauses;
-use crate::sql::{EVENT_TOTAL_TOKENS, count_from, dimension_info};
+use crate::session_source::session_source;
+use crate::sql::{count_from, dimension_info};
 use crate::{Store, StoreError};
 
 fn request_sizes(connection: &Connection, query: &RangeQuery) -> Result<Vec<SizeRow>, StoreError> {
@@ -24,8 +25,14 @@ fn request_sizes(connection: &Connection, query: &RangeQuery) -> Result<Vec<Size
             clauses.push(clause);
         }
     }
+    // Without filters, the totals across every dimension answer from far fewer rows.
+    let table = if query.filters.is_empty() {
+        "rollup_15m_size_totals"
+    } else {
+        "rollup_15m_sizes"
+    };
     let mut statement = connection.prepare_cached(&format!(
-        "SELECT bucket_start, size_bin, SUM(requests) FROM rollup_15m_sizes WHERE {} \
+        "SELECT bucket_start, size_bin, SUM(requests) FROM {table} WHERE {} \
          GROUP BY bucket_start, size_bin ORDER BY bucket_start, size_bin",
         clauses.join(" AND ")
     ))?;
@@ -52,11 +59,13 @@ fn session_sizes(
     query: &RangeQuery,
 ) -> Result<Vec<SessionSize>, StoreError> {
     let mut values = Vec::new();
-    let where_sql =
-        event_clauses(query.from, query.until, &query.filters, &mut values).join(" AND ");
-    let mut statement = connection.prepare_cached(&format!(
-        "SELECT e.session_id, MIN(e.occurred_at), SUM({EVENT_TOTAL_TOKENS}) \
-         FROM usage_events e WHERE {where_sql} GROUP BY e.session_id"
+    let (source, clauses) = session_source(query.from, query.until, &query.filters, &mut values);
+    let mut statement = connection.prepare(&format!(
+        "SELECT e.session_id, {}, {} FROM {} WHERE {} GROUP BY e.session_id",
+        source.first_at,
+        source.tokens,
+        source.from,
+        clauses.join(" AND ")
     ))?;
     let rows = statement.query_map(params_from_iter(values), |row| {
         Ok((

@@ -3,6 +3,7 @@
 //! Each query reads the smallest rollup level that answers it exactly:
 //! - no grouping and no filters → `rollup_15m_totals` (one row per bucket);
 //! - one dimension, grouped and/or filtered → `rollup_15m_by_dimension`;
+//! - only provider, model, application and interface → `rollup_15m_services` (ADR-030);
 //! - anything else → `rollup_15m` (one row per bucket and dimension combination).
 //!
 //! All levels are clustered by time, so a date range is a sequential read.
@@ -12,7 +13,7 @@ use std::collections::BTreeSet;
 use rusqlite::types::Value;
 use rusqlite::{Row, params_from_iter};
 use veyra_analytics::dimension::{Dimension, DimensionValue};
-use veyra_analytics::port::{BaseSumsQuery, BaseSumsReader, BaseSumsRow, ReadError};
+use veyra_analytics::port::{BaseSumsQuery, BaseSumsReader, BaseSumsRow, ReadError, TokenRow};
 use veyra_analytics::sums::{BaseSums, CostSums};
 use veyra_domain::money::NanoUsd;
 use veyra_domain::time::UtcMillis;
@@ -24,17 +25,74 @@ use crate::{Store, StoreError};
 
 impl BaseSumsReader for Store {
     fn read_base_sums(&self, query: &BaseSumsQuery) -> Result<Vec<BaseSumsRow>, ReadError> {
-        self.with_reader(|connection| {
-            let plan = plan(query);
+        read(self, query, Measure::Sums, |row, key| {
+            Ok(BaseSumsRow {
+                bucket_start: key.bucket_start,
+                key: key.values,
+                sums: sums_from(row, key.next_column)?,
+            })
+        })
+    }
+
+    fn read_tokens(&self, query: &BaseSumsQuery) -> Result<Vec<TokenRow>, ReadError> {
+        read(self, query, Measure::Tokens, |row, key| {
+            Ok(TokenRow {
+                bucket_start: key.bucket_start,
+                key: key.values,
+                tokens: count_from(row.get(key.next_column)?, "tokens")?.unwrap_or(0),
+            })
+        })
+    }
+}
+
+/// What a read selects for each group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Measure {
+    /// Every rollup sum, in [`ROLLUP_SUM_COLUMNS`] order.
+    Sums,
+    /// The total tokens only (the `tokens_total` column).
+    Tokens,
+}
+
+impl Measure {
+    /// The selected columns: aggregated, or as stored when rows are already one per group.
+    fn select(self, aggregated: bool) -> String {
+        match (self, aggregated) {
+            (Self::Sums, true) => rollup_sums_select(),
+            (Self::Sums, false) => ROLLUP_SUM_COLUMNS.join(", "),
+            (Self::Tokens, true) => "SUM(tokens_total)".to_owned(),
+            (Self::Tokens, false) => "tokens_total".to_owned(),
+        }
+    }
+}
+
+/// The bucket and grouping key of a result row, and the column its measure starts at.
+struct RowKey {
+    bucket_start: Option<UtcMillis>,
+    values: Vec<DimensionValue>,
+    next_column: usize,
+}
+
+/// Runs a query planned for `measure`, mapping each row with its key.
+fn read<T>(
+    store: &Store,
+    query: &BaseSumsQuery,
+    measure: Measure,
+    map: impl Fn(&Row<'_>, RowKey) -> Result<T, StoreError>,
+) -> Result<Vec<T>, ReadError> {
+    store
+        .with_reader(|connection| {
+            let plan = plan(query, measure);
             let mut statement = connection.prepare_cached(&plan.sql)?;
-            let rows = statement.query_map(params_from_iter(plan.values), |row| {
-                Ok(map_row(row, query.by_bucket, &plan.integer_keys))
-            })?;
-            rows.map(|row| row.map_err(StoreError::from).and_then(|r| r))
-                .collect()
+            let mut rows = statement.query(params_from_iter(plan.values))?;
+            let mut out = Vec::new();
+            while let Some(row) = rows.next()? {
+                let key = row_key(row, query.by_bucket, &plan.integer_keys)?;
+                out.push(map(row, key)?);
+            }
+            Ok(out)
         })
         .map_err(|e| ReadError(e.to_string()))
-    }
 }
 
 /// Which rollup level answers a query.
@@ -42,8 +100,18 @@ impl BaseSumsReader for Store {
 enum Source {
     Totals,
     ByDimension(Dimension),
+    /// `rollup_15m_services`: keyed like `rollup_15m` by [`SERVICE_DIMENSIONS`] only.
+    Services,
     Full,
 }
+
+/// The dimensions `rollup_15m_services` is keyed by.
+const SERVICE_DIMENSIONS: [Dimension; 4] = [
+    Dimension::Provider,
+    Dimension::Model,
+    Dimension::App,
+    Dimension::Interface,
+];
 
 fn source(query: &BaseSumsQuery) -> Source {
     let filtered: Vec<Dimension> = query.filters.iter().map(|(d, _)| d).collect();
@@ -52,6 +120,14 @@ fn source(query: &BaseSumsQuery) -> Source {
         ([grouped], []) => Source::ByDimension(*grouped),
         ([grouped], [filter]) if grouped == filter => Source::ByDimension(*grouped),
         ([], [filter]) => Source::ByDimension(*filter),
+        (grouped, filtered)
+            if grouped
+                .iter()
+                .chain(filtered)
+                .all(|d| SERVICE_DIMENSIONS.contains(d)) =>
+        {
+            Source::Services
+        }
         _ => Source::Full,
     }
 }
@@ -63,7 +139,7 @@ struct Plan {
     integer_keys: Vec<bool>,
 }
 
-fn plan(query: &BaseSumsQuery) -> Plan {
+fn plan(query: &BaseSumsQuery, measure: Measure) -> Plan {
     let mut values = vec![Value::Integer(query.from.0), Value::Integer(query.until.0)];
     let mut clauses = vec![
         "bucket_start >= ?1".to_owned(),
@@ -84,8 +160,12 @@ fn plan(query: &BaseSumsQuery) -> Plan {
             let integers = vec![false; keys.len()];
             ("rollup_15m_by_dimension", keys, integers)
         }
-        Source::Full => (
-            "rollup_15m",
+        Source::Services | Source::Full => (
+            if source == Source::Services {
+                "rollup_15m_services"
+            } else {
+                "rollup_15m"
+            },
             query
                 .group_by
                 .iter()
@@ -104,7 +184,8 @@ fn plan(query: &BaseSumsQuery) -> Plan {
             _ => dimension_info(dimension).1,
         };
         // The by-dimension table stores every value as text.
-        let integer = matches!(source, Source::Full) && dimension_info(dimension).2;
+        let integer =
+            matches!(source, Source::Services | Source::Full) && dimension_info(dimension).2;
         if let Some(clause) = filter_clause(column, integer, allowed, &mut values) {
             clauses.push(clause);
         }
@@ -115,7 +196,7 @@ fn plan(query: &BaseSumsQuery) -> Plan {
         // Already one row per bucket: read the columns as stored, no aggregation.
         let sql = format!(
             "SELECT bucket_start, {} FROM {table} WHERE {filter} ORDER BY bucket_start",
-            ROLLUP_SUM_COLUMNS.join(", ")
+            measure.select(false)
         );
         return Plan {
             sql,
@@ -136,7 +217,7 @@ fn plan(query: &BaseSumsQuery) -> Plan {
     };
     let sql = format!(
         "SELECT {select_keys}{} FROM {table} WHERE {filter}{group} HAVING SUM(events) > 0",
-        rollup_sums_select(),
+        measure.select(true),
     );
     Plan {
         sql,
@@ -173,11 +254,8 @@ pub(crate) fn filter_clause(
     (!alternatives.is_empty()).then(|| format!("({})", alternatives.join(" OR ")))
 }
 
-fn map_row(
-    row: &Row<'_>,
-    by_bucket: bool,
-    integer_keys: &[bool],
-) -> Result<BaseSumsRow, StoreError> {
+/// Reads a row's bucket (when grouped by bucket) and grouping key, in plan order.
+fn row_key(row: &Row<'_>, by_bucket: bool, integer_keys: &[bool]) -> Result<RowKey, StoreError> {
     let mut index = 0;
     let bucket_start = if by_bucket {
         index += 1;
@@ -185,20 +263,20 @@ fn map_row(
     } else {
         None
     };
-    let mut key: Vec<DimensionValue> = Vec::with_capacity(integer_keys.len());
+    let mut values: Vec<DimensionValue> = Vec::with_capacity(integer_keys.len());
     for integer in integer_keys {
         let value = if *integer {
             row.get::<_, Option<i64>>(index)?.map(|id| id.to_string())
         } else {
             row.get::<_, Option<String>>(index)?
         };
-        key.push(value);
+        values.push(value);
         index += 1;
     }
-    Ok(BaseSumsRow {
+    Ok(RowKey {
         bucket_start,
-        key,
-        sums: sums_from(row, index)?,
+        values,
+        next_column: index,
     })
 }
 
