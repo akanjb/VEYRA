@@ -4,7 +4,7 @@ use jiff::civil::date;
 use jiff::tz::TimeZone;
 use veyra_domain::time::UtcMillis;
 
-use super::evaluate;
+use super::{TokenPoint, evaluate, token_series};
 use crate::dimension::{Dimension, Filters};
 use crate::port::{BaseSumsQuery, BaseSumsReader, BaseSumsRow, ReadError};
 use crate::query::{Period, QuerySpec, TimeGrain};
@@ -155,4 +155,33 @@ fn total_grain_has_no_series() {
     let result = evaluate(&reader, &spec(period, TimeGrain::Total, vec![])).unwrap();
     assert_eq!(result.series, Vec::new());
     assert_eq!(result.totals.tokens.output_total, Some(3));
+}
+
+#[test]
+fn token_series_matches_the_evaluated_series() {
+    let reader = FakeReader {
+        rows: vec![
+            (NOV_8 - 5 * HOUR - HOUR / 2, "anthropic", 10),
+            (NOV_8 + 18 * HOUR, "openai", 20),
+            (NOV_8 + 18 * HOUR + HOUR / 2, "openai", 40),
+        ],
+    };
+    let period = Period::local_days(date(2026, 11, 8), 3, &kolkata()).unwrap();
+    for grain in [TimeGrain::Hour, TimeGrain::Day] {
+        let query = spec(period, grain, vec![]);
+        let expected: Vec<TokenPoint> = evaluate(&reader, &query)
+            .unwrap()
+            .series
+            .iter()
+            .map(|point| TokenPoint {
+                start: point.start,
+                tokens: point.sums.tokens.output_total.unwrap_or(0),
+            })
+            .collect();
+        assert_eq!(
+            token_series(&reader, &query).unwrap(),
+            expected,
+            "{grain:?}"
+        );
+    }
 }

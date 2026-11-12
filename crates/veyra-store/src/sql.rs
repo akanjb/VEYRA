@@ -145,12 +145,32 @@ pub fn rollup_sums_select() -> String {
         .join(", ")
 }
 
-/// Position of a column within [`ROLLUP_SUM_COLUMNS`].
-pub fn rollup_sum_index(column: &str) -> usize {
-    ROLLUP_SUM_COLUMNS
-        .iter()
-        .position(|c| *c == column)
-        .unwrap_or_else(|| unreachable!("unknown rollup column {column}"))
+/// Position of a column within [`ROLLUP_SUM_COLUMNS`]. A `const fn`, so a read evaluates
+/// it once at compile time rather than once per column of every row.
+pub const fn rollup_sum_index(column: &str) -> usize {
+    let mut index = 0;
+    while index < ROLLUP_SUM_COLUMNS.len() {
+        if same_bytes(ROLLUP_SUM_COLUMNS[index].as_bytes(), column.as_bytes()) {
+            return index;
+        }
+        index += 1;
+    }
+    panic!("unknown rollup column");
+}
+
+/// Byte-wise equality usable in a `const fn`.
+const fn same_bytes(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
 }
 
 /// Total tokens of an event (alias `e`): prompt components plus output, matching

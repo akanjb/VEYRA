@@ -4,18 +4,25 @@
 //! the same query ending one millisecond earlier selects the same events (all requests
 //! fall on whole seconds) but is read from the events. Every read is compared both ways
 //! on random data, after late writes and after a project merge, and the migration's
-//! backfill is checked against the incremental rebuild.
+//! backfill is checked against the incremental rebuild. The store's token, cost and
+//! by-period reads (ADR-031) are compared with the port's default implementations.
 
 #![allow(clippy::unwrap_used, reason = "test code: a failure aborts the test")]
 
 mod support;
 
-use veyra_analytics::dimension::{Dimension, Filters};
-use veyra_analytics::metrics::{MetricId, MetricValue};
+use std::collections::BTreeMap;
+
+use jiff::tz::TimeZone;
+use veyra_analytics::dimension::{Dimension, DimensionValue, Filters};
+use veyra_analytics::engine::period_starts;
 use veyra_analytics::port::{
-    ActivityReader, BaseSumsQuery, BaseSumsReader, PricingReader, RangeQuery, SizeReader, TokenRow,
+    ActivityReader, BaseSumsQuery, BaseSumsReader, BaseSumsRow, PricingReader, RangeQuery,
+    ReadError, SizeReader,
 };
+use veyra_analytics::query::{Period, TimeGrain};
 use veyra_analytics::sessions::{SessionQuery, SessionReader, SessionSort};
+use veyra_analytics::sums::BaseSums;
 use veyra_domain::identity::{AppId, ModelId};
 use veyra_domain::project::ProjectRepository;
 use veyra_domain::time::UtcMillis;
@@ -233,49 +240,116 @@ fn request_size_totals_match_the_sizes_by_dimension() {
     assert_eq!(totals, db.store.request_sizes(&every_app).unwrap());
 }
 
+/// The store read through the port's default methods only: its token, cost and
+/// by-period reads derive from `read_base_sums`.
+struct Defaults<'a>(&'a Store);
+
+impl BaseSumsReader for Defaults<'_> {
+    fn read_base_sums(&self, query: &BaseSumsQuery) -> Result<Vec<BaseSumsRow>, ReadError> {
+        self.0.read_base_sums(query)
+    }
+}
+
+/// Totals, one dimension, services and every combination, unfiltered and filtered.
+fn sum_queries(range: &RangeQuery) -> Vec<BaseSumsQuery> {
+    let codex = Filters::new().with(Dimension::App, [Some("codex".to_owned())]);
+    [
+        (vec![], Filters::new()),
+        (vec![], codex.clone()),
+        (vec![Dimension::Model], Filters::new()),
+        (vec![Dimension::Provider, Dimension::App], codex.clone()),
+        (vec![Dimension::Project, Dimension::Model], codex),
+    ]
+    .into_iter()
+    .map(|(group_by, filters)| BaseSumsQuery {
+        from: range.from,
+        until: range.until,
+        filters,
+        group_by,
+        by_bucket: false,
+    })
+    .collect()
+}
+
 #[test]
-fn token_reads_equal_the_total_tokens_of_full_sums() {
+fn token_and_cost_reads_equal_those_of_full_sums() {
     let db = TempDb::new();
     let mut rng = Rng::new(0x70ce_0005);
     db.store
         .write_events(&random_events(&mut rng, "t", 400), UtcMillis(NOV_8))
         .unwrap();
     let (range, _) = both(&Filters::new());
-    let codex = Filters::new().with(Dimension::App, [Some("codex".to_owned())]);
-    // Totals, one dimension, services and every combination, by bucket and in total.
-    for (group_by, filters) in [
-        (vec![], Filters::new()),
-        (vec![Dimension::Model], Filters::new()),
-        (vec![Dimension::Provider, Dimension::App], codex.clone()),
-        (vec![Dimension::Project, Dimension::Model], codex),
-    ] {
+    let defaults = Defaults(&db.store);
+    for query in sum_queries(&range) {
         for by_bucket in [false, true] {
             let query = BaseSumsQuery {
-                from: range.from,
-                until: range.until,
-                filters: filters.clone(),
-                group_by: group_by.clone(),
                 by_bucket,
+                ..query.clone()
             };
-            let expected: Vec<TokenRow> = db
-                .store
-                .read_base_sums(&query)
-                .unwrap()
-                .into_iter()
-                .map(|row| TokenRow {
-                    tokens: match MetricId::TotalTokens.compute(&row.sums) {
-                        Some(MetricValue::Count(n)) => n,
-                        _ => 0,
-                    },
-                    bucket_start: row.bucket_start,
-                    key: row.key,
-                })
-                .collect();
             assert_eq!(
                 sorted(db.store.read_tokens(&query).unwrap()),
-                sorted(expected),
-                "{group_by:?} by bucket: {by_bucket}"
+                sorted(defaults.read_tokens(&query).unwrap()),
+                "tokens of {query:?}"
             );
+            assert_eq!(
+                sorted(db.store.read_costs(&query).unwrap()),
+                sorted(defaults.read_costs(&query).unwrap()),
+                "cost of {query:?}"
+            );
+        }
+    }
+}
+
+/// Rows merged by period and key.
+fn by_period_and_key(
+    rows: Vec<BaseSumsRow>,
+) -> BTreeMap<(Option<UtcMillis>, Vec<DimensionValue>), BaseSums> {
+    let mut merged: BTreeMap<_, BaseSums> = BTreeMap::new();
+    for row in rows {
+        merged
+            .entry((row.bucket_start, row.key))
+            .or_default()
+            .merge(&row.sums);
+    }
+    merged
+}
+
+#[test]
+fn period_reads_equal_buckets_summed_per_period() {
+    let db = TempDb::new();
+    let mut rng = Rng::new(0x70ce_0006);
+    db.store
+        .write_events(&random_events(&mut rng, "p", 400), UtcMillis(NOV_8))
+        .unwrap();
+    let (whole, _) = both(&Filters::new());
+    // A range starting inside the first period, as well as the whole data.
+    let late = RangeQuery {
+        from: UtcMillis(NOV_8 + 45 * 60_000),
+        ..whole.clone()
+    };
+    let defaults = Defaults(&db.store);
+    // Whole-hour, half-hour and quarter-hour offsets, by hour and by day.
+    for zone in ["America/New_York", "Asia/Kolkata", "Asia/Kathmandu"] {
+        let time_zone = TimeZone::get(zone).unwrap();
+        for grain in [TimeGrain::Hour, TimeGrain::Day] {
+            for range in [&whole, &late] {
+                let period = Period::new(range.from, range.until).unwrap();
+                let starts = period_starts(&period, grain, &time_zone).unwrap();
+                for query in sum_queries(range) {
+                    let rows = db.store.read_base_sums_by_period(&query, &starts).unwrap();
+                    assert!(rows.iter().all(|row| {
+                        row.bucket_start
+                            .is_some_and(|start| starts.contains(&start))
+                    }));
+                    assert_eq!(
+                        by_period_and_key(rows),
+                        by_period_and_key(
+                            defaults.read_base_sums_by_period(&query, &starts).unwrap()
+                        ),
+                        "{zone} {grain:?} {query:?}"
+                    );
+                }
+            }
         }
     }
 }

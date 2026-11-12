@@ -76,6 +76,15 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
   - Connector documentation and ADR-023.
 
 ### Changed
+- **Every page within its speed budget** (ADR-031). Reads now fetch only what a card shows:
+  - daily and hourly series are summed per local day or hour in SQL, so a 30-day series returns one row per day rather than one per 15 minutes;
+  - the activity calendar and hour-of-week grid read total tokens only;
+  - the Cost waterfalls read only the previous period's cost;
+  - reads of a single sum (tokens or cost) add up stored rows directly instead of having SQL sort them, so each project's top model is found several times faster at ten million events;
+  - decoding a row no longer looks up each column by name;
+  - reader connections read the database through memory mapping instead of private page caches.
+
+  Results are unchanged; tests compare each new read with the full sums.
 - **Pages stay fast at ten million events** (ADR-030). Four new rollup levels:
   - **Session spans and sums per bucket:** activity, the session list, session sizes and per-project activity no longer read every raw event of the period.
   - **Sums per provider, model, application and interface:** the Models & Providers page uses these.

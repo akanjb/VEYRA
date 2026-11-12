@@ -23,9 +23,9 @@ use jiff::tz::TimeZone;
 use jiff::{Timestamp, Zoned};
 use veyra_analytics::activity::{Activity, DEFAULT_IDLE_THRESHOLD_MS, activity};
 use veyra_analytics::dimension::Dimension;
-use veyra_analytics::engine::{QueryResult, evaluate};
+use veyra_analytics::engine::{QueryResult, TokenPoint, evaluate, token_series};
 use veyra_analytics::metrics::{MetricId, MetricValue};
-use veyra_analytics::port::{BaseSumsQuery, TokenRow};
+use veyra_analytics::port::{BaseSumsQuery, CostRow, TokenRow};
 use veyra_analytics::query::{Period, QuerySpec};
 use veyra_analytics::sums::BaseSums;
 use veyra_domain::accuracy::Accuracy;
@@ -45,6 +45,17 @@ pub(crate) fn joined<T>(part: ScopedJoinHandle<'_, T>) -> T {
         .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
 }
 
+/// Totals per group of a scope's events in `period`.
+fn totals_query(scope: &Resolved, period: Period, group_by: Vec<Dimension>) -> BaseSumsQuery {
+    BaseSumsQuery {
+        from: period.from(),
+        until: period.until(),
+        filters: scope.filters.clone(),
+        group_by,
+        by_bucket: false,
+    }
+}
+
 /// Total tokens per group over the scope's period, for cards that show tokens only.
 pub(crate) fn tokens_by(
     data: &DataServices,
@@ -52,19 +63,33 @@ pub(crate) fn tokens_by(
     group_by: Vec<Dimension>,
 ) -> Result<Vec<TokenRow>, ApiError> {
     data.analytics
-        .read_tokens(&BaseSumsQuery {
-            from: scope.period.from(),
-            until: scope.period.until(),
-            filters: scope.filters.clone(),
-            group_by,
-            by_bucket: false,
-        })
+        .read_tokens(&totals_query(scope, scope.period, group_by))
+        .map_err(|e| internal(&e))
+}
+
+/// API-equivalent cost per group over `period`, for cards that show cost only.
+pub(crate) fn costs_by(
+    data: &DataServices,
+    scope: &Resolved,
+    period: Period,
+    group_by: Vec<Dimension>,
+) -> Result<Vec<CostRow>, ApiError> {
+    data.analytics
+        .read_costs(&totals_query(scope, period, group_by))
         .map_err(|e| internal(&e))
 }
 
 /// Evaluates an analytics query.
 pub(crate) fn evaluated(data: &DataServices, spec: &QuerySpec) -> Result<QueryResult, ApiError> {
     evaluate(data.analytics.as_ref(), spec).map_err(|e| internal(&e))
+}
+
+/// Total tokens per local period of a query, for charts that show tokens only.
+pub(crate) fn token_points(
+    data: &DataServices,
+    spec: &QuerySpec,
+) -> Result<Vec<TokenPoint>, ApiError> {
+    token_series(data.analytics.as_ref(), spec).map_err(|e| internal(&e))
 }
 
 /// Sessions and active time of a scope's events in `period`.

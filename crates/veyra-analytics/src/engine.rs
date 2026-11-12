@@ -57,15 +57,20 @@ pub struct QueryResult {
 /// Returns [`EngineError`] for invalid specifications, read failures or time errors.
 pub fn evaluate(reader: &dyn BaseSumsReader, spec: &QuerySpec) -> Result<QueryResult, EngineError> {
     spec.validate()?;
-    let rows = reader.read_base_sums(&BaseSumsQuery {
+    let starts = period_starts(&spec.period, spec.grain, &spec.time_zone)?;
+    let query = BaseSumsQuery {
         from: spec.period.from(),
         until: spec.period.until(),
         filters: spec.filters.clone(),
         group_by: spec.group_by.clone(),
-        by_bucket: spec.grain != TimeGrain::Total,
-    })?;
+        by_bucket: false,
+    };
+    let rows = if spec.grain == TimeGrain::Total {
+        reader.read_base_sums(&query)?
+    } else {
+        reader.read_base_sums_by_period(&query, &starts)?
+    };
 
-    let starts = period_starts(&spec.period, spec.grain, &spec.time_zone)?;
     let mut overall_series: BTreeMap<i64, BaseSums> = BTreeMap::new();
     let mut groups: BTreeMap<Vec<DimensionValue>, (BaseSums, BTreeMap<i64, BaseSums>)> =
         BTreeMap::new();
@@ -103,6 +108,45 @@ pub fn evaluate(reader: &dyn BaseSumsReader, spec: &QuerySpec) -> Result<QueryRe
             })
             .collect(),
     })
+}
+
+/// The total tokens of one local period.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenPoint {
+    pub start: UtcMillis,
+    pub tokens: u64,
+}
+
+/// Total tokens ([`MetricId::TotalTokens`](crate::metrics::MetricId::TotalTokens)) per
+/// local period of `spec`, gaps filled, for charts that show tokens only: the values of
+/// [`evaluate`]'s series, read from one summed column instead of every sum. The grouping
+/// and comparison of `spec` are ignored.
+///
+/// # Errors
+/// Returns [`EngineError`] for read failures or time errors.
+pub fn token_series(
+    reader: &dyn BaseSumsReader,
+    spec: &QuerySpec,
+) -> Result<Vec<TokenPoint>, EngineError> {
+    let starts = period_starts(&spec.period, spec.grain, &spec.time_zone)?;
+    let rows = reader.read_tokens(&BaseSumsQuery {
+        from: spec.period.from(),
+        until: spec.period.until(),
+        filters: spec.filters.clone(),
+        group_by: Vec::new(),
+        by_bucket: true,
+    })?;
+    let mut tokens = vec![0_u64; starts.len()];
+    for row in rows {
+        if let Some(index) = row.bucket_start.and_then(|at| period_index(&starts, at)) {
+            tokens[index] += row.tokens;
+        }
+    }
+    Ok(starts
+        .into_iter()
+        .zip(tokens)
+        .map(|(start, tokens)| TokenPoint { start, tokens })
+        .collect())
 }
 
 type PreviousTotals = (BaseSums, BTreeMap<Vec<DimensionValue>, BaseSums>);

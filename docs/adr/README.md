@@ -36,3 +36,4 @@ Each record documents one significant decision: its context, the decision itself
 | [028](0028-billing-entries-and-budgets.md) | Billing entries, budgets and the month forecast | Accepted |
 | [029](0029-page-reads-in-parallel.md) | Dashboard pages read in parallel, with a budget per page | Accepted |
 | [030](0030-page-rollups.md) | Page rollups and token-only reads | Accepted |
+| [031](0031-reads-sized-to-each-card.md) | Reads sized to what each card shows | Accepted |

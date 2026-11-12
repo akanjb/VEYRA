@@ -6,6 +6,7 @@ use veyra_domain::time::UtcMillis;
 
 use crate::activity::Span;
 use crate::dimension::{Dimension, DimensionValue, Filters};
+use crate::engine::period_index;
 use crate::metrics::{MetricId, MetricValue};
 use crate::sizes::{SessionSize, SizeRow};
 use crate::sums::BaseSums;
@@ -42,6 +43,14 @@ pub struct TokenRow {
     pub tokens: u64,
 }
 
+/// The API-equivalent cost of one group, aligned with [`BaseSumsQuery::group_by`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CostRow {
+    pub bucket_start: Option<UtcMillis>,
+    pub key: Vec<DimensionValue>,
+    pub cost: NanoUsd,
+}
+
 /// Implemented by the data layer to serve analytics queries.
 pub trait BaseSumsReader {
     /// Returns sums grouped as requested.
@@ -49,6 +58,26 @@ pub trait BaseSumsReader {
     /// # Errors
     /// Returns [`ReadError`] when the underlying store fails.
     fn read_base_sums(&self, query: &BaseSumsQuery) -> Result<Vec<BaseSumsRow>, ReadError>;
+
+    /// Sums grouped as requested and by local period: each row's `bucket_start` is the
+    /// start of the period in `starts` that contains its buckets (`query.by_bucket` is
+    /// ignored). `starts` are ascending, bucket-aligned, and the first is at or before
+    /// `query.from`. A key may appear more than once per period; callers merge rows.
+    /// A store may answer this with far fewer rows than one per 15-minute bucket.
+    ///
+    /// # Errors
+    /// Returns [`ReadError`] when the underlying store fails.
+    fn read_base_sums_by_period(
+        &self,
+        query: &BaseSumsQuery,
+        starts: &[UtcMillis],
+    ) -> Result<Vec<BaseSumsRow>, ReadError> {
+        let by_bucket = BaseSumsQuery {
+            by_bucket: true,
+            ..query.clone()
+        };
+        Ok(in_periods(self.read_base_sums(&by_bucket)?, starts))
+    }
 
     /// Total tokens ([`MetricId::TotalTokens`], zero when none were reported) grouped as
     /// requested, for cards that show tokens only. A store may answer this more cheaply
@@ -70,6 +99,38 @@ pub trait BaseSumsReader {
             })
             .collect())
     }
+
+    /// API-equivalent cost ([`MetricId::ApiEquivalentCost`]) grouped as requested, for
+    /// cards that show cost only. A store may answer this more cheaply than
+    /// [`read_base_sums`](Self::read_base_sums), with the same values.
+    ///
+    /// # Errors
+    /// Returns [`ReadError`] when the underlying store fails.
+    fn read_costs(&self, query: &BaseSumsQuery) -> Result<Vec<CostRow>, ReadError> {
+        Ok(self
+            .read_base_sums(query)?
+            .into_iter()
+            .map(|row| CostRow {
+                cost: row.sums.cost.total,
+                bucket_start: row.bucket_start,
+                key: row.key,
+            })
+            .collect())
+    }
+}
+
+/// Rows per 15-minute bucket relabelled with the start of the period in `starts` that
+/// contains their bucket, as [`BaseSumsReader::read_base_sums_by_period`] returns them.
+#[must_use]
+pub fn in_periods(rows: Vec<BaseSumsRow>, starts: &[UtcMillis]) -> Vec<BaseSumsRow> {
+    rows.into_iter()
+        .map(|row| BaseSumsRow {
+            bucket_start: row
+                .bucket_start
+                .map(|bucket| period_index(starts, bucket).map_or(bucket, |i| starts[i])),
+            ..row
+        })
+        .collect()
 }
 
 /// Events in `[from, until)` matching the filters, for activity metrics.

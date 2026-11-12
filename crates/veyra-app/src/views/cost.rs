@@ -28,7 +28,7 @@ use veyra_domain::time::UtcMillis;
 
 use super::kpis::{kpi, metric_kpi, token_accuracy};
 use super::rankings::{Labeller, RankBy, RowLabel, dimension_ranking, groups_of};
-use super::{evaluated, internal, joined, local_time, measures};
+use super::{costs_by, evaluated, internal, joined, local_time, measures};
 use crate::DataServices;
 use crate::dto::{
     AccuracyClass, BreakdownDimension, BudgetLevel, BudgetStatus, Cost, CostBreakdown, CostDay,
@@ -383,13 +383,17 @@ impl Grouped {
 
     /// The change in cost from the previous period, by group.
     fn waterfall(&self, data: &DataServices, scope: &Resolved) -> Result<Waterfall, ApiError> {
-        let mut spec = scope.spec(self.labeller.group_by(), TimeGrain::Total, false);
-        spec.period = scope.period.previous();
-        let previous = evaluated(data, &spec)?.groups;
-        let value = |g: GroupResult| (g.key, g.totals.cost.total.0);
+        let previous = costs_by(
+            data,
+            scope,
+            scope.period.previous(),
+            self.labeller.group_by(),
+        )?;
         let change: Contributions<Vec<DimensionValue>> = contributions(
-            self.current.iter().cloned().map(value),
-            previous.into_iter().map(value),
+            self.current
+                .iter()
+                .map(|g| (g.key.clone(), g.totals.cost.total.0)),
+            previous.into_iter().map(|row| (row.key, row.cost.0)),
             WATERFALL_STEPS,
         );
         let mut steps: Vec<WaterfallStep> = change

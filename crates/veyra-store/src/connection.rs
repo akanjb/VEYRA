@@ -50,6 +50,10 @@ pub(crate) fn register_functions(connection: &Connection) -> Result<(), StoreErr
     Ok(())
 }
 
+/// The part of the database file a reader maps into memory (SQLite caps it at its
+/// compile-time maximum). It reserves address space, not memory.
+const READER_MMAP_BYTES: i64 = 1 << 30;
+
 pub fn open_reader(path: &Path) -> Result<Connection, StoreError> {
     let connection = Connection::open_with_flags(
         path,
@@ -60,5 +64,8 @@ pub fn open_reader(path: &Path) -> Result<Connection, StoreError> {
     // Sorts and groupings stay in memory: temporary files are slow, and on some systems
     // each one is scanned by antivirus software before it can be used.
     connection.pragma_update(None, "temp_store", "MEMORY")?;
+    // Pages are read straight from the operating system's file cache, which all readers
+    // share, instead of being copied into each connection's own small page cache.
+    connection.pragma_update(None, "mmap_size", READER_MMAP_BYTES)?;
     Ok(connection)
 }

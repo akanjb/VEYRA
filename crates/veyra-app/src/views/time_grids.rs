@@ -3,7 +3,7 @@
 use jiff::ToSpan;
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 
-use super::{evaluated, internal, local_date, local_time, measures};
+use super::{internal, local_date, local_time, token_points};
 use crate::DataServices;
 use crate::dto::{CalendarDay, HourCell};
 use crate::error::ApiError;
@@ -28,13 +28,12 @@ pub(crate) fn calendar(
         comparison: None,
         ..scope.spec(vec![], TimeGrain::Day, false)
     };
-    evaluated(data, &spec)?
-        .series
+    token_points(data, &spec)?
         .iter()
         .map(|point| {
             Ok(CalendarDay {
                 date: local_date(point.start, &scope.time_zone)?,
-                tokens: measures(&point.sums).tokens,
+                tokens: point.tokens,
             })
         })
         .collect()
@@ -43,11 +42,11 @@ pub(crate) fn calendar(
 /// Tokens per local weekday and hour over the period of the scope.
 pub(crate) fn hours(data: &DataServices, scope: &Resolved) -> Result<Vec<HourCell>, ApiError> {
     let mut grid = [[0_u64; 24]; 7];
-    for point in evaluated(data, &scope.spec(vec![], TimeGrain::Hour, false))?.series {
+    for point in token_points(data, &scope.spec(vec![], TimeGrain::Hour, false))? {
         let local = local_time(point.start, &scope.time_zone)?;
         let weekday = usize::try_from(local.weekday().to_monday_zero_offset()).unwrap_or(0);
         let hour = usize::try_from(local.hour()).unwrap_or(0);
-        grid[weekday][hour] += measures(&point.sums).tokens;
+        grid[weekday][hour] += point.tokens;
     }
     Ok(grid
         .iter()
