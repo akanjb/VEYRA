@@ -21,7 +21,7 @@ use support::{api, engine_value, ingested, scope};
 #[test]
 fn overview_numbers_equal_the_metric_engine() {
     let data = ingested();
-    let overview = api(&data.store)
+    let overview = api(&data)
         .get_overview(OverviewRequest { scope: scope() })
         .unwrap();
     let k = &overview.kpis;
@@ -90,7 +90,7 @@ fn overview_numbers_equal_the_metric_engine() {
 #[test]
 fn sessions_and_their_timelines_match_the_overview() {
     let data = ingested();
-    let api = api(&data.store);
+    let api = api(&data);
     let list = api
         .list_sessions(SessionsRequest {
             scope: scope(),
@@ -149,7 +149,7 @@ fn sessions_and_their_timelines_match_the_overview() {
 #[test]
 fn usage_numbers_equal_the_metric_engine_and_add_up() {
     let data = ingested();
-    let usage = api(&data.store)
+    let usage = api(&data)
         .get_usage(UsageRequest { scope: scope() })
         .unwrap();
     let k = &usage.kpis;
@@ -207,7 +207,7 @@ fn usage_numbers_equal_the_metric_engine_and_add_up() {
 #[test]
 fn cache_numbers_equal_the_metric_engine_and_add_up() {
     let data = ingested();
-    let cache = api(&data.store)
+    let cache = api(&data)
         .get_cache(CacheRequest { scope: scope() })
         .unwrap();
     let k = &cache.kpis;
@@ -277,7 +277,7 @@ fn cache_numbers_equal_the_metric_engine_and_add_up() {
 #[test]
 fn models_numbers_add_up_to_the_scope() {
     let data = ingested();
-    let models = api(&data.store)
+    let models = api(&data)
         .get_models(ModelsRequest { scope: scope() })
         .unwrap();
     #[allow(
@@ -337,7 +337,7 @@ fn models_numbers_add_up_to_the_scope() {
 #[test]
 fn activity_days_add_up_to_the_period_and_match_the_overview() {
     let data = ingested();
-    let api = api(&data.store);
+    let api = api(&data);
     let activity = api
         .get_activity(ActivityRequest { scope: scope() })
         .unwrap();
@@ -382,7 +382,7 @@ fn activity_days_add_up_to_the_period_and_match_the_overview() {
 #[test]
 fn projects_match_the_overview_and_can_be_renamed() {
     let data = ingested();
-    let api = api(&data.store);
+    let api = api(&data);
     let list = api
         .list_projects(ProjectsRequest { scope: scope() })
         .unwrap();
@@ -449,7 +449,7 @@ fn projects_match_the_overview_and_can_be_renamed() {
 #[test]
 fn highlights_restate_the_overview() {
     let data = ingested();
-    let overview = api(&data.store)
+    let overview = api(&data)
         .get_overview(OverviewRequest { scope: scope() })
         .unwrap();
     assert!(overview.highlights.len() <= 5);

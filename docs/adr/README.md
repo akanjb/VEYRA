@@ -38,4 +38,5 @@ Each record documents one significant decision: its context, the decision itself
 | [030](0030-page-rollups.md) | Page rollups and token-only reads | Accepted |
 | [031](0031-reads-sized-to-each-card.md) | Reads sized to what each card shows | Accepted |
 | [032](0032-report-exports-and-audit-log.md) | Report exports, stored settings and the audit log | Accepted |
+| [033](0033-storage-backups-and-restore.md) | Storage page, daily backups and restore at start | Accepted |
 | [035](0035-source-available-licence.md) | Source-available licence | Accepted |

@@ -1,6 +1,7 @@
 //! Page budgets: the command behind every dashboard page, called through the application
 //! facade exactly as the desktop shell calls it, over the last 30 days with comparison.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use veyra_app::dto::{
@@ -8,10 +9,10 @@ use veyra_app::dto::{
     ModelsRequest, OverviewRequest, ProjectsRequest, Scope, ScopeFilters, SessionSort,
     SessionsRequest, UsageRequest,
 };
-use veyra_app::{Api, ApiError, AppMetadata, DataServices, DisplayNames, FileSaver};
+use veyra_app::{Api, ApiError, AppControl, AppMetadata, DataServices, DisplayNames, FileSaver};
 use veyra_domain::pricing::PriceCatalog;
 use veyra_domain::source::IngestControl;
-use veyra_store::Store;
+use veyra_store::{Storage, Store};
 
 use crate::timing::{Budget, timed};
 
@@ -26,6 +27,13 @@ struct NoIngest;
 impl IngestControl for NoIngest {
     fn request_scan(&self) {}
     fn sources_changed(&self) {}
+}
+
+/// Nothing restarts while pages are timed.
+struct NoRestart;
+
+impl AppControl for NoRestart {
+    fn restart(&self) {}
 }
 
 /// Reports are not saved while pages are timed.
@@ -50,12 +58,19 @@ fn api(store: &Arc<Store>, catalog: PriceCatalog, names: DisplayNames) -> Api {
         billing: Arc::clone(store) as _,
         settings: Arc::clone(store) as _,
         audit: Arc::clone(store) as _,
+        // Pages never back up; the paths are never used.
+        storage: Arc::new(Storage::new(
+            Arc::clone(store),
+            PathBuf::from("veyra.db"),
+            std::env::temp_dir().join("veyra-perf-backups"),
+        )),
         analytics: Arc::clone(store) as _,
         catalog: Arc::new(catalog),
         connectors: Vec::new(),
         names,
         ingest: Box::new(NoIngest),
         files: Box::new(NoFiles),
+        control: Box::new(NoRestart),
     }));
     api
 }

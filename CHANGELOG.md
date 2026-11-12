@@ -5,6 +5,11 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Storage page and backups** (ADR-033).
+  - Command `get_storage`: database size, space per table with its indexes, events and their first and last time, events per month, and the backups.
+  - Daily backups with `VACUUM INTO`, keeping the newest seven, and a "Back up now" button (`create_backup`).
+  - Restore with a preview: `preview_restore` shows what a backup holds beside what is stored now, and `restore_backup` stages it, records it in the audit log and restarts Veyra. The backup replaces the database at start, before anything opens it, and the replaced database is kept beside it.
+  - Backup names from the dashboard must match the backup pattern exactly, so no request can reach another file.
 - **Report exports** (ADR-032).
   - An Export button in the header of every page with a date range opens a dialog. Choose a report (daily, weekly, monthly, per project, per model, usage by application, or cost summary) and a format (CSV, CSV for Excel, JSON, XLSX). Preview the rows exactly as they will be written, then save through the operating system's save dialog.
   - Commands `preview_export` and `save_export`. Reports add up to the totals the pages show for the same filters, and include a cost-kind and a token-accuracy column. Recorded subscriptions and charges stay in rows of their own cost kind.

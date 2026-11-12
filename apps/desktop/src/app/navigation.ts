@@ -10,6 +10,7 @@ import {
   DatabaseZap,
   Database,
   FolderGit2,
+  HardDrive,
   LayoutDashboard,
   Settings,
   Wallet,
@@ -27,6 +28,7 @@ export interface Page {
     | "/projects"
     | "/sessions"
     | "/sources"
+    | "/storage"
     | "/settings";
   title: string;
   /** The question the page answers. */
@@ -122,6 +124,15 @@ export const PAGES: readonly Page[] = [
     section: "System",
     icon: Database,
     shortcut: "h",
+    scoped: false,
+  },
+  {
+    to: "/storage",
+    title: "Storage",
+    purpose: "How much space Veyra takes, and its backups.",
+    section: "System",
+    icon: HardDrive,
+    shortcut: "b",
     scoped: false,
   },
   {

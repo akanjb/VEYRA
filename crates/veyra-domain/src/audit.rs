@@ -20,6 +20,8 @@ pub enum AuditActor {
 pub enum AuditAction {
     /// A report was written to a file the user chose.
     Export,
+    /// A backup was set to replace the database at the next start.
+    Restore,
 }
 
 impl AuditAction {
@@ -28,6 +30,7 @@ impl AuditAction {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Export => "export",
+            Self::Restore => "restore",
         }
     }
 
@@ -36,6 +39,7 @@ impl AuditAction {
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
             "export" => Some(Self::Export),
+            "restore" => Some(Self::Restore),
             _ => None,
         }
     }

@@ -4005,6 +4005,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "veyra-app",
  "veyra-connectors",
+ "veyra-domain",
  "veyra-ingest",
  "veyra-registry",
  "veyra-store",

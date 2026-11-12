@@ -63,7 +63,7 @@ fn json(
 #[test]
 fn every_report_adds_up_to_the_overview() {
     let data = ingested();
-    let (api, files) = api_with_files(&data.store);
+    let (api, files) = api_with_files(&data);
     let page = overview(&api);
     let tokens = page.kpis.tokens.value.unwrap();
     let cost = page.kpis.cost_nano_usd.value.unwrap();
@@ -96,7 +96,7 @@ fn every_report_adds_up_to_the_overview() {
 #[test]
 fn hashed_reports_name_no_project_and_no_path() {
     let data = ingested();
-    let pair = api_with_files(&data.store);
+    let pair = api_with_files(&data);
     let hashed = ExportRedaction {
         hash_project_names: true,
         drop_paths: false,
@@ -131,7 +131,7 @@ fn hashed_reports_name_no_project_and_no_path() {
 #[test]
 fn csv_previews_show_the_written_rows() {
     let data = ingested();
-    let (api, files) = api_with_files(&data.store);
+    let (api, files) = api_with_files(&data);
     let ask = request(
         ExportPreset::ByModel,
         ExportFormat::Csv,
@@ -160,7 +160,7 @@ fn csv_previews_show_the_written_rows() {
 #[test]
 fn recorded_billing_stays_in_its_own_cost_kind() {
     let data = ingested();
-    let pair = api_with_files(&data.store);
+    let pair = api_with_files(&data);
     pair.0
         .save_billing_entry(SaveBillingEntryRequest {
             id: None,
@@ -194,7 +194,7 @@ fn recorded_billing_stays_in_its_own_cost_kind() {
 #[test]
 fn saved_reports_are_audited_without_personal_data() {
     let data = ingested();
-    let (api, _files) = api_with_files(&data.store);
+    let (api, _files) = api_with_files(&data);
     api.preview_export(request(
         ExportPreset::ByProject,
         ExportFormat::Csv,
@@ -234,7 +234,32 @@ fn an_invalid_scope_is_refused() {
     );
     ask.scope.time_zone = "Nowhere/Else".to_owned();
     assert!(matches!(
-        api(&data.store).preview_export(ask),
+        api(&data).preview_export(ask),
         Err(veyra_app::ApiError::Validation { .. })
     ));
+}
+
+#[test]
+fn workbooks_are_written_and_audited() {
+    let data = ingested();
+    let (api, files) = api_with_files(&data);
+    let saved = api
+        .save_export(request(
+            ExportPreset::Monthly,
+            ExportFormat::Xlsx,
+            ExportRedaction::default(),
+        ))
+        .unwrap();
+    assert!(saved.saved);
+    let (name, bytes) = files.lock().unwrap().pop().unwrap();
+    assert!(
+        std::path::Path::new(&name)
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("xlsx"))
+    );
+    assert!(bytes.starts_with(b"PK"), "XLSX files are ZIP archives");
+    assert_eq!(
+        data.store.audit_entries(1).unwrap()[0].detail,
+        "monthly report, XLSX, 1 row"
+    );
 }

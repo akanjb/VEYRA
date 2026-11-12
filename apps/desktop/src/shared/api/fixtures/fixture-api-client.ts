@@ -21,6 +21,7 @@ import { FixtureBilling } from "./billing-view";
 import { cache } from "./cache-view";
 import { costView } from "./cost-view";
 import { exportPreview } from "./export-view";
+import { FixtureStorage } from "./storage-view";
 import { models } from "./models-view";
 import { costAssumptions } from "./pricing-view";
 import { FixtureProjects } from "./projects-view";
@@ -64,6 +65,7 @@ class FixtureState {
 
   readonly projects = new FixtureProjects();
   readonly billing = new FixtureBilling();
+  readonly storage = new FixtureStorage();
 
   get now(): number {
     return this.options.now;
@@ -183,6 +185,37 @@ function exportHandlers(state: FixtureState): Pick<Handlers, "preview_export" | 
   };
 }
 
+type StorageCommand = "get_storage" | "create_backup" | "preview_restore" | "restore_backup";
+
+function storageHandlers(state: FixtureState): Pick<Handlers, StorageCommand> {
+  return {
+    get_storage: (r) => state.storage.overview(state.flat(), r.timeZone),
+    create_backup: () => state.storage.create(state.flat(), Date.now()),
+    preview_restore: (r) => state.storage.preview(state.flat(), r.name),
+    // A browser cannot restart Veyra; the restore is only checked.
+    restore_backup: (r) => {
+      state.storage.preview(state.flat(), r.name);
+      return {};
+    },
+  };
+}
+
+function projectChanges(
+  state: FixtureState,
+): Pick<Handlers, "rename_project" | "merge_project" | "unmerge_project"> {
+  return {
+    rename_project: (r) => state.projects.rename(r.id, r.name),
+    merge_project: (r) => {
+      state.projects.merge(r.from, r.into);
+      return {};
+    },
+    unmerge_project: (r) => {
+      state.projects.unmerge(r.id);
+      return {};
+    },
+  };
+}
+
 /** Creates the fixture client. */
 export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient {
   const state = new FixtureState({ fresh: options.fresh ?? false, now: options.now ?? Date.now() });
@@ -211,17 +244,10 @@ export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient 
     get_activity: (r) => activity(state.flat(), r.scope),
     list_projects: (r) => state.projects.list(state.flat(), r.scope),
     get_project: (r) => state.projects.detail(state.flat(), r.scope, r.id),
-    rename_project: (r) => state.projects.rename(r.id, r.name),
-    merge_project: (r) => {
-      state.projects.merge(r.from, r.into);
-      return {};
-    },
-    unmerge_project: (r) => {
-      state.projects.unmerge(r.id);
-      return {};
-    },
+    ...projectChanges(state),
     ...billingHandlers(state.billing),
     ...exportHandlers(state),
+    ...storageHandlers(state),
     list_sessions: (r) => sessions(state.flat(), r),
     get_session: (r) => state.detail(r.id),
   };

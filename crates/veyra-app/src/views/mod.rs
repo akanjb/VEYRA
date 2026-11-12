@@ -15,6 +15,7 @@ pub(crate) mod projects;
 mod rankings;
 pub(crate) mod sessions;
 pub(crate) mod sources;
+pub(crate) mod storage;
 mod time_grids;
 pub(crate) mod usage;
 

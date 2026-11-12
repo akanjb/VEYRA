@@ -12,6 +12,7 @@ pub mod events;
 mod export;
 mod names;
 mod scope;
+mod shell;
 mod views;
 
 pub use api::{AnalyticsReader, Api, AppMetadata, DataServices};
@@ -19,3 +20,4 @@ pub use commands::COMMAND_NAMES;
 pub use error::ApiError;
 pub use export::FileSaver;
 pub use names::DisplayNames;
+pub use shell::AppControl;

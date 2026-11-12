@@ -3,19 +3,52 @@
 //! through every data command instead of preventing the window from opening.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use veyra_app::dto::DataChanged;
 use veyra_app::events::DATA_CHANGED;
-use veyra_app::{Api, DataServices, DisplayNames};
+use veyra_app::{Api, AppControl, DataServices, DisplayNames};
+use veyra_domain::time::UtcMillis;
 use veyra_ingest::{IngestWorker, WorkerConfig, discovery_env};
 use veyra_registry::Registry;
-use veyra_store::Store;
+use veyra_store::{Storage, Store};
 
 use crate::files::DialogSaver;
 
 /// File name of the database inside the local app-data directory.
 const DATABASE: &str = "veyra.db";
+/// The backup folder inside the local app-data directory (ADR-033).
+const BACKUPS: &str = "backups";
+/// The first daily backup waits so the startup scan runs first; then it is checked hourly.
+const FIRST_BACKUP_DELAY: Duration = Duration::from_mins(10);
+const BACKUP_CHECK: Duration = Duration::from_hours(1);
+
+/// Restarts the application (to apply a restored backup).
+struct Restart<R: Runtime>(AppHandle<R>);
+
+impl<R: Runtime> AppControl for Restart<R> {
+    fn restart(&self) {
+        self.0.request_restart();
+    }
+}
+
+/// Takes a backup once a day, in the background.
+fn back_up_daily(storage: Arc<Storage>) -> Result<(), String> {
+    std::thread::Builder::new()
+        .name("veyra-backups".to_owned())
+        .spawn(move || {
+            std::thread::sleep(FIRST_BACKUP_DELAY);
+            loop {
+                if let Err(error) = storage.back_up_daily(UtcMillis::now()) {
+                    eprintln!("veyra: daily backup failed: {error}");
+                }
+                std::thread::sleep(BACKUP_CHECK);
+            }
+        })
+        .map(drop)
+        .map_err(|e| format!("cannot start daily backups: {e}"))
+}
 
 /// Opens the database, starts ingestion and attaches both to the API.
 pub fn start<R: Runtime>(app: &AppHandle<R>) {
@@ -30,7 +63,17 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
         .app_local_data_dir()
         .map_err(|e| format!("no app-data directory: {e}"))?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
-    let store = Arc::new(Store::open(&dir.join(DATABASE)).map_err(|e| e.to_string())?);
+    let database = dir.join(DATABASE);
+    // A backup the user chose to restore replaces the database before anything opens it.
+    veyra_store::apply_pending_restore(&database)
+        .map_err(|e| format!("cannot apply the restored backup: {e}"))?;
+    let store = Arc::new(Store::open(&database).map_err(|e| e.to_string())?);
+    let storage = Arc::new(Storage::new(
+        Arc::clone(&store),
+        database,
+        dir.join(BACKUPS),
+    ));
+    back_up_daily(Arc::clone(&storage))?;
     let registry = Arc::new(Registry::bundled().map_err(|e| e.to_string())?);
     let connectors = veyra_connectors::all();
     let descriptors: Vec<_> = connectors.iter().map(|c| c.descriptor().clone()).collect();
@@ -63,11 +106,13 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
         billing: Arc::clone(&store) as _,
         settings: Arc::clone(&store) as _,
         audit: Arc::clone(&store) as _,
+        storage,
         analytics: store,
         catalog,
         connectors: descriptors,
         names,
         ingest: Box::new(ingest),
         files: Box::new(DialogSaver { app: app.clone() }),
+        control: Box::new(Restart(app.clone())),
     })
 }

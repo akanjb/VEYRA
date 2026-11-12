@@ -35,6 +35,10 @@ macro_rules! for_each_command {
             delete_budget($crate::dto::DeleteBudgetRequest) -> $crate::dto::BillingChanged;
             preview_export($crate::dto::ExportRequest) -> $crate::dto::ExportPreview;
             save_export($crate::dto::ExportRequest) -> $crate::dto::ExportSaved;
+            get_storage($crate::dto::StorageRequest) -> $crate::dto::StorageOverview;
+            create_backup($crate::dto::CreateBackupRequest) -> $crate::dto::BackupInfo;
+            preview_restore($crate::dto::RestoreRequest) -> $crate::dto::RestorePreview;
+            restore_backup($crate::dto::RestoreRequest) -> $crate::dto::RestoreScheduled;
             list_sessions($crate::dto::SessionsRequest) -> $crate::dto::SessionList;
             get_session($crate::dto::SessionRequest) -> $crate::dto::SessionDetail;
         }

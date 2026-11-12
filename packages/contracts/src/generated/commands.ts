@@ -3,6 +3,7 @@ import type { Activity } from "./Activity";
 import type { ActivityRequest } from "./ActivityRequest";
 import type { AppInfo } from "./AppInfo";
 import type { AppInfoRequest } from "./AppInfoRequest";
+import type { BackupInfo } from "./BackupInfo";
 import type { BillingChanged } from "./BillingChanged";
 import type { BillingEntryInfo } from "./BillingEntryInfo";
 import type { BillingRequest } from "./BillingRequest";
@@ -14,6 +15,7 @@ import type { Cost } from "./Cost";
 import type { CostAssumptions } from "./CostAssumptions";
 import type { CostAssumptionsRequest } from "./CostAssumptionsRequest";
 import type { CostRequest } from "./CostRequest";
+import type { CreateBackupRequest } from "./CreateBackupRequest";
 import type { DeleteBillingEntryRequest } from "./DeleteBillingEntryRequest";
 import type { DeleteBudgetRequest } from "./DeleteBudgetRequest";
 import type { ExportPreview } from "./ExportPreview";
@@ -34,6 +36,9 @@ import type { ProjectsRequest } from "./ProjectsRequest";
 import type { RenameProjectRequest } from "./RenameProjectRequest";
 import type { RescanAccepted } from "./RescanAccepted";
 import type { RescanRequest } from "./RescanRequest";
+import type { RestorePreview } from "./RestorePreview";
+import type { RestoreRequest } from "./RestoreRequest";
+import type { RestoreScheduled } from "./RestoreScheduled";
 import type { SaveBillingEntryRequest } from "./SaveBillingEntryRequest";
 import type { SaveBudgetRequest } from "./SaveBudgetRequest";
 import type { SessionDetail } from "./SessionDetail";
@@ -43,6 +48,8 @@ import type { SessionsRequest } from "./SessionsRequest";
 import type { SetSourceEnabledRequest } from "./SetSourceEnabledRequest";
 import type { SourceList } from "./SourceList";
 import type { SourceSummary } from "./SourceSummary";
+import type { StorageOverview } from "./StorageOverview";
+import type { StorageRequest } from "./StorageRequest";
 import type { UnmergeProjectRequest } from "./UnmergeProjectRequest";
 import type { Usage } from "./Usage";
 import type { UsageRequest } from "./UsageRequest";
@@ -72,6 +79,10 @@ export interface CommandMap {
   delete_budget: { request: DeleteBudgetRequest; response: BillingChanged };
   preview_export: { request: ExportRequest; response: ExportPreview };
   save_export: { request: ExportRequest; response: ExportSaved };
+  get_storage: { request: StorageRequest; response: StorageOverview };
+  create_backup: { request: CreateBackupRequest; response: BackupInfo };
+  preview_restore: { request: RestoreRequest; response: RestorePreview };
+  restore_backup: { request: RestoreRequest; response: RestoreScheduled };
   list_sessions: { request: SessionsRequest; response: SessionList };
   get_session: { request: SessionRequest; response: SessionDetail };
 }
@@ -102,6 +113,10 @@ export const COMMAND_NAMES = [
   "delete_budget",
   "preview_export",
   "save_export",
+  "get_storage",
+  "create_backup",
+  "preview_restore",
+  "restore_backup",
   "list_sessions",
   "get_session",
 ] as const satisfies readonly CommandName[];

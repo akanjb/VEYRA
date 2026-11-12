@@ -23,6 +23,7 @@ mod size_reads;
 mod sources;
 mod spans;
 mod sql;
+mod storage;
 mod write;
 
 use std::path::Path;
@@ -36,6 +37,7 @@ pub use error::StoreError;
 pub use migrations::LATEST_SCHEMA_VERSION;
 pub use reprice::StoredEvent;
 pub use sources::{RunStats, StoredCheckpoint};
+pub use storage::{KEPT_BACKUPS, Storage, apply_pending_restore};
 pub use veyra_domain::source::SourceRecord;
 pub use write::{FileCheckpoint, IngestBatch, PricedEvent, WriteSummary};
 

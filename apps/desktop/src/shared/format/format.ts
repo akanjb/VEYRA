@@ -22,6 +22,22 @@ export function compact(value: Num, locale?: string): string {
   }).format(value);
 }
 
+const BYTE_UNITS = ["KB", "MB", "GB", "TB"];
+
+/** A size in bytes, in binary units: 512 B, 4.2 KB, 1.3 GB. */
+export function bytes(value: Num, locale?: string): string {
+  if (isMissing(value)) return MISSING;
+  if (Math.abs(value) < 1024) return `${integer(value, locale)} B`;
+  let scaled = value;
+  let unit = 0;
+  do {
+    scaled /= 1024;
+    unit += 1;
+  } while (Math.abs(scaled) >= 1024 && unit < BYTE_UNITS.length);
+  const number = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(scaled);
+  return `${number} ${BYTE_UNITS[unit - 1] ?? "TB"}`;
+}
+
 /** Full precision with grouping: 12,400,315. */
 export function integer(value: Num, locale?: string): string {
   if (isMissing(value)) return MISSING;

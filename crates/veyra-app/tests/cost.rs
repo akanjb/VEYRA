@@ -49,7 +49,7 @@ fn entry(kind: BillingKind, recurrence: BillingRecurrence, amount: i64) -> Billi
 #[test]
 fn cost_figures_equal_the_metric_engine() {
     let data = ingested();
-    let page = cost(&api(&data.store));
+    let page = cost(&api(&data));
     let k = &page.kpis;
     for (kpi, metric) in [
         (&k.api_equivalent_nano_usd, MetricId::ApiEquivalentCost),
@@ -71,7 +71,7 @@ fn cost_figures_equal_the_metric_engine() {
 #[test]
 fn days_breakdowns_composition_and_waterfalls_add_up() {
     let data = ingested();
-    let page = cost(&api(&data.store));
+    let page = cost(&api(&data));
     let total = page.kpis.api_equivalent_nano_usd.value.unwrap();
     let daily: i64 = page.daily.iter().map(|d| d.api_equivalent_nano_usd).sum();
     assert_eq!(as_f64(daily), total);
@@ -123,7 +123,7 @@ fn days_breakdowns_composition_and_waterfalls_add_up() {
 #[test]
 fn the_month_outlook_is_consistent() {
     let data = ingested();
-    let month = cost(&api(&data.store)).month;
+    let month = cost(&api(&data)).month;
     assert_eq!(month.month, "2026-11");
     assert_eq!(month.days.len(), 30);
     assert_eq!(
@@ -145,7 +145,7 @@ fn the_month_outlook_is_consistent() {
 #[test]
 fn recorded_billing_stays_apart_from_the_estimate() {
     let data = ingested();
-    let api = api(&data.store);
+    let api = api(&data);
     let before = cost(&api);
     let monthly = SaveBillingEntryRequest {
         id: None,
@@ -201,7 +201,7 @@ fn recorded_billing_stays_apart_from_the_estimate() {
 #[test]
 fn budgets_report_their_month_and_level() {
     let data = ingested();
-    let api = api(&data.store);
+    let api = api(&data);
     let page = cost(&api);
     let tiny = api
         .save_budget(SaveBudgetRequest {
@@ -254,7 +254,7 @@ fn budgets_report_their_month_and_level() {
 #[test]
 fn invalid_and_unknown_records_are_refused() {
     let data = ingested();
-    let api = api(&data.store);
+    let api = api(&data);
     let invalid = |entry| {
         api.save_billing_entry(SaveBillingEntryRequest { id: None, entry })
             .unwrap_err()
@@ -294,7 +294,7 @@ fn invalid_and_unknown_records_are_refused() {
 #[test]
 fn cost_assumptions_add_up_to_the_estimate() {
     let data = ingested();
-    let api = api(&data.store);
+    let api = api(&data);
     let panel = api
         .get_cost_assumptions(CostAssumptionsRequest { scope: scope() })
         .unwrap();

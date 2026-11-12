@@ -89,6 +89,14 @@ test("every page and overlay runs without a CSP violation", async ({ page }) => 
 
   await page
     .getByRole("navigation", { name: "Pages" })
+    .getByRole("link", { name: "Storage" })
+    .click();
+  await expect(
+    page.getByRole("table", { name: "Space each table takes, with its indexes" }),
+  ).toBeVisible();
+
+  await page
+    .getByRole("navigation", { name: "Pages" })
     .getByRole("link", { name: "Settings" })
     .click();
   await page.getByRole("button", { name: "Add budget" }).click();

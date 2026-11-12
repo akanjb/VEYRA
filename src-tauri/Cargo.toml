@@ -21,6 +21,7 @@ tauri.workspace = true
 tauri-plugin-dialog.workspace = true
 veyra-app.workspace = true
 veyra-connectors.workspace = true
+veyra-domain.workspace = true
 veyra-ingest.workspace = true
 veyra-registry.workspace = true
 veyra-store.workspace = true

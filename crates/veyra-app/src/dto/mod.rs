@@ -15,6 +15,7 @@ mod pricing;
 mod projects;
 mod sessions;
 mod sources;
+mod storage;
 mod usage;
 
 pub use activity::{Activity, ActivityDay, ActivityKpis, ActivityRequest, LengthBin, LongSession};
@@ -53,6 +54,10 @@ pub use sessions::{
 pub use sources::{
     Capability, DataChanged, IssueCount, ListSourcesRequest, RescanAccepted, RescanRequest,
     SetSourceEnabledRequest, SourceList, SourceSummary, SupportLevel,
+};
+pub use storage::{
+    BackupInfo, CreateBackupRequest, MonthEvents, RestorePreview, RestoreRequest, RestoreScheduled,
+    StorageOverview, StorageRequest, TableBytes,
 };
 pub use usage::{
     Breakdown, BreakdownDimension, SizeBinCount, SizePoint, TokenMixPoint, Usage, UsageKpis,

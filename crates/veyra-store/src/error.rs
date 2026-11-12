@@ -21,6 +21,8 @@ pub enum StoreError {
         #[source]
         source: EventError,
     },
+    #[error("file operation failed: {0}")]
+    Io(#[from] std::io::Error),
     #[error("{0} is out of the storable range")]
     OutOfRange(&'static str),
     #[error("stored data is inconsistent: {0}")]

@@ -12,22 +12,25 @@ use veyra_domain::pricing::PriceCatalog;
 use veyra_domain::project::ProjectRepository;
 use veyra_domain::settings::SettingsRepository;
 use veyra_domain::source::{ConnectorDescriptor, IngestControl, SourceRepository};
+use veyra_domain::storage::{BackupError, StorageRepository};
 use veyra_domain::time::UtcMillis;
 
 use crate::dto::{
-    Activity, ActivityRequest, AppInfo, AppInfoRequest, BillingChanged, BillingEntryInfo,
-    BillingRequest, BillingSettings, BudgetInfo, BuildProfile, Cache, CacheRequest, Cost,
-    CostAssumptions, CostAssumptionsRequest, CostRequest, DeleteBillingEntryRequest,
-    DeleteBudgetRequest, ExportPreview, ExportRequest, ExportSaved, ListSourcesRequest,
-    MergeProjectRequest, Models, ModelsRequest, Overview, OverviewRequest, ProjectDetail,
-    ProjectInfo, ProjectList, ProjectRequest, ProjectsChanged, ProjectsRequest,
-    RenameProjectRequest, RescanAccepted, RescanRequest, SaveBillingEntryRequest,
-    SaveBudgetRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
-    SetSourceEnabledRequest, SourceList, SourceSummary, UnmergeProjectRequest, Usage, UsageRequest,
+    Activity, ActivityRequest, AppInfo, AppInfoRequest, BackupInfo, BillingChanged,
+    BillingEntryInfo, BillingRequest, BillingSettings, BudgetInfo, BuildProfile, Cache,
+    CacheRequest, Cost, CostAssumptions, CostAssumptionsRequest, CostRequest, CreateBackupRequest,
+    DeleteBillingEntryRequest, DeleteBudgetRequest, ExportPreview, ExportRequest, ExportSaved,
+    ListSourcesRequest, MergeProjectRequest, Models, ModelsRequest, Overview, OverviewRequest,
+    ProjectDetail, ProjectInfo, ProjectList, ProjectRequest, ProjectsChanged, ProjectsRequest,
+    RenameProjectRequest, RescanAccepted, RescanRequest, RestorePreview, RestoreRequest,
+    RestoreScheduled, SaveBillingEntryRequest, SaveBudgetRequest, SessionDetail, SessionList,
+    SessionRequest, SessionsRequest, SetSourceEnabledRequest, SourceList, SourceSummary,
+    StorageOverview, StorageRequest, UnmergeProjectRequest, Usage, UsageRequest,
 };
 use crate::error::ApiError;
 use crate::export::{self, FileSaver};
 use crate::names::DisplayNames;
+use crate::shell::AppControl;
 use crate::{scope, views};
 
 /// Static facts about the build, supplied by the composition root.
@@ -70,6 +73,7 @@ pub struct DataServices {
     pub billing: Arc<dyn BillingRepository>,
     pub settings: Arc<dyn SettingsRepository>,
     pub audit: Arc<dyn AuditLog>,
+    pub storage: Arc<dyn StorageRepository>,
     pub analytics: Arc<dyn AnalyticsReader>,
     /// The price catalogue events are priced with.
     pub catalog: Arc<PriceCatalog>,
@@ -80,6 +84,8 @@ pub struct DataServices {
     pub ingest: Box<dyn IngestControl>,
     /// Saves reports where the user chooses.
     pub files: Box<dyn FileSaver>,
+    /// Restarts Veyra, to apply a restored backup.
+    pub control: Box<dyn AppControl>,
 }
 
 impl std::fmt::Debug for DataServices {
@@ -502,6 +508,105 @@ impl Api {
     }
 }
 
+impl Api {
+    /// The database's size, per-table sizes, events per month and backups.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an unknown time zone; [`ApiError::Busy`] while
+    /// starting; [`ApiError::Internal`] on database or file failure.
+    pub fn get_storage(&self, request: StorageRequest) -> Result<StorageOverview, ApiError> {
+        let StorageRequest { time_zone } = request;
+        let zone = jiff::tz::TimeZone::get(&time_zone).map_err(|_| ApiError::Validation {
+            message: format!("unknown time zone `{time_zone}`"),
+        })?;
+        views::storage::overview(self.data()?, &zone)
+    }
+
+    /// Backs up the database now, keeping only the newest backups.
+    ///
+    /// # Errors
+    /// [`ApiError::Busy`] while starting; [`ApiError::Internal`] when the copy fails.
+    pub fn create_backup(&self, _request: CreateBackupRequest) -> Result<BackupInfo, ApiError> {
+        let backup = self
+            .data()?
+            .storage
+            .create_backup(UtcMillis::now())
+            .map_err(|e| ApiError::internal(&e))?;
+        Ok(views::storage::backup_info(backup))
+    }
+
+    /// What restoring a backup would replace, before anything changes.
+    ///
+    /// # Errors
+    /// [`ApiError::NotFound`] for an unknown backup; [`ApiError::Validation`] for one this
+    /// version cannot restore; [`ApiError::Busy`] while starting.
+    pub fn preview_restore(&self, request: RestoreRequest) -> Result<RestorePreview, ApiError> {
+        let RestoreRequest { name } = request;
+        let data = self.data()?;
+        let contents = data
+            .storage
+            .backup_contents(&name)
+            .map_err(|e| backup_error(&e))?;
+        let backup = data
+            .storage
+            .backups()
+            .map_err(|e| ApiError::internal(&e))?
+            .into_iter()
+            .find(|b| b.name == name)
+            .ok_or_else(|| ApiError::NotFound {
+                message: format!("no backup is named `{name}`"),
+            })?;
+        let current = data
+            .storage
+            .footprint()
+            .map_err(|e| ApiError::internal(&e))?;
+        Ok(RestorePreview {
+            backup: views::storage::backup_info(backup),
+            events: contents.events,
+            first_event_at: contents.first_event_at.map(|at| at.0),
+            last_event_at: contents.last_event_at.map(|at| at.0),
+            current_events: current.events,
+        })
+    }
+
+    /// Sets a backup to replace the database, records it in the audit log, and restarts
+    /// Veyra so the backup is in place before anything opens the database (ADR-033).
+    ///
+    /// # Errors
+    /// As [`Self::preview_restore`], or [`ApiError::Internal`] when the backup cannot be
+    /// staged.
+    pub fn restore_backup(&self, request: RestoreRequest) -> Result<RestoreScheduled, ApiError> {
+        let RestoreRequest { name } = request;
+        let data = self.data()?;
+        data.storage
+            .schedule_restore(&name)
+            .map_err(|e| backup_error(&e))?;
+        data.audit
+            .record(&AuditEntry {
+                at: UtcMillis::now(),
+                actor: AuditActor::User,
+                action: AuditAction::Restore,
+                detail: "backup set to replace the database at the next start".to_owned(),
+            })
+            .map_err(|e| ApiError::internal(&e))?;
+        data.control.restart();
+        Ok(RestoreScheduled {})
+    }
+}
+
+/// A backup the user named that is unknown or unusable is their error, not Veyra's.
+fn backup_error(error: &veyra_domain::source::PortError) -> ApiError {
+    match error.downcast_ref::<BackupError>() {
+        Some(BackupError::NotFound(_)) => ApiError::NotFound {
+            message: error.to_string(),
+        },
+        Some(BackupError::Unusable(_)) => ApiError::Validation {
+            message: error.to_string(),
+        },
+        None => ApiError::internal(error),
+    }
+}
+
 fn row_count(table: &export::Table) -> u32 {
     u32::try_from(table.rows.len()).unwrap_or(u32::MAX)
 }
@@ -548,6 +653,13 @@ mod tests {
         }
     }
 
+    /// Never restarts: these tests do not restore.
+    struct NoRestart;
+
+    impl crate::AppControl for NoRestart {
+        fn restart(&self) {}
+    }
+
     /// Never saves: these tests do not export.
     struct NoFiles;
 
@@ -572,6 +684,11 @@ mod tests {
                 billing: Arc::clone(&store) as _,
                 settings: Arc::clone(&store) as _,
                 audit: Arc::clone(&store) as _,
+                storage: Arc::new(veyra_store::Storage::new(
+                    Arc::clone(&store),
+                    dir.join("veyra.db"),
+                    dir.join("backups"),
+                )),
                 analytics: Arc::clone(&store) as _,
                 catalog: Arc::new(
                     veyra_registry::Registry::bundled()
@@ -586,6 +703,7 @@ mod tests {
                 names: DisplayNames::default(),
                 ingest: Box::new(FakeIngest(Arc::clone(&calls))),
                 files: Box::new(NoFiles),
+                control: Box::new(NoRestart),
             }))
         );
         (api, store, calls, dir)

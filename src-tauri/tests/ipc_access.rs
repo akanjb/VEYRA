@@ -76,6 +76,8 @@ fn valid_request(cmd: &str) -> Value {
         | "list_projects" => json!({ "scope": scope }),
         "preview_export" | "save_export" => json!({ "scope": scope, "preset": "byProject",
             "format": "csv", "redaction": { "hashProjectNames": true, "dropPaths": true } }),
+        "get_storage" => json!({ "timeZone": "UTC" }),
+        "preview_restore" | "restore_backup" => json!({ "name": "veyra-1.db" }),
         "list_sessions" => {
             json!({ "scope": scope, "sort": "lastActive", "page": 0, "pageSize": 50 })
         }

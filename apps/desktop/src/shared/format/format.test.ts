@@ -4,6 +4,7 @@ import {
   MISSING,
   ago,
   basename,
+  bytes,
   change,
   compact,
   dateTime,
@@ -95,5 +96,14 @@ describe("identifiers", () => {
     expect(basename("C:\\work\\demo\\")).toBe("demo");
     expect(shortId("claude-code:1f2e3d4c-aaaa-bbbb")).toBe("1f2e3d4c");
     expect(shortId("claude-code:1f2e3d4c-aaaa:a1")).toBe("1f2e3d4c · a1");
+  });
+});
+
+describe("bytes", () => {
+  it("uses binary units with one decimal", () => {
+    expect(bytes(512, "en-US")).toBe("512 B");
+    expect(bytes(4300, "en-US")).toBe("4.2 KB");
+    expect(bytes(1.3 * 1024 ** 3, "en-US")).toBe("1.3 GB");
+    expect(bytes(null)).toBe(MISSING);
   });
 });

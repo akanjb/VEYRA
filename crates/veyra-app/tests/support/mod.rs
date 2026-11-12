@@ -4,7 +4,7 @@
 #![allow(dead_code, reason = "each test crate uses part of the harness")]
 
 use std::collections::BTreeMap;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use jiff::tz::TimeZone;
@@ -13,11 +13,11 @@ use veyra_analytics::engine::evaluate;
 use veyra_analytics::metrics::{MetricId, MetricValue};
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_app::dto::{Comparison, Scope, ScopeFilters};
-use veyra_app::{Api, AppMetadata, DataServices, DisplayNames, FileSaver};
+use veyra_app::{Api, AppControl, AppMetadata, DataServices, DisplayNames, FileSaver};
 use veyra_domain::source::{DiscoveryEnv, IngestControl};
 use veyra_ingest::{DEFAULT_CHUNK_BYTES, IngestContext, discover, scan_all};
 use veyra_registry::Registry;
-use veyra_store::Store;
+use veyra_store::{Storage, Store};
 use veyra_testkit::TempDir;
 
 struct NoIngest;
@@ -45,8 +45,27 @@ impl FileSaver for MemoryFiles {
 
 /// A database holding the ingested fixtures, removed on drop.
 pub struct Ingested {
-    _dir: TempDir,
+    dir: TempDir,
     pub store: Arc<Store>,
+}
+
+impl Ingested {
+    pub fn database(&self) -> std::path::PathBuf {
+        self.dir.path().join("veyra.db")
+    }
+
+    pub fn backups(&self) -> std::path::PathBuf {
+        self.dir.path().join("backups")
+    }
+}
+
+/// Counts restart requests instead of restarting.
+pub struct Restarts(pub Arc<AtomicUsize>);
+
+impl AppControl for Restarts {
+    fn restart(&self) {
+        self.0.fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 pub fn ingested() -> Ingested {
@@ -78,15 +97,22 @@ pub fn ingested() -> Ingested {
     )
     .unwrap();
     assert_eq!(report.inserted, 4, "the fixtures hold four requests");
-    Ingested { _dir: dir, store }
+    Ingested { dir, store }
 }
 
-pub fn api(store: &Arc<Store>) -> Api {
-    api_with_files(store).0
+pub fn api(data: &Ingested) -> Api {
+    api_with_files(data).0
 }
 
-/// An API over `store` whose exports are kept in memory.
-pub fn api_with_files(store: &Arc<Store>) -> (Api, SavedFiles) {
+/// An API over the fixtures whose exports are kept in memory.
+pub fn api_with_files(data: &Ingested) -> (Api, SavedFiles) {
+    let (api, files, _) = api_with_restarts(data);
+    (api, files)
+}
+
+/// An API over the fixtures, with its saved exports and restart requests.
+pub fn api_with_restarts(data: &Ingested) -> (Api, SavedFiles, Arc<AtomicUsize>) {
+    let store = &data.store;
     let api = Api::new(AppMetadata {
         product_name: "Veyra".to_owned(),
         version: "0.0.0".to_owned(),
@@ -103,20 +129,24 @@ pub fn api_with_files(store: &Arc<Store>) -> (Api, SavedFiles) {
         &connectors,
     );
     let files = SavedFiles::default();
+    let restarts = Arc::new(AtomicUsize::new(0));
+    let storage = Storage::new(Arc::clone(store), data.database(), data.backups());
     assert!(api.attach(Ok(DataServices {
         sources: Arc::clone(store) as _,
         projects: Arc::clone(store) as _,
         billing: Arc::clone(store) as _,
         settings: Arc::clone(store) as _,
         audit: Arc::clone(store) as _,
+        storage: Arc::new(storage),
         analytics: Arc::clone(store) as _,
         catalog: Arc::new(registry.catalog().clone()),
         connectors,
         names,
         ingest: Box::new(NoIngest),
         files: Box::new(MemoryFiles(Arc::clone(&files))),
+        control: Box::new(Restarts(Arc::clone(&restarts))),
     })));
-    (api, files)
+    (api, files, restarts)
 }
 
 /// The fixture day, 2026-11-08, in UTC.

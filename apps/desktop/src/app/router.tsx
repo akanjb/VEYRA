@@ -96,6 +96,12 @@ const sourcesRoute = createRoute({
   component: lazyRouteComponent(() => import("@/modules/sources"), "SourcesPage"),
 });
 
+const storageRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/storage",
+  component: lazyRouteComponent(() => import("@/modules/storage"), "StoragePage"),
+});
+
 const routeTree = rootRoute.addChildren([
   overviewRoute,
   usageRoute,
@@ -108,6 +114,7 @@ const routeTree = rootRoute.addChildren([
   sessionsRoute,
   sessionRoute,
   sourcesRoute,
+  storageRoute,
   settingsRoute,
 ]);
 
