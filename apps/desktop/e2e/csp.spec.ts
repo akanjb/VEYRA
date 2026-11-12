@@ -62,6 +62,8 @@ test("every page and overlay runs without a CSP violation", async ({ page }) => 
 
   await visit(page, "Activity", "Longest sessions");
 
+  await visit(page, "Tools & Agents", "Tool calls by kind");
+
   await page
     .getByRole("navigation", { name: "Pages" })
     .getByRole("link", { name: "Projects" })

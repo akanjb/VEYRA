@@ -19,4 +19,5 @@ pub mod query;
 pub mod sessions;
 pub mod sizes;
 pub mod sums;
+pub mod tools;
 pub mod top_n;

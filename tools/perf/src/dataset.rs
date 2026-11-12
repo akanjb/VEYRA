@@ -9,6 +9,7 @@ use veyra_domain::identity::{AppId, ConnectorId, Interface, ModelId, ProviderId}
 use veyra_domain::pricing::{PriceCatalog, price_event};
 use veyra_domain::time::UtcMillis;
 use veyra_domain::tokens::TokenCounts;
+use veyra_domain::tooling::ToolCall;
 use veyra_store::{PricedEvent, Store, StoreError};
 
 /// Data ends at 2026-11-08T00:00Z and spans the preceding 365 days.
@@ -38,6 +39,18 @@ const MODELS: [(&str, &str, u64); 8] = [
     ("google", "gemini-3.8-flash", 5),
     ("openai", "unlisted-preview-model", 2),
 ];
+/// Tool names, weighted like a coding agent: mostly reads, edits and shell commands.
+const TOOLS: [(&str, u64); 8] = [
+    ("Read", 30),
+    ("Bash", 20),
+    ("Edit", 15),
+    ("Grep", 12),
+    ("Glob", 8),
+    ("TodoWrite", 5),
+    ("mcp__github__get_issue", 6),
+    ("mcp__docs__search", 4),
+];
+
 const APPS: [(&str, Interface); 5] = [
     ("claude-code", Interface::Cli),
     ("claude-desktop", Interface::Desktop),
@@ -79,6 +92,28 @@ fn weighted_model(roll: u64) -> (&'static str, &'static str) {
         pick -= weight;
     }
     (MODELS[0].0, MODELS[0].1)
+}
+
+/// Up to three tool calls for event `index`, about 1.5 on average, each with a unique id.
+fn tool_calls(index: usize, rng: &mut Rng) -> Vec<ToolCall> {
+    let total: u64 = TOOLS.iter().map(|t| t.1).sum();
+    (0..rng.below(4))
+        .map(|n| {
+            let mut pick = rng.below(total);
+            let name = TOOLS
+                .iter()
+                .find(|(_, weight)| {
+                    let hit = pick < *weight;
+                    pick = pick.saturating_sub(*weight);
+                    hit
+                })
+                .map_or(TOOLS[0].0, |(name, _)| name);
+            ToolCall {
+                id: format!("perf:t{index}:{n}"),
+                name: (*name).to_owned(),
+            }
+        })
+        .collect()
 }
 
 /// Minutes before [`END`] at which event `index` of `count` occurs.
@@ -169,13 +204,17 @@ pub fn ingest(
     order: Order,
 ) -> Result<(usize, usize), Box<dyn std::error::Error>> {
     let mut rng = Rng(0x00ef_1c1e_a7ed_5eed);
+    // Tool calls draw from their own sequence, so the events stay the same as before.
+    let mut tool_rng = Rng(0x7001_ca11_5eed_0001);
     let mut written = 0;
     let mut buckets = 0;
     let mut batch = Vec::with_capacity(BATCH);
     for index in 0..count {
         let event = synthetic_event(index, count, order, &mut rng)?;
         let cost = price_event(&event, catalog);
-        batch.push(PricedEvent::new(event, cost));
+        let mut priced = PricedEvent::new(event, cost);
+        priced.tool_calls = tool_calls(index, &mut tool_rng);
+        batch.push(priced);
         if batch.len() == BATCH || index + 1 == count {
             let summary = store
                 .write_events(&batch, END)

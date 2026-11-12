@@ -23,6 +23,7 @@ macro_rules! for_each_command {
             get_cache($crate::dto::CacheRequest) -> $crate::dto::Cache;
             get_models($crate::dto::ModelsRequest) -> $crate::dto::Models;
             get_activity($crate::dto::ActivityRequest) -> $crate::dto::Activity;
+            get_tools($crate::dto::ToolsRequest) -> $crate::dto::Tools;
             list_projects($crate::dto::ProjectsRequest) -> $crate::dto::ProjectList;
             get_project($crate::dto::ProjectRequest) -> $crate::dto::ProjectDetail;
             rename_project($crate::dto::RenameProjectRequest) -> $crate::dto::ProjectInfo;

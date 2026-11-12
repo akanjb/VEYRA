@@ -118,39 +118,43 @@ pub fn commit(
     let mut statements = EventStatements::prepare(&transaction)?;
     for priced in events {
         let fp = fingerprint(&priced.event, &priced.cost);
-        let event_id = match existing(&mut statements.existing, priced)? {
+        let new_bucket = priced.event.occurred_at.bucket_start().0;
+        let (event_id, bucket) = match existing(&mut statements.existing, priced)? {
             Some(e) if e.fingerprint == fp => {
                 summary.unchanged += 1;
-                e.id
+                (e.id, e.bucket)
             }
             Some(e) if is_superseded(priced, &e) => {
                 summary.superseded += 1;
-                e.id
+                (e.id, e.bucket)
             }
             Some(e) => {
                 let values = event_values(&transaction, priced, fp, &mut keys, now)?;
                 update_event(&mut statements.update, e.id, values)?;
                 bind_cost(&mut statements.cost, e.id, &priced.cost)?;
                 buckets.insert(e.bucket);
-                buckets.insert(priced.event.occurred_at.bucket_start().0);
+                buckets.insert(new_bucket);
                 summary.updated += 1;
-                e.id
+                (e.id, new_bucket)
             }
             None => {
                 let values = event_values(&transaction, priced, fp, &mut keys, now)?;
                 let key = priced.event.dedup_key.as_str();
                 let id = insert_event(&mut statements.insert, key, values)?;
                 bind_cost(&mut statements.cost, id, &priced.cost)?;
-                buckets.insert(priced.event.occurred_at.bucket_start().0);
+                buckets.insert(new_bucket);
                 summary.inserted += 1;
-                id
+                (id, new_bucket)
             }
         };
-        // Tool calls accumulate across observations of the same request.
-        insert_tool_calls(&mut statements.tool_call, event_id, &priced.tool_calls)?;
+        // Tool calls accumulate across observations of the same request; a new call
+        // changes its bucket's tool rollup even when the event itself is unchanged.
+        if insert_tool_calls(&mut statements.tool_call, event_id, &priced.tool_calls)? {
+            buckets.insert(bucket);
+        }
     }
     drop(statements);
-    apply_tool_outcomes(&transaction, tool_outcomes)?;
+    buckets.extend(apply_tool_outcomes(&transaction, tool_outcomes)?);
     if let Some(checkpoint) = checkpoint {
         upsert_checkpoint(&transaction, checkpoint, now)?;
     }
@@ -213,28 +217,41 @@ fn is_superseded(new: &PricedEvent, stored: &Existing) -> bool {
         || (new.precedence == stored.precedence && new.event.occurred_at.0 > stored.occurred_at)
 }
 
+/// Stores the calls not stored yet. Returns whether any was new.
 fn insert_tool_calls(
     insert: &mut Statement<'_>,
     event_id: i64,
     calls: &[ToolCall],
-) -> Result<(), StoreError> {
+) -> Result<bool, StoreError> {
+    let mut inserted = false;
     for call in calls {
         let (server, tool) = mcp_parts(&call.name).unzip();
-        insert.execute(params![event_id, call.id, call.name, server, tool])?;
+        inserted |= insert.execute(params![event_id, call.id, call.name, server, tool])? > 0;
     }
-    Ok(())
+    Ok(inserted)
 }
 
+/// Records the outcomes of stored calls. Returns the buckets of the events whose calls
+/// changed, whose tool rollup must be rebuilt.
 fn apply_tool_outcomes(
     transaction: &Transaction<'_>,
     outcomes: &[ToolOutcome],
-) -> Result<(), StoreError> {
-    let mut update =
-        transaction.prepare_cached("UPDATE tool_calls SET is_error = ?2 WHERE tool_use_id = ?1")?;
+) -> Result<BTreeSet<i64>, StoreError> {
+    let mut update = transaction.prepare_cached(
+        "UPDATE tool_calls SET is_error = ?2 WHERE tool_use_id = ?1 AND is_error IS NOT ?2 \
+         RETURNING (SELECT bucket_start FROM usage_events WHERE id = event_id)",
+    )?;
+    let mut buckets = BTreeSet::new();
     for outcome in outcomes {
-        update.execute(params![outcome.tool_call_id, i64::from(outcome.is_error)])?;
+        let changed = update
+            .query_row(
+                params![outcome.tool_call_id, i64::from(outcome.is_error)],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?;
+        buckets.extend(changed);
     }
-    Ok(())
+    Ok(buckets)
 }
 
 fn upsert_checkpoint(

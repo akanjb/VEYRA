@@ -73,6 +73,7 @@ fn valid_request(cmd: &str) -> Value {
         | "get_cache"
         | "get_models"
         | "get_activity"
+        | "get_tools"
         | "list_projects" => json!({ "scope": scope }),
         "preview_export" | "save_export" => json!({ "scope": scope, "preset": "byProject",
             "format": "csv", "redaction": { "hashProjectNames": true, "dropPaths": true } }),

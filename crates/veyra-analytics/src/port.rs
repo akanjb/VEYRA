@@ -10,6 +10,7 @@ use crate::engine::period_index;
 use crate::metrics::{MetricId, MetricValue};
 use crate::sizes::{SessionSize, SizeRow};
 use crate::sums::BaseSums;
+use crate::tools::{CategoryCalls, ToolUse};
 
 /// A request for additive sums over `[from, until)`, grouped by dimensions and,
 /// optionally, by 15-minute bucket. Both bounds are bucket-aligned.
@@ -180,6 +181,21 @@ pub trait SizeReader {
     /// # Errors
     /// Returns [`ReadError`] when the underlying store fails.
     fn session_sizes(&self, query: &RangeQuery) -> Result<Vec<SessionSize>, ReadError>;
+}
+
+/// Tool calls (implemented by the data layer from the tool rollup, ADR-034).
+pub trait ToolReader {
+    /// Each tool called by matching events in `[from, until)`, with its counts.
+    ///
+    /// # Errors
+    /// Returns [`ReadError`] when the underlying store fails.
+    fn tool_uses(&self, query: &RangeQuery) -> Result<Vec<ToolUse>, ReadError>;
+
+    /// Calls per 15-minute bucket and category, ordered by bucket.
+    ///
+    /// # Errors
+    /// Returns [`ReadError`] when the underlying store fails.
+    fn category_calls(&self, query: &RangeQuery) -> Result<Vec<CategoryCalls>, ReadError>;
 }
 
 /// A project as stored: its id (the analytics dimension value), normalised path and the

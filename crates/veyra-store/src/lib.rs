@@ -24,6 +24,7 @@ mod sources;
 mod spans;
 mod sql;
 mod storage;
+mod tool_reads;
 mod write;
 
 use std::path::Path;

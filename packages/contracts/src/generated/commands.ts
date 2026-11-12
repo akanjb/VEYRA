@@ -50,6 +50,8 @@ import type { SourceList } from "./SourceList";
 import type { SourceSummary } from "./SourceSummary";
 import type { StorageOverview } from "./StorageOverview";
 import type { StorageRequest } from "./StorageRequest";
+import type { Tools } from "./Tools";
+import type { ToolsRequest } from "./ToolsRequest";
 import type { UnmergeProjectRequest } from "./UnmergeProjectRequest";
 import type { Usage } from "./Usage";
 import type { UsageRequest } from "./UsageRequest";
@@ -67,6 +69,7 @@ export interface CommandMap {
   get_cache: { request: CacheRequest; response: Cache };
   get_models: { request: ModelsRequest; response: Models };
   get_activity: { request: ActivityRequest; response: Activity };
+  get_tools: { request: ToolsRequest; response: Tools };
   list_projects: { request: ProjectsRequest; response: ProjectList };
   get_project: { request: ProjectRequest; response: ProjectDetail };
   rename_project: { request: RenameProjectRequest; response: ProjectInfo };
@@ -101,6 +104,7 @@ export const COMMAND_NAMES = [
   "get_cache",
   "get_models",
   "get_activity",
+  "get_tools",
   "list_projects",
   "get_project",
   "rename_project",

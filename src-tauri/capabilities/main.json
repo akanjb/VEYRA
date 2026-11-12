@@ -15,6 +15,7 @@
     "allow-get-cache",
     "allow-get-models",
     "allow-get-activity",
+    "allow-get-tools",
     "allow-list-projects",
     "allow-get-project",
     "allow-rename-project",

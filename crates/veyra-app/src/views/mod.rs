@@ -17,6 +17,7 @@ pub(crate) mod sessions;
 pub(crate) mod sources;
 pub(crate) mod storage;
 mod time_grids;
+pub(crate) mod tools;
 pub(crate) mod usage;
 
 use std::thread::ScopedJoinHandle;

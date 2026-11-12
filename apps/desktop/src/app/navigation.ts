@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Settings,
   Wallet,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -25,6 +26,7 @@ export interface Page {
     | "/cache"
     | "/models"
     | "/activity"
+    | "/tools"
     | "/projects"
     | "/sessions"
     | "/sources"
@@ -97,6 +99,15 @@ export const PAGES: readonly Page[] = [
     section: "Analyze",
     icon: CalendarClock,
     shortcut: "a",
+    scoped: true,
+  },
+  {
+    to: "/tools",
+    title: "Tools & Agents",
+    purpose: "What do the agents do with their tools, and which ones fail?",
+    section: "Analyze",
+    icon: Wrench,
+    shortcut: "l",
     scoped: true,
   },
   {

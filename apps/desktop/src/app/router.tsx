@@ -59,6 +59,12 @@ const activityRoute = createRoute({
   component: lazyRouteComponent(() => import("@/modules/activity"), "ActivityPage"),
 });
 
+const toolsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/tools",
+  component: lazyRouteComponent(() => import("@/modules/tools"), "ToolsPage"),
+});
+
 const projectsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/projects",
@@ -109,6 +115,7 @@ const routeTree = rootRoute.addChildren([
   cacheRoute,
   modelsRoute,
   activityRoute,
+  toolsRoute,
   projectsRoute,
   projectRoute,
   sessionsRoute,

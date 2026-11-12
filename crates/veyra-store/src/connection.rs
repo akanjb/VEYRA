@@ -6,6 +6,7 @@ use std::time::Duration;
 use rusqlite::functions::FunctionFlags;
 use rusqlite::{Connection, OpenFlags};
 use veyra_analytics::sizes::size_bin;
+use veyra_domain::tooling::ToolCategory;
 
 use crate::StoreError;
 
@@ -35,6 +36,9 @@ pub fn open_writer(path: &Path) -> Result<Connection, StoreError> {
 /// SQL name of [`size_bin`], used by the size rollups and their migration.
 pub const SIZE_BIN_FUNCTION: &str = "veyra_size_bin";
 
+/// SQL name of [`ToolCategory::of`], used by the tool rollup and its migration.
+pub const TOOL_CATEGORY_FUNCTION: &str = "veyra_tool_category";
+
 /// Registers the Rust functions the writer's SQL calls, so each rule has one definition.
 pub(crate) fn register_functions(connection: &Connection) -> Result<(), StoreError> {
     connection.create_scalar_function(
@@ -45,6 +49,12 @@ pub(crate) fn register_functions(connection: &Connection) -> Result<(), StoreErr
             let tokens = u64::try_from(context.get::<i64>(0)?).unwrap_or(0);
             Ok(i64::from(size_bin(tokens)))
         },
+    )?;
+    connection.create_scalar_function(
+        TOOL_CATEGORY_FUNCTION,
+        1,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        |context| Ok(ToolCategory::of(&context.get::<String>(0)?).name()),
     )?;
     crate::spans::register(connection)?;
     Ok(())

@@ -3,7 +3,7 @@
 use std::sync::{Arc, OnceLock};
 
 use veyra_analytics::port::{
-    ActivityReader, BaseSumsReader, LabelReader, PricingReader, SizeReader,
+    ActivityReader, BaseSumsReader, LabelReader, PricingReader, SizeReader, ToolReader,
 };
 use veyra_analytics::sessions::SessionReader;
 use veyra_domain::audit::{AuditAction, AuditActor, AuditEntry, AuditLog};
@@ -25,7 +25,8 @@ use crate::dto::{
     RenameProjectRequest, RescanAccepted, RescanRequest, RestorePreview, RestoreRequest,
     RestoreScheduled, SaveBillingEntryRequest, SaveBudgetRequest, SessionDetail, SessionList,
     SessionRequest, SessionsRequest, SetSourceEnabledRequest, SourceList, SourceSummary,
-    StorageOverview, StorageRequest, UnmergeProjectRequest, Usage, UsageRequest,
+    StorageOverview, StorageRequest, Tools, ToolsRequest, UnmergeProjectRequest, Usage,
+    UsageRequest,
 };
 use crate::error::ApiError;
 use crate::export::{self, FileSaver};
@@ -49,6 +50,7 @@ pub trait AnalyticsReader:
     + LabelReader
     + SizeReader
     + PricingReader
+    + ToolReader
     + Send
     + Sync
 {
@@ -61,6 +63,7 @@ impl<T> AnalyticsReader for T where
         + LabelReader
         + SizeReader
         + PricingReader
+        + ToolReader
         + Send
         + Sync
 {
@@ -341,6 +344,18 @@ impl Api {
         let ActivityRequest { scope: requested } = request;
         let resolved = scope::resolve(&requested)?;
         views::activity::activity(self.data()?, &resolved)
+    }
+
+    /// The Tools & Agents page for a scope: tool calls by kind and day, the most called
+    /// and most failing tools, and MCP servers.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn get_tools(&self, request: ToolsRequest) -> Result<Tools, ApiError> {
+        let ToolsRequest { scope: requested } = request;
+        let resolved = scope::resolve(&requested)?;
+        views::tools::tools(self.data()?, &resolved)
     }
 
     /// Every project that is not merged into another, with its usage in the scope.

@@ -18,10 +18,13 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0006_billing.sql"),
     include_str!("../migrations/0007_page_rollups.sql"),
     include_str!("../migrations/0008_settings_audit.sql"),
+    include_str!("../migrations/0009_tool_rollup.sql"),
 ];
 
-/// The version whose migration adds rollup levels that must be filled for existing data.
-const PAGE_ROLLUPS_VERSION: u32 = 7;
+/// The last version whose migration adds rollup levels. Every level is filled for existing
+/// data once, when this version is applied: an earlier level may only be filled once all
+/// the levels the rebuild writes exist.
+const ROLLUPS_VERSION: u32 = 9;
 
 /// The schema version this build creates and understands.
 #[expect(clippy::cast_possible_truncation, reason = "a handful of migrations")]
@@ -42,7 +45,7 @@ pub fn migrate(connection: &mut Connection) -> Result<u32, StoreError> {
         let apply = |connection: &mut Connection| -> Result<(), StoreError> {
             let transaction = connection.transaction()?;
             transaction.execute_batch(sql)?;
-            if version == PAGE_ROLLUPS_VERSION {
+            if version == ROLLUPS_VERSION {
                 rollup::rebuild_all(&transaction)?;
             }
             transaction.pragma_update(None, "user_version", version)?;

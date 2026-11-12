@@ -6,7 +6,7 @@
 //! single dimension) and `rollup_15m_totals` (one row per bucket). Beside them,
 //! `rollup_15m_sizes` counts requests per size bin (ADR-026), and the page rollups of
 //! ADR-030 hold session spans and sums, sums per service (provider, model, application,
-//! interface) and pricing outcomes.
+//! interface) and pricing outcomes, and `rollup_15m_tools` counts tool calls (ADR-034).
 //!
 //! Rebuilds are set-based: the batch's affected buckets go into a temporary table and
 //! each level is rebuilt for all of them with one statement.
@@ -17,7 +17,7 @@ use std::sync::LazyLock;
 use rusqlite::Transaction;
 
 use crate::StoreError;
-use crate::connection::SIZE_BIN_FUNCTION;
+use crate::connection::{SIZE_BIN_FUNCTION, TOOL_CATEGORY_FUNCTION};
 use crate::spans::ACTIVE_INTERVALS_FUNCTION;
 use crate::sql::{
     DIMENSIONS, EVENT_SUMS_SELECT, EVENT_TOTAL_TOKENS, ROLLUP_SUM_COLUMNS, rollup_sums_select,
@@ -143,8 +143,27 @@ static REBUILD_SIZE_TOTALS_SQL: LazyLock<String> = LazyLock::new(|| {
     )
 });
 
+/// Counts the affected buckets' tool calls per tool and dimension combination, with
+/// their category, failures, known outcomes and the calls made inside subagents
+/// (ADR-034).
+static REBUILD_TOOLS_SQL: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "INSERT INTO rollup_15m_tools (bucket_start, slot, tool_name, mcp_server, category, \
+         provider_id, model_id, app_id, interface, gateway_id, project_id, device_id, calls, \
+         failed, with_outcome, in_subagents) \
+         SELECT e.bucket_start, ROW_NUMBER() OVER (PARTITION BY e.bucket_start), t.tool_name, \
+         t.mcp_server, {TOOL_CATEGORY_FUNCTION}(t.tool_name), e.provider_id, e.model_id, \
+         e.app_id, e.interface, e.gateway_id, e.project_id, e.device_id, COUNT(*), \
+         COALESCE(SUM(t.is_error), 0), COUNT(t.is_error), SUM(e.is_subagent) \
+         FROM usage_events e JOIN tool_calls t ON t.event_id = e.id \
+         WHERE e.bucket_start IN {AFFECTED} \
+         GROUP BY e.bucket_start, t.tool_name, t.mcp_server, e.provider_id, e.model_id, \
+         e.app_id, e.interface, e.gateway_id, e.project_id, e.device_id"
+    )
+});
+
 /// Tables keyed by bucket first, emptied for the affected buckets before a rebuild.
-const BUCKET_TABLES: [&str; 7] = [
+const BUCKET_TABLES: [&str; 8] = [
     "rollup_15m",
     "rollup_15m_totals",
     "rollup_15m_sizes",
@@ -152,6 +171,7 @@ const BUCKET_TABLES: [&str; 7] = [
     "rollup_15m_sessions",
     "rollup_15m_services",
     "rollup_15m_pricing",
+    "rollup_15m_tools",
 ];
 
 /// Rebuilds every rollup level for every bucket that holds events, for example after a
@@ -211,6 +231,7 @@ pub fn rebuild(
         &*REBUILD_SESSIONS_SQL,
         &*REBUILD_SERVICES_SQL,
         &*REBUILD_PRICING_SQL,
+        &*REBUILD_TOOLS_SQL,
     ] {
         transaction.prepare_cached(sql)?.execute([])?;
     }

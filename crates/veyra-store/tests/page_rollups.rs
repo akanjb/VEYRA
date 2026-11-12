@@ -205,6 +205,7 @@ fn the_migration_fills_the_page_rollups_like_the_rebuild() {
             "DROP TABLE settings; DROP TABLE audit_log; \
              DROP TABLE rollup_15m_sessions; DROP TABLE rollup_15m_services; \
              DROP TABLE rollup_15m_pricing; DROP TABLE rollup_15m_size_totals; \
+             DROP TABLE rollup_15m_tools; \
              PRAGMA user_version = 6;",
         )
         .unwrap();

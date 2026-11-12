@@ -16,6 +16,7 @@ mod projects;
 mod sessions;
 mod sources;
 mod storage;
+mod tools;
 mod usage;
 
 pub use activity::{Activity, ActivityDay, ActivityKpis, ActivityRequest, LengthBin, LongSession};
@@ -58,6 +59,10 @@ pub use sources::{
 pub use storage::{
     BackupInfo, CreateBackupRequest, MonthEvents, RestorePreview, RestoreRequest, RestoreScheduled,
     StorageOverview, StorageRequest, TableBytes,
+};
+pub use tools::{
+    McpServerRow, ToolCallCounts, ToolKind, ToolKindRow, ToolRow, Tools, ToolsDay, ToolsKpis,
+    ToolsRequest,
 };
 pub use usage::{
     Breakdown, BreakdownDimension, SizeBinCount, SizePoint, TokenMixPoint, Usage, UsageKpis,

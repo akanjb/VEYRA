@@ -5,6 +5,10 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Tools & Agents page** (ADR-034).
+  - Command `get_tools`: tool calls, calls per request, failure rate, MCP share and the share made by subagents, each compared with the previous period; calls per day by kind; the most used tools; MCP servers with the tools used and their failure rate; and the tools that fail most.
+  - Tool names from every application are grouped into eight kinds (read and search, edit, shell, web, subagent, planning, MCP, other) by one definition in the domain.
+  - Migration 0009 adds a tool-call rollup kept exact by the existing bucket rebuild, including calls and outcomes that arrive after their request was stored. Every rollup level is now filled once, after the last migration that adds one.
 - **Storage page and backups** (ADR-033).
   - Command `get_storage`: database size, space per table with its indexes, events and their first and last time, events per month, and the backups.
   - Daily backups with `VACUUM INTO`, keeping the newest seven, and a "Back up now" button (`create_backup`).
