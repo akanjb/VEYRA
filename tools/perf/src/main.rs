@@ -17,6 +17,7 @@
 
 mod dataset;
 mod pages;
+mod reads;
 mod timing;
 
 use std::path::PathBuf;
@@ -99,6 +100,7 @@ fn run(options: &Options) -> Result<bool, Box<dyn std::error::Error>> {
     let budget = Budget::for_events(options.events);
     let names = DisplayNames::new(registry.provider_names(), registry.model_names(), &[]);
     let queries = overview_queries(&store, budget)?;
+    reads::data_reads(&store)?;
     let pages = pages::page_commands(&store, catalog, names, budget)?;
     drop(store);
     if let Some(dir) = generated {

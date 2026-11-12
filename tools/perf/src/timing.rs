@@ -3,7 +3,7 @@
 use std::time::{Duration, Instant};
 
 /// Runs per measured query.
-const RUNS: usize = 30;
+pub const RUNS: usize = 30;
 /// Datasets up to this many events get [`SMALL_P95`]; larger ones get [`LARGE_P95`].
 const SMALL_DATASET: usize = 1_000_000;
 const SMALL_P95: Duration = Duration::from_millis(150);
@@ -56,12 +56,16 @@ impl Budget {
     /// Prints one result and returns whether it is within the budget.
     pub fn check(self, name: &str, timings: Timings) -> bool {
         let ok = timings.p95 <= self.0;
-        println!(
-            "  {} {name}: p50 {:.1} ms, p95 {:.1} ms",
-            if ok { "PASS" } else { "FAIL" },
-            timings.p50.as_secs_f64() * 1000.0,
-            timings.p95.as_secs_f64() * 1000.0
-        );
+        report(if ok { "PASS" } else { "FAIL" }, name, timings);
         ok
     }
+}
+
+/// Prints one result after a status word.
+pub fn report(status: &str, name: &str, timings: Timings) {
+    println!(
+        "  {status} {name}: p50 {:.1} ms, p95 {:.1} ms",
+        timings.p50.as_secs_f64() * 1000.0,
+        timings.p95.as_secs_f64() * 1000.0
+    );
 }

@@ -16,9 +16,9 @@ use veyra_store::Store;
 use crate::timing::{Budget, timed};
 
 /// The dataset's last 30 local days in [`TIME_ZONE`]; it ends at 2026-11-08T00:00Z.
-const FIRST_DAY: &str = "2026-10-08";
-const LAST_DAY: &str = "2026-11-06";
-const TIME_ZONE: &str = "Asia/Kolkata";
+pub const FIRST_DAY: &str = "2026-10-08";
+pub const LAST_DAY: &str = "2026-11-06";
+pub const TIME_ZONE: &str = "Asia/Kolkata";
 
 /// Ingestion is not running while pages are timed.
 struct NoIngest;
