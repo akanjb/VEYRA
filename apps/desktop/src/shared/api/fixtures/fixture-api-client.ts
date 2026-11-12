@@ -20,6 +20,7 @@ import { activity } from "./activity-view";
 import { FixtureBilling } from "./billing-view";
 import { cache } from "./cache-view";
 import { costView } from "./cost-view";
+import { exportPreview } from "./export-view";
 import { models } from "./models-view";
 import { costAssumptions } from "./pricing-view";
 import { FixtureProjects } from "./projects-view";
@@ -174,6 +175,14 @@ function billingHandlers(billing: FixtureBilling): Pick<Handlers, BillingCommand
   };
 }
 
+function exportHandlers(state: FixtureState): Pick<Handlers, "preview_export" | "save_export"> {
+  return {
+    preview_export: (r) => exportPreview(state.flat(), r),
+    // There is no file system in the browser: report what would have been saved.
+    save_export: (r) => ({ saved: true, rowCount: exportPreview(state.flat(), r).rowCount }),
+  };
+}
+
 /** Creates the fixture client. */
 export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient {
   const state = new FixtureState({ fresh: options.fresh ?? false, now: options.now ?? Date.now() });
@@ -212,6 +221,7 @@ export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient 
       return {};
     },
     ...billingHandlers(state.billing),
+    ...exportHandlers(state),
     list_sessions: (r) => sessions(state.flat(), r),
     get_session: (r) => state.detail(r.id),
   };

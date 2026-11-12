@@ -9,15 +9,17 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
+getrandom.workspace = true
 jiff.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 ts-rs.workspace = true
 veyra-analytics.workspace = true
 veyra-domain.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 veyra-connectors.workspace = true
 veyra-ingest.workspace = true
 veyra-registry.workspace = true

@@ -12,6 +12,8 @@ use veyra_ingest::{IngestWorker, WorkerConfig, discovery_env};
 use veyra_registry::Registry;
 use veyra_store::Store;
 
+use crate::files::DialogSaver;
+
 /// File name of the database inside the local app-data directory.
 const DATABASE: &str = "veyra.db";
 
@@ -59,10 +61,13 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
         sources: Arc::clone(&store) as _,
         projects: Arc::clone(&store) as _,
         billing: Arc::clone(&store) as _,
+        settings: Arc::clone(&store) as _,
+        audit: Arc::clone(&store) as _,
         analytics: store,
         catalog,
         connectors: descriptors,
         names,
         ingest: Box::new(ingest),
+        files: Box::new(DialogSaver { app: app.clone() }),
     })
 }

@@ -9,6 +9,7 @@ mod app_info;
 mod billing;
 mod cache;
 mod cost;
+mod export;
 mod models;
 mod pricing;
 mod projects;
@@ -31,6 +32,9 @@ pub use cache::{Cache, CacheKpis, CachePoint, CacheRequest, CacheSession, RatioR
 pub use cost::{
     BudgetLevel, BudgetStatus, Cost, CostBreakdown, CostDay, CostDefinitions, CostKpis, CostMix,
     CostRequest, MonthOutlook, OutlookDay, RateRow, Waterfall, WaterfallStep,
+};
+pub use export::{
+    ExportFormat, ExportPreset, ExportPreview, ExportRedaction, ExportRequest, ExportSaved,
 };
 pub use models::{Matrix, ModelLane, ModelRow, Models, ModelsRequest, ShareDay};
 pub use pricing::{

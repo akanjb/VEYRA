@@ -5,6 +5,13 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Report exports** (ADR-032).
+  - An Export button in the header of every page with a date range opens a dialog. Choose a report (daily, weekly, monthly, per project, per model, usage by application, or cost summary) and a format (CSV, CSV for Excel, JSON). Preview the rows exactly as they will be written, then save through the operating system's save dialog.
+  - Commands `preview_export` and `save_export`. Reports add up to the totals the pages show for the same filters, and include a cost-kind and a token-accuracy column. Recorded subscriptions and charges stay in rows of their own cost kind.
+  - Redaction: project names can be replaced with a secret-salted hash that stays stable on this device, and folder paths can be left out. Hashed reports never include paths.
+  - CSV follows RFC 4180, and text a spreadsheet would treat as a formula is kept as text.
+  - Migration 0008 adds stored settings and an audit log. Each saved export is recorded without the file's name or location.
+  - Dependency: the official Tauri dialog plugin, of which only the Rust API is used. The window cannot call its commands.
 - **How cost is estimated.** Command `get_cost_assumptions` and a panel on the Cost page. They list:
   - the outcome of pricing each request;
   - every assumption the pricing engine made, with how many requests and how much cost it affects;

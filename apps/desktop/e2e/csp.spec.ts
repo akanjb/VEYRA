@@ -48,6 +48,9 @@ test("every page and overlay runs without a CSP violation", async ({ page }) => 
   await page.getByRole("button", { name: /^Period:/ }).click();
   await expect(page.getByRole("menuitemradio").first()).toBeVisible();
   await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Export report" }).click();
+  await expect(page.getByRole("region", { name: "Report preview" })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await visit(page, "Usage", "Token composition");
 

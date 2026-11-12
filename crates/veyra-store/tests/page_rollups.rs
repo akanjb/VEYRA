@@ -196,12 +196,14 @@ fn the_migration_fills_the_page_rollups_like_the_rebuild() {
             .unwrap(),
     );
 
-    // Back to the schema before the page rollups, then reopen: the migration runs again.
+    // Back to the schema before the page rollups (dropping what later migrations add),
+    // then reopen: the migrations run again.
     let path = db.path().join("veyra.db");
     let connection = rusqlite::Connection::open(&path).unwrap();
     connection
         .execute_batch(
-            "DROP TABLE rollup_15m_sessions; DROP TABLE rollup_15m_services; \
+            "DROP TABLE settings; DROP TABLE audit_log; \
+             DROP TABLE rollup_15m_sessions; DROP TABLE rollup_15m_services; \
              DROP TABLE rollup_15m_pricing; DROP TABLE rollup_15m_size_totals; \
              PRAGMA user_version = 6;",
         )

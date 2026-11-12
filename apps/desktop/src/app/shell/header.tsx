@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import type { SourceSummary } from "@veyra/contracts";
-import { Command } from "lucide-react";
+import { Command, Download } from "lucide-react";
 
 import { HealthDot, overallHealth } from "@/modules/sources";
+import { ExportDialog, defaultPreset } from "@/shared/export";
 import { fmt } from "@/shared/format";
 import { Button, Kbd, Tip } from "@/shared/ui";
 
@@ -59,6 +60,7 @@ export function Header({
   lastChange: number | null;
   onOpenPalette: () => void;
 }) {
+  const [exporting, setExporting] = useState(false);
   return (
     <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-surface px-6">
       <div className="min-w-0">
@@ -67,6 +69,19 @@ export function Header({
       </div>
       <div className="ml-auto flex items-center gap-4">
         <Status sources={sources} lastChange={lastChange} />
+        {page.scoped ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setExporting(true);
+            }}
+            aria-label="Export report"
+          >
+            <Download size={14} aria-hidden />
+            <span className="hidden md:inline">Export</span>
+          </Button>
+        ) : null}
         <Button
           size="sm"
           variant="secondary"
@@ -74,9 +89,21 @@ export function Header({
           // Contains the visible text, so speech users can say what they see (WCAG 2.5.3).
           aria-label="Open command palette with Ctrl K"
         >
-          <Command size={14} aria-hidden /> <Kbd>Ctrl K</Kbd>
+          <Command size={14} aria-hidden />
+          {/* The shortcut label shows on wider screens; narrow headers keep room for the title. */}
+          <span className="hidden md:inline">
+            <Kbd>Ctrl K</Kbd>
+          </span>
         </Button>
       </div>
+      {exporting ? (
+        <ExportDialog
+          initialPreset={defaultPreset(page.to)}
+          onClose={() => {
+            setExporting(false);
+          }}
+        />
+      ) : null}
     </header>
   );
 }

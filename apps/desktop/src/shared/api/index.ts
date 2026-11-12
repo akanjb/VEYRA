@@ -5,6 +5,7 @@ export {
   commandKey,
   createQueryClient,
   useCommand,
+  useCommandAction,
   useCommandMutation,
   useLiveRefresh,
 } from "./queries";

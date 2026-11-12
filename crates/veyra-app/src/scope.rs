@@ -17,7 +17,10 @@ const MAX_DAYS: i32 = 731;
 #[derive(Debug, Clone)]
 pub(crate) struct Resolved {
     pub time_zone: TimeZone,
+    pub start: Date,
     pub end: Date,
+    /// Local days from `start` to `end`, inclusive.
+    pub days: i32,
     pub period: Period,
     pub previous: Option<Period>,
     pub filters: Filters,
@@ -76,7 +79,9 @@ pub(crate) fn resolve(scope: &Scope) -> Result<Resolved, ApiError> {
     }
     Ok(Resolved {
         time_zone,
+        start,
         end,
+        days,
         period,
         previous,
         filters,

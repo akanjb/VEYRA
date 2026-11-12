@@ -18,6 +18,7 @@ mod reprice;
 mod rollup;
 mod session_reads;
 mod session_source;
+mod settings;
 mod size_reads;
 mod sources;
 mod spans;

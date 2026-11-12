@@ -74,6 +74,8 @@ fn valid_request(cmd: &str) -> Value {
         | "get_models"
         | "get_activity"
         | "list_projects" => json!({ "scope": scope }),
+        "preview_export" | "save_export" => json!({ "scope": scope, "preset": "byProject",
+            "format": "csv", "redaction": { "hashProjectNames": true, "dropPaths": true } }),
         "list_sessions" => {
             json!({ "scope": scope, "sort": "lastActive", "page": 0, "pageSize": 50 })
         }
@@ -170,6 +172,9 @@ fn main_window_may_not_emit_or_use_other_plugins() {
     for (cmd, body) in [
         ("plugin:event|emit", emit),
         ("plugin:window|close", json!({ "label": "main" })),
+        // The save dialog is opened by the core only, never by the dashboard.
+        ("plugin:dialog|save", json!({ "options": {} })),
+        ("plugin:dialog|open", json!({ "options": {} })),
     ] {
         let error = invoke_with(&main, cmd, body).expect_err("must be denied");
         assert!(

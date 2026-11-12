@@ -5,6 +5,7 @@
 //! definitions, so each business rule has exactly one home.
 
 pub mod accuracy;
+pub mod audit;
 pub mod billing;
 pub mod connector;
 pub mod event;
@@ -12,6 +13,7 @@ pub mod identity;
 pub mod money;
 pub mod pricing;
 pub mod project;
+pub mod settings;
 pub mod source;
 pub mod time;
 pub mod tokens;

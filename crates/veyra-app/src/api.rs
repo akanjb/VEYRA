@@ -6,9 +6,11 @@ use veyra_analytics::port::{
     ActivityReader, BaseSumsReader, LabelReader, PricingReader, SizeReader,
 };
 use veyra_analytics::sessions::SessionReader;
+use veyra_domain::audit::{AuditAction, AuditActor, AuditEntry, AuditLog};
 use veyra_domain::billing::BillingRepository;
 use veyra_domain::pricing::PriceCatalog;
 use veyra_domain::project::ProjectRepository;
+use veyra_domain::settings::SettingsRepository;
 use veyra_domain::source::{ConnectorDescriptor, IngestControl, SourceRepository};
 use veyra_domain::time::UtcMillis;
 
@@ -16,13 +18,15 @@ use crate::dto::{
     Activity, ActivityRequest, AppInfo, AppInfoRequest, BillingChanged, BillingEntryInfo,
     BillingRequest, BillingSettings, BudgetInfo, BuildProfile, Cache, CacheRequest, Cost,
     CostAssumptions, CostAssumptionsRequest, CostRequest, DeleteBillingEntryRequest,
-    DeleteBudgetRequest, ListSourcesRequest, MergeProjectRequest, Models, ModelsRequest, Overview,
-    OverviewRequest, ProjectDetail, ProjectInfo, ProjectList, ProjectRequest, ProjectsChanged,
-    ProjectsRequest, RenameProjectRequest, RescanAccepted, RescanRequest, SaveBillingEntryRequest,
+    DeleteBudgetRequest, ExportPreview, ExportRequest, ExportSaved, ListSourcesRequest,
+    MergeProjectRequest, Models, ModelsRequest, Overview, OverviewRequest, ProjectDetail,
+    ProjectInfo, ProjectList, ProjectRequest, ProjectsChanged, ProjectsRequest,
+    RenameProjectRequest, RescanAccepted, RescanRequest, SaveBillingEntryRequest,
     SaveBudgetRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
     SetSourceEnabledRequest, SourceList, SourceSummary, UnmergeProjectRequest, Usage, UsageRequest,
 };
 use crate::error::ApiError;
+use crate::export::{self, FileSaver};
 use crate::names::DisplayNames;
 use crate::{scope, views};
 
@@ -64,6 +68,8 @@ pub struct DataServices {
     pub sources: Arc<dyn SourceRepository>,
     pub projects: Arc<dyn ProjectRepository>,
     pub billing: Arc<dyn BillingRepository>,
+    pub settings: Arc<dyn SettingsRepository>,
+    pub audit: Arc<dyn AuditLog>,
     pub analytics: Arc<dyn AnalyticsReader>,
     /// The price catalogue events are priced with.
     pub catalog: Arc<PriceCatalog>,
@@ -72,6 +78,8 @@ pub struct DataServices {
     /// Display names of providers, models and applications.
     pub names: DisplayNames,
     pub ingest: Box<dyn IngestControl>,
+    /// Saves reports where the user chooses.
+    pub files: Box<dyn FileSaver>,
 }
 
 impl std::fmt::Debug for DataServices {
@@ -425,6 +433,76 @@ impl Api {
     pub fn get_session(&self, request: SessionRequest) -> Result<SessionDetail, ApiError> {
         views::sessions::detail(self.data()?, request.id)
     }
+
+    /// The first rows of a report exactly as they will be written, its size and the file
+    /// name the save dialog will suggest (ADR-032).
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn preview_export(&self, request: ExportRequest) -> Result<ExportPreview, ApiError> {
+        /// Rows a preview shows.
+        const PREVIEW_ROWS: usize = 20;
+        let format = request.format;
+        let report = views::export::report(self.data()?, request)?;
+        Ok(ExportPreview {
+            columns: report
+                .table
+                .columns
+                .iter()
+                .map(|column| column.label.to_owned())
+                .collect(),
+            rows: report
+                .table
+                .rows
+                .iter()
+                .take(PREVIEW_ROWS)
+                .map(|row| row.iter().map(export::Cell::text).collect())
+                .collect(),
+            row_count: row_count(&report.table),
+            file_name: export::file_name(&report.info, format),
+        })
+    }
+
+    /// Writes a report to a file the user picks in the operating system's save dialog,
+    /// and records the export in the audit log without the file's name or location.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] when the report or the file cannot be written.
+    pub fn save_export(&self, request: ExportRequest) -> Result<ExportSaved, ApiError> {
+        let data = self.data()?;
+        let format = request.format;
+        let report = views::export::report(data, request)?;
+        let bytes = export::encode(&report.table, &report.info, format);
+        let rows = row_count(&report.table);
+        let saved = data
+            .files
+            .save(
+                &export::file_name(&report.info, format),
+                export::extension(format),
+                &bytes,
+            )
+            .map_err(|e| ApiError::internal(&e))?;
+        if saved {
+            data.audit
+                .record(&AuditEntry {
+                    at: UtcMillis::now(),
+                    actor: AuditActor::User,
+                    action: AuditAction::Export,
+                    detail: export::audit_detail(&report.info, format, rows),
+                })
+                .map_err(|e| ApiError::internal(&e))?;
+        }
+        Ok(ExportSaved {
+            saved,
+            row_count: rows,
+        })
+    }
+}
+
+fn row_count(table: &export::Table) -> u32 {
+    u32::try_from(table.rows.len()).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]
@@ -469,6 +547,15 @@ mod tests {
         }
     }
 
+    /// Never saves: these tests do not export.
+    struct NoFiles;
+
+    impl crate::FileSaver for NoFiles {
+        fn save(&self, _: &str, _: &str, _: &[u8]) -> Result<bool, String> {
+            Ok(false)
+        }
+    }
+
     /// An API with a store in a fresh temporary directory (removed by the caller).
     fn attached(name: &str) -> (Api, Arc<Store>, Arc<Calls>, std::path::PathBuf) {
         let dir = std::env::temp_dir().join(format!("veyra-app-{}-{name}", std::process::id()));
@@ -482,6 +569,8 @@ mod tests {
                 sources: Arc::clone(&store) as _,
                 projects: Arc::clone(&store) as _,
                 billing: Arc::clone(&store) as _,
+                settings: Arc::clone(&store) as _,
+                audit: Arc::clone(&store) as _,
                 analytics: Arc::clone(&store) as _,
                 catalog: Arc::new(
                     veyra_registry::Registry::bundled()
@@ -495,6 +584,7 @@ mod tests {
                     .collect(),
                 names: DisplayNames::default(),
                 ingest: Box::new(FakeIngest(Arc::clone(&calls))),
+                files: Box::new(NoFiles),
             }))
         );
         (api, store, calls, dir)

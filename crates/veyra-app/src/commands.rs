@@ -33,6 +33,8 @@ macro_rules! for_each_command {
             delete_billing_entry($crate::dto::DeleteBillingEntryRequest) -> $crate::dto::BillingChanged;
             save_budget($crate::dto::SaveBudgetRequest) -> $crate::dto::BudgetInfo;
             delete_budget($crate::dto::DeleteBudgetRequest) -> $crate::dto::BillingChanged;
+            preview_export($crate::dto::ExportRequest) -> $crate::dto::ExportPreview;
+            save_export($crate::dto::ExportRequest) -> $crate::dto::ExportSaved;
             list_sessions($crate::dto::SessionsRequest) -> $crate::dto::SessionList;
             get_session($crate::dto::SessionRequest) -> $crate::dto::SessionDetail;
         }

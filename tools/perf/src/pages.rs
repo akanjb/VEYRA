@@ -8,7 +8,7 @@ use veyra_app::dto::{
     ModelsRequest, OverviewRequest, ProjectsRequest, Scope, ScopeFilters, SessionSort,
     SessionsRequest, UsageRequest,
 };
-use veyra_app::{Api, ApiError, AppMetadata, DataServices, DisplayNames};
+use veyra_app::{Api, ApiError, AppMetadata, DataServices, DisplayNames, FileSaver};
 use veyra_domain::pricing::PriceCatalog;
 use veyra_domain::source::IngestControl;
 use veyra_store::Store;
@@ -28,6 +28,15 @@ impl IngestControl for NoIngest {
     fn sources_changed(&self) {}
 }
 
+/// Reports are not saved while pages are timed.
+struct NoFiles;
+
+impl FileSaver for NoFiles {
+    fn save(&self, _: &str, _: &str, _: &[u8]) -> Result<bool, String> {
+        Ok(false)
+    }
+}
+
 /// An API over the store, wired like the desktop shell.
 fn api(store: &Arc<Store>, catalog: PriceCatalog, names: DisplayNames) -> Api {
     let api = Api::new(AppMetadata {
@@ -39,11 +48,14 @@ fn api(store: &Arc<Store>, catalog: PriceCatalog, names: DisplayNames) -> Api {
         sources: Arc::clone(store) as _,
         projects: Arc::clone(store) as _,
         billing: Arc::clone(store) as _,
+        settings: Arc::clone(store) as _,
+        audit: Arc::clone(store) as _,
         analytics: Arc::clone(store) as _,
         catalog: Arc::new(catalog),
         connectors: Vec::new(),
         names,
         ingest: Box::new(NoIngest),
+        files: Box::new(NoFiles),
     }));
     api
 }

@@ -17,6 +17,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0005_project_merges.sql"),
     include_str!("../migrations/0006_billing.sql"),
     include_str!("../migrations/0007_page_rollups.sql"),
+    include_str!("../migrations/0008_settings_audit.sql"),
 ];
 
 /// The version whose migration adds rollup levels that must be filled for existing data.

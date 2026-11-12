@@ -16,6 +16,9 @@ import type { CostAssumptionsRequest } from "./CostAssumptionsRequest";
 import type { CostRequest } from "./CostRequest";
 import type { DeleteBillingEntryRequest } from "./DeleteBillingEntryRequest";
 import type { DeleteBudgetRequest } from "./DeleteBudgetRequest";
+import type { ExportPreview } from "./ExportPreview";
+import type { ExportRequest } from "./ExportRequest";
+import type { ExportSaved } from "./ExportSaved";
 import type { ListSourcesRequest } from "./ListSourcesRequest";
 import type { MergeProjectRequest } from "./MergeProjectRequest";
 import type { Models } from "./Models";
@@ -67,6 +70,8 @@ export interface CommandMap {
   delete_billing_entry: { request: DeleteBillingEntryRequest; response: BillingChanged };
   save_budget: { request: SaveBudgetRequest; response: BudgetInfo };
   delete_budget: { request: DeleteBudgetRequest; response: BillingChanged };
+  preview_export: { request: ExportRequest; response: ExportPreview };
+  save_export: { request: ExportRequest; response: ExportSaved };
   list_sessions: { request: SessionsRequest; response: SessionList };
   get_session: { request: SessionRequest; response: SessionDetail };
 }
@@ -95,6 +100,8 @@ export const COMMAND_NAMES = [
   "delete_billing_entry",
   "save_budget",
   "delete_budget",
+  "preview_export",
+  "save_export",
   "list_sessions",
   "get_session",
 ] as const satisfies readonly CommandName[];

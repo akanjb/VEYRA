@@ -5,6 +5,7 @@
 
 mod commands;
 mod data;
+mod files;
 
 use tauri::{Context, PackageInfo, Runtime};
 use veyra_app::dto::BuildProfile;
@@ -20,6 +21,9 @@ pub fn configure<R: Runtime>(
 ) -> tauri::Builder<R> {
     builder
         .manage(Api::new(app_metadata(context.package_info())))
+        // Only its Rust API is used (the save dialog of `files`); the window is granted
+        // none of its commands.
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(commands::handler())
 }
 

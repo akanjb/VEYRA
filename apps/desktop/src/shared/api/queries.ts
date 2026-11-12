@@ -68,6 +68,14 @@ export function useCommandMutation<C extends CommandName>(command: C) {
   });
 }
 
+/** Runs a command that changes nothing the dashboard shows, such as saving a report. */
+export function useCommandAction<C extends CommandName>(command: C) {
+  const client = useApiClient();
+  return useMutation<CommandResponse<C>, Error, CommandRequest<C>>({
+    mutationFn: (request) => client.call(command, request),
+  });
+}
+
 /**
  * Refreshes every query when the core reports that stored usage changed. Returns when
  * that last happened (epoch ms), or `null` before the first change.

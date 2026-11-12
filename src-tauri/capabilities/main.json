@@ -25,6 +25,8 @@
     "allow-delete-billing-entry",
     "allow-save-budget",
     "allow-delete-budget",
+    "allow-preview-export",
+    "allow-save-export",
     "allow-list-sessions",
     "allow-get-session",
     "core:event:allow-listen",

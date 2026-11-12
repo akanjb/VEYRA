@@ -18,6 +18,7 @@ veyra-app.workspace = true
 
 [dependencies]
 tauri.workspace = true
+tauri-plugin-dialog.workspace = true
 veyra-app.workspace = true
 veyra-connectors.workspace = true
 veyra-ingest.workspace = true

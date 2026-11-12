@@ -5,6 +5,7 @@ pub(crate) mod activity;
 pub(crate) mod billing;
 pub(crate) mod cache;
 pub(crate) mod cost;
+pub(crate) mod export;
 mod highlights;
 mod kpis;
 pub(crate) mod models;

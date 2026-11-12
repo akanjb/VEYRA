@@ -4,8 +4,8 @@
 #![allow(dead_code, reason = "each test crate uses part of the harness")]
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 
 use jiff::tz::TimeZone;
 use veyra_analytics::dimension::Filters;
@@ -13,7 +13,7 @@ use veyra_analytics::engine::evaluate;
 use veyra_analytics::metrics::{MetricId, MetricValue};
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_app::dto::{Comparison, Scope, ScopeFilters};
-use veyra_app::{Api, AppMetadata, DataServices, DisplayNames};
+use veyra_app::{Api, AppMetadata, DataServices, DisplayNames, FileSaver};
 use veyra_domain::source::{DiscoveryEnv, IngestControl};
 use veyra_ingest::{DEFAULT_CHUNK_BYTES, IngestContext, discover, scan_all};
 use veyra_registry::Registry;
@@ -25,6 +25,22 @@ struct NoIngest;
 impl IngestControl for NoIngest {
     fn request_scan(&self) {}
     fn sources_changed(&self) {}
+}
+
+/// Files "saved" by exports, as (suggested name, bytes), newest last.
+pub type SavedFiles = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+
+/// Saves to memory, as if the user accepted the suggested name.
+struct MemoryFiles(SavedFiles);
+
+impl FileSaver for MemoryFiles {
+    fn save(&self, suggested_name: &str, _: &str, bytes: &[u8]) -> Result<bool, String> {
+        self.0
+            .lock()
+            .map_err(|e| e.to_string())?
+            .push((suggested_name.to_owned(), bytes.to_vec()));
+        Ok(true)
+    }
 }
 
 /// A database holding the ingested fixtures, removed on drop.
@@ -66,6 +82,11 @@ pub fn ingested() -> Ingested {
 }
 
 pub fn api(store: &Arc<Store>) -> Api {
+    api_with_files(store).0
+}
+
+/// An API over `store` whose exports are kept in memory.
+pub fn api_with_files(store: &Arc<Store>) -> (Api, SavedFiles) {
     let api = Api::new(AppMetadata {
         product_name: "Veyra".to_owned(),
         version: "0.0.0".to_owned(),
@@ -81,17 +102,21 @@ pub fn api(store: &Arc<Store>) -> Api {
         registry.model_names(),
         &connectors,
     );
+    let files = SavedFiles::default();
     assert!(api.attach(Ok(DataServices {
         sources: Arc::clone(store) as _,
         projects: Arc::clone(store) as _,
         billing: Arc::clone(store) as _,
+        settings: Arc::clone(store) as _,
+        audit: Arc::clone(store) as _,
         analytics: Arc::clone(store) as _,
         catalog: Arc::new(registry.catalog().clone()),
         connectors,
         names,
         ingest: Box::new(NoIngest),
+        files: Box::new(MemoryFiles(Arc::clone(&files))),
     })));
-    api
+    (api, files)
 }
 
 /// The fixture day, 2026-11-08, in UTC.
