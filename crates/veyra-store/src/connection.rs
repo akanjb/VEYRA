@@ -54,6 +54,9 @@ pub(crate) fn register_functions(connection: &Connection) -> Result<(), StoreErr
 /// compile-time maximum). It reserves address space, not memory.
 const READER_MMAP_BYTES: i64 = 1 << 30;
 
+/// Prepared statements a reader keeps: more than the distinct reads of all pages.
+const READER_STATEMENTS: usize = 128;
+
 pub fn open_reader(path: &Path) -> Result<Connection, StoreError> {
     let connection = Connection::open_with_flags(
         path,
@@ -67,5 +70,7 @@ pub fn open_reader(path: &Path) -> Result<Connection, StoreError> {
     // Pages are read straight from the operating system's file cache, which all readers
     // share, instead of being copied into each connection's own small page cache.
     connection.pragma_update(None, "mmap_size", READER_MMAP_BYTES)?;
+    // Each reader serves every page in turn, so it keeps all their statements prepared.
+    connection.set_prepared_statement_cache_capacity(READER_STATEMENTS);
     Ok(connection)
 }

@@ -148,7 +148,8 @@ enum Measure {
 }
 
 impl Measure {
-    /// The selected columns: summed per group, or as stored.
+    /// The selected columns: summed per group, or as stored. A single column is always
+    /// read as stored, since [`single_sums`] adds the rows up.
     fn select(self, aggregated: bool) -> String {
         match (self, aggregated) {
             (Self::Sums, true) => rollup_sums_select(),

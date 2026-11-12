@@ -30,7 +30,7 @@ Timing each read showed where the work went:
 
 3. **Column positions are found at compile time.** `rollup_sum_index` is a `const fn`, so decoding a row no longer searches the column names.
 
-4. **Readers map the database file.** Reader connections set `mmap_size` to 1 GiB, so they read pages from the operating system's file cache, which all of them share, instead of copying them into small private caches. The writer is unchanged.
+4. **Readers map the database file.** Reader connections set `mmap_size` to 1 GiB, so they read pages from the operating system's file cache, which all of them share, instead of copying them into small private caches. Each reader also keeps up to 128 prepared statements rather than 16, because readers take turns serving every page and the pages together make more distinct reads than 16. The writer is unchanged.
 
 ## Alternatives considered
 
@@ -45,7 +45,8 @@ Timing each read showed where the work went:
 - Series reads cost about as much as a total over the same range, whatever the grain.
 - The port has two more methods with defaults. A store that implements neither gets the same results more slowly.
 - Memory mapping reserves address space. On a system where mapping fails, SQLite falls back to ordinary reads.
+- On Windows a file cannot be shortened while another connection maps it. Nothing shortens the database today: there is no `VACUUM`, `auto_vacuum` is off, and backups use `VACUUM INTO` to a separate file. Any future feature that shrinks the file, such as compacting storage after deleting old data, must first close the readers or turn their mapping off.
 
 ## Revisit when
 
-A page misses its budget again, or custom ranges of several years become common enough that reading every bucket of the range, even per period, is the slow part.
+A feature needs to shrink the database file (see Consequences), a page misses its budget again, or custom ranges of several years become common enough that reading every bucket of the range, even per period, is the slow part.
