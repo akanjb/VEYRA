@@ -27,12 +27,13 @@ Veyra is a local-first desktop application that consolidates AI usage from model
 ---
 
 > [!IMPORTANT]
-> **Project status: Milestones M0 (Foundations), M1 (Data core), M2 (Claude Code ingestion), M3 (Dashboard shell) and M4 (more connectors) complete.**
+> **Project status: Milestones M0 (Foundations), M1 (Data core), M2 (Claude Code ingestion), M3 (Dashboard shell), M4 (more connectors) and M5 (analytics pages) complete.**
 > - **Built:** the secure desktop shell, generated contracts, the domain model, the verified pricing engine and price catalogue, the SQLite store and the analytics engine.
 > - **M2:** consent-gated, incremental ingestion of Claude Code logs, verified on 1.3 GB of real logs with no content stored.
 > - **M3:** the dashboard. It has three pages (Overview, Sessions with a session timeline, and Sources & Health), a first-run consent flow, light and dark themes, a command palette and full keyboard use, and accessibility checks in CI.
 > - **New in M4:** connectors for Codex, Gemini CLI, OpenCode and GitHub Copilot CLI, each verified against the tool's source code. Compressed archives and live SQLite databases are read through snapshots. Every source shows what it can and cannot report.
-> - **Next:** the analytics pages (M5).
+> - **New in M5:** the analytics pages: Usage, Cost (with billing entries, budgets, the month forecast and how cost is estimated), Cache, Models & Providers, Projects (rename and merge), Activity, and highlights on the Overview. Every page is timed against its budget.
+> - **Next:** exports, storage and privacy controls (M6).
 >
 > This README marks every capability as **Available** or **Planned**.
 
@@ -101,8 +102,10 @@ Veyra answers the questions no single tool can:
 | Connector: Claude Code (CLI, desktop Code tab, IDE extensions) | **Available** |
 | Connectors: Codex (CLI, IDE, desktop app), Gemini CLI, OpenCode, GitHub Copilot CLI (per session) | **Available** |
 | Dashboard shell: light and dark themes, URL-held filters, command palette, keyboard shortcuts, live refresh | **Available** |
-| Pages: Overview, Sessions (explorer and timeline), Sources & Health with first-run consent | **Available** |
-| Pages: Usage, Cost, Cache, Models & Providers, Projects, Activity | Planned (M5) |
+| Pages: Overview with highlights, Sessions (explorer and timeline), Sources & Health with first-run consent | **Available** |
+| Pages: Usage, Cost, Cache, Models & Providers, Projects with detail, Activity | **Available** |
+| Billing entries (subscriptions, charges), monthly budgets, run rate and forecast, and how cost is estimated | **Available** |
+| Project renaming and merging | **Available** |
 | Tools & Agents, Quotas & Limits, deterministic Optimization recommendations | Planned (M7) |
 | Opt-in local OpenTelemetry receiver | Planned (M7) |
 | CSV / JSON / XLSX exports with redaction; storage and retention controls | Planned (M6) |
@@ -395,8 +398,15 @@ flowchart TB
   main[main.tsx<br/>bootstrap · theme · client] --> app[app/<br/>router · shell · palette · shortcuts]
   app --> mods
   subgraph mods [modules/ · one folder per product page]
-    ov[overview<br/>KPIs · trend · rankings · activity]
+    ov[overview<br/>KPIs · highlights · trend · rankings]
+    us[usage<br/>token mix · breakdowns · sizes]
+    co[cost<br/>three cost kinds · budgets · assumptions]
+    ca[cache<br/>benefit · hit ratios · losses]
+    mo[models<br/>leaderboard · share · matrices]
+    ac[activity<br/>active time · calendar · lengths]
+    pr[projects<br/>list · detail · rename · merge]
     se[sessions<br/>explorer · detail]
+    st[settings<br/>billing entries · budgets]
     so[sources<br/>health · consent · welcome]
   end
   subgraph shared [shared/ · module-agnostic building blocks]
@@ -406,6 +416,7 @@ flowchart TB
     ch[charts<br/>ECharts primitives · table twins]
     ui[ui<br/>primitives · overlays · KPI tiles]
     fmt[format<br/>numbers · money · time]
+    cards[summary · rankings · time-cards<br/>cards shared by several pages]
   end
   tokens[[styles/tokens.css<br/>design tokens, light and dark]]
   mods --> shared
@@ -573,17 +584,30 @@ erDiagram
   }
 ```
 
-**Rollups.** Events are aggregated into three levels of 15-minute UTC buckets, all clustered by time and all rebuilt in the same transaction as each write. Every real-world UTC offset is a multiple of 15 minutes, so local days, hours and weeks stay exact in zones like Asia/Kolkata (+05:30). See [ADR-009](docs/adr/0009-fifteen-minute-utc-rollups.md) and [ADR-022](docs/adr/0022-data-core-implementation.md).
+**Rollups.** Events are aggregated into levels of 15-minute UTC buckets, all clustered by time and all rebuilt in the same transaction as each write. Every real-world UTC offset is a multiple of 15 minutes, so local days, hours and weeks stay exact in zones like Asia/Kolkata (+05:30). See [ADR-009](docs/adr/0009-fifteen-minute-utc-rollups.md) and [ADR-022](docs/adr/0022-data-core-implementation.md).
+
+- **Sums:** totals, one dimension, services (provider, model, application, interface) and every combination.
+- **Page rollups** ([ADR-030](docs/adr/0030-page-rollups.md)): session spans and sums, pricing outcomes, and request-size bins. Raw events stay the exact fallback whenever a rollup cannot answer exactly.
 
 ```mermaid
 flowchart LR
   Q[Analytics query] --> D{Grouping and filters?}
   D -->|none| T[(rollup_15m_totals<br/>one row per bucket)]
   D -->|one dimension| B[(rollup_15m_by_dimension<br/>one row per bucket and value)]
-  D -->|several dimensions| F[(rollup_15m<br/>one row per bucket and combination)]
+  D -->|provider, model, app, interface only| S[(rollup_15m_services<br/>one row per bucket and service)]
+  D -->|any other combination| F[(rollup_15m<br/>one row per bucket and combination)]
   E[(usage_events + event_costs)] -->|set-based rebuild per batch| F --> B
+  F --> S
   F --> T
 ```
+
+**Reads sized to each card** ([ADR-031](docs/adr/0031-reads-sized-to-each-card.md)):
+
+- **Daily and hourly series** are summed per local day or hour in SQL, so a 30-day series returns one row per day rather than one per 15 minutes.
+- **Cards that show one sum** (the activity calendar, the hour-of-week grid, model matrices, each project's top model, the Cost waterfalls) read only total tokens or only API-equivalent cost.
+- **Readers** map the database file into memory and keep every page's statements prepared.
+
+Tests compare every specialised read with the full sums.
 
 ### Pricing and cost model
 
@@ -617,6 +641,21 @@ Overview queries, measured with `veyra-perf` on one million synthetic events (a 
 | 30-day model ranking (top 8 + other) | 51 ms | 21–42 ms | 150 ms |
 | 12-month trend | 81 ms | 32–68 ms | 150 ms |
 
+Dashboard pages: the command behind each page, called as the desktop shell calls it, over the last 30 days with comparison. Measured on a two-core CI runner on 2026-11-12 ([ADR-029](docs/adr/0029-page-reads-in-parallel.md), [ADR-031](docs/adr/0031-reads-sized-to-each-card.md)):
+
+| Page | p95, 1M events | p95, 10M events |
+|---|---|---|
+| Overview | 96 ms | 330 ms |
+| Usage | 91 ms | 221 ms |
+| Cost | 85 ms | 241 ms |
+| Cost assumptions | 10 ms | 14 ms |
+| Cache | 83 ms | 295 ms |
+| Models & Providers | 77 ms | 164 ms |
+| Activity | 29 ms | 172 ms |
+| Projects | 38 ms | 224 ms |
+| Sessions (first page) | 5 ms | 50 ms |
+| **Budget** | **150 ms** | **400 ms** |
+
 Ingestion:
 
 | Measurement | Developer machine | CI runners | Budget (CI) |
@@ -626,7 +665,7 @@ Ingestion:
 | Real backfill: 249 logs, 1.3 GB, 38,509 requests | 8.9 s | — | — |
 | Rescan with nothing new | 0.2 s, no writes | — | — |
 
-GitHub-hosted runners vary by up to about 20% between runs. The ingest budget takes the best of three attempts and sits about 15% below the slowest best-of-three result measured (41,400 events/s), matching that variance, so it fails on real regressions rather than on slow hardware. The `Performance` workflow checks both the query and ingest budgets weekly and on demand. After a backfill the worker blocks until the next change, so idle CPU is zero.
+GitHub-hosted runners vary by up to about 20% between runs. The ingest budget takes the best of three attempts and sits about 15% below the slowest best-of-three result measured (41,400 events/s), matching that variance, so it fails on real regressions rather than on slow hardware. The `Performance` workflow checks the query, page and ingest budgets weekly and on demand. After a backfill the worker blocks until the next change, so idle CPU is zero.
 
 ## Privacy and security
 
@@ -687,12 +726,13 @@ veyra/
 │       ├── e2e/                 # Playwright + axe UI tests on the fixture client
 │       └── src/
 │           ├── app/             # router, shell (sidebar, header, query bar, palette), theme
-│           ├── modules/         # one folder per page: overview, sessions, sources
+│           ├── modules/         # one folder per page (overview, usage, cost, cache, …)
 │           ├── shared/          # module-agnostic building blocks
 │           │   ├── api/         # ApiClient, Tauri transport, queries, synthetic fixture client
 │           │   ├── charts/      # ECharts primitives and their table twins
 │           │   ├── filters/     # URL filter state, dates
 │           │   ├── format/      # numbers, money, durations, measures
+│           │   ├── summary/     # cards shared by several pages (also rankings/, time-cards/, links/)
 │           │   └── ui/          # design-system primitives, overlays, KPI tiles
 │           └── styles/          # design tokens (light, dark) and base styles
 ├── packages/
@@ -805,7 +845,7 @@ The compiler, the IPC access tests and the contract drift check catch any missed
 | Parser | Each connector and format version: synthetic fixtures → expected records, field by field; only allow-listed files are read; no content leaves the parser; running totals add up to the final total and resets start a new baseline (Codex); session summaries count once (Copilot CLI) | `cargo test` (`veyra-connectors`) |
 | Connectors end to end | Discovery, consent, totals, idempotent rescans and no stored content for every connector; compressed copies add nothing; a live SQLite database is never locked while a writer keeps writing; Claude through Copilot attributes vendor, gateway and application separately | `cargo test` (`veyra-ingest/tests/connectors.rs`) |
 | Ingestion | Consent, idempotent rescans, appends, partial lines, truncation, replacement, deletion, oversize lines, cancellation, concurrent writers, shared access, canaries, the watcher | `cargo test` (`veyra-ingest`) |
-| Performance | Overview query budgets on 1M synthetic events; end-to-end ingest throughput | `veyra-perf`, ignored throughput test, `Performance` workflow |
+| Performance | Overview query and dashboard page budgets on 1M and 10M synthetic events; end-to-end ingest throughput | `veyra-perf`, ignored throughput test, `Performance` workflow |
 | Page contract | Overview equals the metric engine for the same scope; parts add up to the headline; sessions sum to the Overview; one name per model across pages | `cargo test` (`veyra-app/tests/contract.rs`) |
 | View models | Pure mappings from DTOs to chart inputs, filter options, URL state, formatting, the data palette | Vitest |
 | UI | First-run consent (UC-01), keyboard-only session journey (UC-02), filter state with Back and Forward, WCAG 2.2 A/AA in both themes | Playwright + axe on the synthetic fixture client |
@@ -839,7 +879,7 @@ flowchart LR
   M1 --> M2[M2 Claude Code<br/>end-to-end ingestion<br/>✅ complete]:::done
   M2 --> M3[M3 Dashboard shell<br/>design system<br/>✅ complete]:::done
   M2 --> M4[M4 Codex · Gemini CLI<br/>OpenCode · Copilot CLI<br/>✅ complete]:::done
-  M3 --> M5[M5 Analytics modules]
+  M3 --> M5[M5 Analytics modules<br/>✅ complete]:::done
   M4 --> M5
   M5 --> M6[M6 Exports · Storage<br/>Settings]
   M5 --> M7[M7 Tools & Agents · Quotas<br/>Optimization · OTLP]
