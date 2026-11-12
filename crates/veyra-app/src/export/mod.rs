@@ -1,9 +1,10 @@
 //! Reports written to files (ADR-032): a format-independent table, and the writers that
-//! turn it into CSV or JSON. The rows come from the analytics engine (`views::export`), so
+//! turn it into CSV, JSON or XLSX. The rows come from the analytics engine (`views::export`), so
 //! a report adds up to what the pages show for the same scope.
 
 mod csv;
 mod json;
+mod xlsx;
 
 use veyra_domain::money::NanoUsd;
 
@@ -58,11 +59,19 @@ pub(crate) struct ReportInfo {
 }
 
 /// The bytes of `table` in `format`.
-pub(crate) fn encode(table: &Table, info: &ReportInfo, format: ExportFormat) -> Vec<u8> {
+///
+/// # Errors
+/// A description of the failure when the workbook cannot be built (XLSX only).
+pub(crate) fn encode(
+    table: &Table,
+    info: &ReportInfo,
+    format: ExportFormat,
+) -> Result<Vec<u8>, String> {
     match format {
-        ExportFormat::Csv => csv::write(table, false),
-        ExportFormat::CsvExcel => csv::write(table, true),
-        ExportFormat::Json => json::write(table, info),
+        ExportFormat::Csv => Ok(csv::write(table, false)),
+        ExportFormat::CsvExcel => Ok(csv::write(table, true)),
+        ExportFormat::Json => Ok(json::write(table, info)),
+        ExportFormat::Xlsx => xlsx::write(table),
     }
 }
 
@@ -71,6 +80,7 @@ pub(crate) const fn extension(format: ExportFormat) -> &'static str {
     match format {
         ExportFormat::Csv | ExportFormat::CsvExcel => "csv",
         ExportFormat::Json => "json",
+        ExportFormat::Xlsx => "xlsx",
     }
 }
 
@@ -92,6 +102,7 @@ pub(crate) fn audit_detail(info: &ReportInfo, format: ExportFormat, rows: u32) -
         ExportFormat::Csv => "CSV",
         ExportFormat::CsvExcel => "CSV for Excel",
         ExportFormat::Json => "JSON",
+        ExportFormat::Xlsx => "XLSX",
     };
     let noun = if rows == 1 { "row" } else { "rows" };
     let mut detail = format!("{} report, {format}, {rows} {noun}", info.report);

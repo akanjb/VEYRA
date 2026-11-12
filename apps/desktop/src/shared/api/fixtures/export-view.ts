@@ -121,7 +121,7 @@ export function exportPreview(flat: readonly Flat[], request: ExportRequest): Ex
       break;
     }
   }
-  const extension = request.format === "json" ? "json" : "csv";
+  const extension = request.format === "json" ? "json" : request.format === "xlsx" ? "xlsx" : "csv";
   return {
     columns: [...keys, ...MEASURES],
     rows: rows.slice(0, PREVIEW_ROWS),

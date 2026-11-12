@@ -28,6 +28,8 @@ pub enum ExportFormat {
     /// CSV with a byte-order mark, so Excel reads it as UTF-8.
     CsvExcel,
     Json,
+    /// An Excel workbook with one sheet.
+    Xlsx,
 }
 
 /// What a report leaves out or disguises (PRD FR-EXP-03). Reports never contain session

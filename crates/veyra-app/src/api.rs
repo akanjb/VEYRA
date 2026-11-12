@@ -474,7 +474,8 @@ impl Api {
         let data = self.data()?;
         let format = request.format;
         let report = views::export::report(data, request)?;
-        let bytes = export::encode(&report.table, &report.info, format);
+        let bytes = export::encode(&report.table, &report.info, format)
+            .map_err(|e| ApiError::internal(&e))?;
         let rows = row_count(&report.table);
         let saved = data
             .files

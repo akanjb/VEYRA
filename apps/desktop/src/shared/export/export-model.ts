@@ -15,6 +15,7 @@ export const FORMATS: readonly { value: ExportFormat; label: string }[] = [
   { value: "csv", label: "CSV" },
   { value: "csvExcel", label: "CSV for Excel" },
   { value: "json", label: "JSON" },
+  { value: "xlsx", label: "XLSX" },
 ];
 
 /** The report a page's export starts with. */

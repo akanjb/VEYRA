@@ -3,4 +3,4 @@
 /**
  * The file a report is written as (PRD FR-EXP-01).
  */
-export type ExportFormat = "csv" | "csvExcel" | "json";
+export type ExportFormat = "csv" | "csvExcel" | "json" | "xlsx";

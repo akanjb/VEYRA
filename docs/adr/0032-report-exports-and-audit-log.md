@@ -26,7 +26,7 @@ The threat model (architecture §11) allows writes only through the native save 
 2. **Writers are format-independent.** A report is a table of typed cells.
    - **CSV:** follows RFC 4180 with CRLF line ends. A variant starts with a byte-order mark, so Excel reads it as UTF-8. Amounts are dollars with nine decimals, so they are exact. Text that a spreadsheet would run as a formula (starting with `=`, `+`, `-`, `@`, a tab or a carriage return) gets an apostrophe in front, because project names come from folder names anyone can choose.
    - **JSON:** rows are objects keyed by stable column keys, with amounts as integer billionths of a dollar.
-   - **XLSX:** follows once its crate passes admission review.
+   - **XLSX:** one worksheet with a bold, frozen header row. Counts and amounts are numbers, and amounts show nine decimals. Text is stored as text, so a spreadsheet never runs it as a formula.
 
 3. **Redaction.**
    - **Hashed names:** a project's name becomes `project-` and 12 hex digits of SHA-256 over a secret salt and the project's path. The salt is 32 random bytes, created once per device and kept in `settings`. The same project therefore gets the same name in every report from this device, and nobody who receives a report can guess names back.
@@ -47,8 +47,10 @@ The threat model (architecture §11) allows writes only through the native save 
    | `tauri-plugin-dialog` | 2.8.4 (2026-10-28) | Apache-2.0 OR MIT | The native save dialog. Maintained by the Tauri team in `tauri-apps/plugins-workspace`; no open advisories. |
    | `rfd`, `tauri-plugin-fs`, `tauri-plugin` | 0.17.2, 2.7.1, 2.7.2 | MIT; Apache-2.0 OR MIT | Its dependencies; the only new crates in the lockfile. |
    | `sha2` 0.10.9, `getrandom` 0.3.4 | already in the lockfile through Tauri | MIT OR Apache-2.0 | Hashing and the salt; now direct dependencies of `veyra-app`. |
+   | `rust_xlsxwriter` | 0.102.0 (2026-10-29), default features off | MIT OR Apache-2.0 | XLSX writing. One maintainer with a long record (the author of the Python and C XlsxWriter libraries); frequent releases; no advisories. |
+   | `zip` 9.3.0, `zopfli` 0.8.4, `typed-path` 0.13.0, `nix` 0.31.3 (Unix only), `cfg_aliases` 0.2.2 | 2026-11-03 or earlier | MIT; Apache-2.0; MIT OR Apache-2.0 | Its dependencies. `zip` publishes almost daily, so it is pinned to the newest release at least seven days old. |
 
-   Without the plugin, the shell would need its own bindings to each operating system's dialog (`rfd` directly). The plugin is the maintained, reviewed route.
+   Without the plugin, the shell would need its own bindings to each operating system's dialog (`rfd` directly), and the plugin is the maintained, reviewed route. Without `rust_xlsxwriter`, XLSX would need a hand-written Office Open XML writer, which is a large surface to get right.
 
 ## Alternatives considered
 
@@ -65,4 +67,4 @@ The threat model (architecture §11) allows writes only through the native save 
 
 ## Revisit when
 
-XLSX export is added (crate admission), or reports need to cover sessions or devices. The redaction options for titles and device names then apply.
+Reports need to cover sessions or devices: the redaction options for titles and device names then apply.
