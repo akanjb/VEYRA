@@ -1,0 +1,195 @@
+Veyra Source-Available License, Version 1.0
+
+Copyright (c) 2026 Nikunj Bansal. All rights reserved.
+
+This is not an open-source licence. The source code is published so that
+people can read, build, verify and use Veyra. Every right not expressly
+granted below is reserved by the Licensor.
+
+1. Definitions
+
+   "Licensor" means Nikunj Bansal, the author and sole owner of the Software.
+
+   "Software" means the source code, object code, binaries, documentation,
+   designs, data files, user interface, artwork and every other material in
+   this repository or distributed by the Licensor under the name Veyra,
+   including all past and future versions.
+
+   "You" means the individual or legal entity exercising rights under this
+   licence. If You act for an organisation, "You" includes that organisation.
+
+   "Official Repository" means the repository published by the Licensor at
+   https://github.com/akanjb/VEYRA, or any successor location the Licensor
+   names.
+
+2. What You may do
+
+   Subject to full and continuing compliance with this licence, the Licensor
+   grants You a personal, worldwide, royalty-free, non-exclusive,
+   non-transferable, non-sublicensable and revocable licence to:
+
+   (a) read and study the source code;
+   (b) download, build and install the Software, unmodified, from the
+       Official Repository or from a release published by the Licensor;
+   (c) run the Software for Your own personal purposes, or for the internal
+       purposes of Your organisation, on devices You own or control;
+   (d) modify a copy of the source code solely to prepare a contribution
+       that You submit to the Official Repository under section 5, and for
+       no other purpose; and
+   (e) fork the Official Repository on GitHub only to the extent that
+       GitHub's Terms of Service require when a repository is public, and
+       only within GitHub's own functionality.
+
+3. What You must not do
+
+   Unless the Licensor gives You prior written permission, You must not, and
+   must not allow or help anyone else to:
+
+   (a) sell, resell, rent, lease, lend, license, sublicense or otherwise
+       commercialise the Software or any part of it, alone or bundled with
+       anything else;
+   (b) copy, publish, redistribute, mirror or share the Software or any part
+       of it, in source or binary form, modified or unmodified, other than by
+       linking to the Official Repository;
+   (c) modify, adapt, translate or create derivative works of the Software,
+       or use any part of it in another product, except as section 2(d)
+       allows;
+   (d) publish, distribute or operate a modified version, a fork outside
+       GitHub's functionality, a clone, a port or a substantially similar
+       product based on the Software or on its source code;
+   (e) offer the Software, or any functionality of it, to third parties as a
+       hosted, managed, embedded or online service;
+   (f) remove, hide or change any copyright, licence, author or trademark
+       notice, or this licence;
+   (g) claim, imply or represent that You or anyone other than the Licensor
+       wrote, owns or co-owns the Software, or present the Software or any
+       part of it under another name;
+   (h) use the names "Veyra" or "Nikunj Bansal", or any Veyra logo, icon or
+       branding, to name, promote or endorse any product, service or fork, or
+       in any way that suggests the Licensor's sponsorship or approval;
+   (i) use the Software or its source code to train, fine-tune, evaluate or
+       build any machine-learning or artificial-intelligence model, dataset or
+       code-generation system;
+   (j) circumvent any technical limitation in the Software, or reverse
+       engineer any build the Licensor distributes, except to the extent that
+       applicable law expressly permits despite this restriction; or
+   (k) use the Software in breach of any law, or of the terms of any service
+       whose data the Software reads.
+
+4. Ownership
+
+   The Software is licensed, not sold. The Licensor owns and keeps all
+   right, title and interest in the Software, including all copyrights,
+   trademarks, trade secrets and other intellectual-property rights, and
+   every copy, change or contribution to it. Nothing in this licence
+   transfers ownership of any part of the Software to You.
+
+5. Contributions
+
+   (a) The Licensor decides, at sole discretion, whether to review, accept,
+       change or reject any contribution, and who, if anyone, may write to
+       the Official Repository. Submitting a pull request, patch, issue,
+       suggestion or other material ("Contribution") gives You no right to
+       have it accepted, no write access and no other role in the project.
+
+   (b) By submitting a Contribution, You assign to the Licensor all right,
+       title and interest in it, including all intellectual-property rights,
+       to the fullest extent the law allows. Where an assignment is not
+       effective, You grant the Licensor a perpetual, worldwide, exclusive,
+       irrevocable, royalty-free, fully paid-up, transferable licence, with
+       the right to sublicense through multiple tiers, to use, copy, modify,
+       distribute, relicense, sell and otherwise exploit the Contribution in
+       any way and under any terms, including in proprietary or commercial
+       products. You waive, and agree not to assert, any moral rights in the
+       Contribution, to the extent the law allows.
+
+   (c) You confirm that each Contribution is Your original work, that You
+       have the right to make the assignment and grant above, that it does
+       not infringe anyone's rights, and that it is not subject to any
+       licence or obligation that conflicts with this section. If Your
+       employer has rights in it, You confirm You have their permission.
+
+   (d) A Contribution, whether accepted or not, does not make You an author,
+       owner, co-owner or partner of the Software, and entitles You to no
+       payment, royalty, credit or attribution. Any credit the Licensor gives
+       is voluntary and may be withdrawn.
+
+6. Termination
+
+   This licence ends automatically and immediately, without notice, if You
+   breach any of its terms, or if You start or join any legal claim alleging
+   that the Software infringes any right. The Licensor may also end this
+   licence for anyone, at any time, by publishing a new version of it in the
+   Official Repository. When it ends, You must stop using the Software and
+   delete every copy in Your possession or control. Sections 3 to 12 survive
+   termination.
+
+7. No warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITH ALL FAULTS AND
+   WITHOUT WARRANTY OF ANY KIND, EXPRESS, IMPLIED OR STATUTORY, INCLUDING ANY
+   WARRANTY OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE,
+   NON-INFRINGEMENT, ACCURACY, AVAILABILITY OR SECURITY. THE ENTIRE RISK OF
+   USING THE SOFTWARE IS WITH YOU.
+
+8. Figures are estimates
+
+   Token counts, costs, prices, quotas, budgets, forecasts and every other
+   figure the Software shows are estimates derived from local files and
+   published price lists, which may be incomplete, out of date or wrong.
+   They are not invoices, bills, financial, accounting, tax, legal or
+   professional advice, and You must not rely on them for any payment,
+   billing, purchasing or contractual decision. Always check figures against
+   Your provider's own records.
+
+9. Your data
+
+   The Software reads files on Your own devices and stores its results
+   there. You are solely responsible for the data You let it read, for
+   keeping backups, for the security of Your devices and for complying with
+   the terms, policies and laws that apply to that data. The Licensor does
+   not receive, control or process Your data, and is not responsible for any
+   loss, corruption, disclosure or misuse of it.
+
+10. Limitation of liability
+
+   TO THE FULLEST EXTENT PERMITTED BY LAW, IN NO EVENT SHALL THE LICENSOR BE
+   LIABLE TO YOU OR ANY THIRD PARTY FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+   SPECIAL, EXEMPLARY, PUNITIVE OR CONSEQUENTIAL DAMAGES, OR FOR ANY LOSS OF
+   PROFITS, REVENUE, DATA, GOODWILL, BUSINESS OR SAVINGS, ARISING OUT OF OR
+   IN CONNECTION WITH THE SOFTWARE OR THIS LICENCE, WHETHER IN CONTRACT,
+   TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF
+   ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. WHERE LIABILITY CANNOT BE
+   EXCLUDED, THE LICENSOR'S TOTAL LIABILITY IS LIMITED TO THE AMOUNT YOU
+   PAID FOR THE SOFTWARE, WHICH IS ZERO.
+
+11. Indemnity
+
+   You agree to defend, indemnify and hold harmless the Licensor from and
+   against all claims, losses, damages, liabilities, costs and expenses,
+   including reasonable legal fees, arising out of or related to Your use of
+   the Software, Your Contributions or Your breach of this licence.
+
+12. General
+
+   (a) Third-party components included with the Software remain under their
+       own licences, which govern those components only.
+   (b) Any breach of sections 3 or 4 may cause the Licensor irreparable harm,
+       for which the Licensor may seek injunctive relief in addition to any
+       other remedy, without posting a bond where the law allows.
+   (c) If any provision of this licence is held unenforceable, it is changed
+       only as much as needed to make it enforceable, and the rest of the
+       licence stays in full effect.
+   (d) The Licensor's failure or delay in enforcing any provision is not a
+       waiver of it.
+   (e) You may not assign or transfer this licence. The Licensor may.
+   (f) This licence is the entire agreement between You and the Licensor
+       about the Software and replaces any earlier licence under which You
+       received it. It can be changed only in writing signed by the
+       Licensor.
+   (g) By downloading, building, installing, running, forking or
+       contributing to the Software, You accept this licence. If You do not
+       accept it, You have no right to do any of those things.
+
+For permission beyond this licence, contact the Licensor through the
+Official Repository.

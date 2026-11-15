@@ -24,7 +24,7 @@ Each record documents one significant decision: its context, the decision itself
 | [016](0016-encryption-at-rest-deferred.md) | Database encryption at rest deferred | Accepted |
 | [017](0017-supply-chain-policy.md) | Supply-chain policy | Accepted |
 | [018](0018-unsigned-v1-distribution.md) | Unsigned v1 distribution with checksums | Accepted |
-| [019](0019-licence.md) | Licence: Apache-2.0 OR MIT | Accepted |
+| [019](0019-licence.md) | Licence: Apache-2.0 OR MIT | Superseded by 035 |
 | [020](0020-ipc-security-baseline.md) | IPC and webview security baseline | Accepted, amended by 024 |
 | [021](0021-ci-scope-while-private.md) | CI scope while the repository is private | Accepted |
 | [022](0022-data-core-implementation.md) | Data-core implementation refinements | Accepted |
@@ -37,3 +37,4 @@ Each record documents one significant decision: its context, the decision itself
 | [029](0029-page-reads-in-parallel.md) | Dashboard pages read in parallel, with a budget per page | Accepted |
 | [030](0030-page-rollups.md) | Page rollups and token-only reads | Accepted |
 | [031](0031-reads-sized-to-each-card.md) | Reads sized to what each card shows | Accepted |
+| [035](0035-source-available-licence.md) | Source-available licence | Accepted |

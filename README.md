@@ -7,7 +7,7 @@
 Veyra is a local-first desktop application that consolidates AI usage from model providers, coding agents, IDEs, desktop apps and CLIs into one accurate, privacy-preserving analytics product. Everything runs on your own machine.
 
 ![Status](https://img.shields.io/badge/status-early%20development%20(M4)-orange)
-![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue)
+![License](https://img.shields.io/badge/license-source--available-red)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Stack](https://img.shields.io/badge/stack-Tauri%202%20%C2%B7%20Rust%20%C2%B7%20React%2019%20%C2%B7%20SQLite-6f42c1)
 ![Author](https://img.shields.io/badge/author-Nikunj%20Bansal-0a7ea4)
@@ -919,7 +919,7 @@ The detailed, dependency-ordered plan with acceptance criteria is in [`docs/plan
 
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for the engineering standards, the module rules, the dependency admission checklist and the pull-request process, and follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+Contributions are reviewed at the maintainer's sole discretion and assign their rights to the author. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for the engineering standards, the module rules, the dependency admission checklist and the pull-request process, and follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security policy
 
@@ -927,9 +927,11 @@ Please report vulnerabilities privately. See [SECURITY.md](SECURITY.md).
 
 ## License
 
-Licensed under either of
+Copyright (c) 2026 Nikunj Bansal. All rights reserved.
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT License ([LICENSE-MIT](LICENSE-MIT))
+Veyra is **source-available**, not open source, under the [Veyra Source-Available License 1.0](LICENSE) (ADR-035).
 
-at your option. Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in Veyra is dual-licensed as above, without additional terms or conditions.
+- **Allowed:** reading the code, and building and running unmodified Veyra for personal use or your organisation's internal use.
+- **Not allowed without written permission:** selling, redistributing, publishing modified copies or clones, hosting it as a service, rebranding it, claiming authorship or using the Veyra name, and training AI models on the code.
+
+The software is provided as is, without warranty. Every figure it shows is an estimate, not financial advice.

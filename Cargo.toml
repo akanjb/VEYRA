@@ -6,8 +6,8 @@ members = ["crates/*", "src-tauri", "tools/contracts-gen", "tools/perf"]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.99"
-license = "Apache-2.0 OR MIT"
-authors = ["The Veyra contributors"]
+license = "LicenseRef-Veyra-Source-Available-1.0"
+authors = ["Nikunj Bansal"]
 publish = false
 
 # Exact pins: every version was published at least a week before adoption

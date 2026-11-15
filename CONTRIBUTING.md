@@ -1,6 +1,15 @@
 # Contributing to Veyra
 
-Thank you for helping. This guide covers setup, engineering standards and the review checklist.
+Thank you for your interest. This guide covers the contribution terms, setup, engineering standards and the review checklist.
+
+## Contribution terms
+
+Veyra is source-available, not open source ([LICENSE](LICENSE)). Before you contribute, note:
+
+- **Acceptance is at the maintainer's sole discretion.** Pull requests may be changed, declined or closed without review. Contributing never grants write access or any role in the project.
+- **Rights.** By submitting a contribution you assign its rights to the author, as section 5 of the licence sets out, and confirm it is your own work.
+- **No ownership.** A contribution, accepted or not, does not make you an author, owner or co-owner of Veyra.
+- **Talk first.** Open an issue to discuss a change before you write code for it.
 
 ## Setup
 
@@ -99,4 +108,4 @@ A new technology or a major dependency also needs an ADR (`docs/adr/template.md`
 
 - Keep each PR focused on one change. Describe *why*, list how it was verified, and link the relevant ADR or plan section.
 - `pnpm check` must pass.
-- Contributions are licensed under Apache-2.0 OR MIT, the same terms as the project.
+- Contributions are accepted only under the contribution terms above.

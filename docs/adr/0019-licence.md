@@ -1,6 +1,6 @@
 # 0019. Licence: Apache-2.0 OR MIT
 
-- **Status:** Accepted (decision D2, approved 2026-11-08)
+- **Status:** Superseded by [ADR-035](0035-source-available-licence.md) (originally decision D2, approved 2026-11-08)
 - **Date:** 2026-11-08
 
 ## Context

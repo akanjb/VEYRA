@@ -76,6 +76,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
   - Connector documentation and ADR-023.
 
 ### Changed
+- **Licence** (ADR-035). Veyra is now published under the Veyra Source-Available License 1.0 instead of Apache-2.0 OR MIT. Anyone may read the code and build and run unmodified Veyra; selling, redistribution, modified copies, clones and rebranding need written permission. Contributions assign their rights to the author.
 - **Every page within its speed budget** (ADR-031). Reads now fetch only what a card shows:
   - daily and hourly series are summed per local day or hour in SQL, so a 30-day series returns one row per day rather than one per 15 minutes;
   - the activity calendar and hour-of-week grid read total tokens only;
