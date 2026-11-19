@@ -20,6 +20,7 @@ macro_rules! for_each_command {
             get_usage($crate::dto::UsageRequest) -> $crate::dto::Usage;
             get_cost($crate::dto::CostRequest) -> $crate::dto::Cost;
             get_cost_assumptions($crate::dto::CostAssumptionsRequest) -> $crate::dto::CostAssumptions;
+            get_what_if($crate::dto::WhatIfRequest) -> $crate::dto::WhatIf;
             get_cache($crate::dto::CacheRequest) -> $crate::dto::Cache;
             get_models($crate::dto::ModelsRequest) -> $crate::dto::Models;
             get_activity($crate::dto::ActivityRequest) -> $crate::dto::Activity;

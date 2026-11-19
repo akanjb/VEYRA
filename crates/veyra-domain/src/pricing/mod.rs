@@ -8,7 +8,9 @@ mod engine;
 mod rule;
 
 pub use catalog::{CatalogError, PriceCatalog};
-pub use engine::{Assumption, Assumptions, CostBreakdown, CostStatus, EventCost, price_event};
+pub use engine::{
+    Assumption, Assumptions, CostBreakdown, CostStatus, EventCost, price_event, price_tokens,
+};
 pub use rule::{
     EffectiveRange, ModelMatch, Modifiers, PriceRule, PromptTier, RateCard, TierFactor,
 };

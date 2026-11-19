@@ -23,6 +23,7 @@ import {
 } from "./cost-cards";
 import { BREAKDOWN, hasCost } from "./cost-model";
 import { AssumptionsButton } from "./assumptions-sheet";
+import { WhatIfCard } from "./what-if-card";
 
 /** The value framing, and the way into how the cost was estimated. */
 function FramingRow({ data, scope }: { data: Cost; scope: Scope }) {
@@ -85,6 +86,7 @@ export function CostPage() {
             <CompositionCard data={data} />
             <RatesCard data={data} />
           </CardGrid>
+          <WhatIfCard scope={filters.scope} />
           <ExpensiveSessionsCard
             sessions={data.sessions}
             definition="Sessions with the highest API-equivalent cost in the period."

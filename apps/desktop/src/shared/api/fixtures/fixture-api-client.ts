@@ -27,6 +27,7 @@ import { costAssumptions } from "./pricing-view";
 import { FixtureProjects } from "./projects-view";
 import { tools } from "./tools-view";
 import { usage } from "./usage-view";
+import { whatIf } from "./what-if-view";
 import { overview, sessions } from "./views";
 
 /** What the Claude Code connector reports (as its descriptor in the core says). */
@@ -240,6 +241,7 @@ export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient 
     get_usage: (r) => usage(state.flat(), r.scope),
     get_cost: (r) => costView(state.flat(), r.scope, state.billing, state.now),
     get_cost_assumptions: (r) => costAssumptions(state.flat(), r.scope, state.now),
+    get_what_if: (r) => whatIf(state.flat(), r.scope, r.model),
     get_cache: (r) => cache(state.flat(), r.scope),
     get_models: (r) => models(state.flat(), r.scope),
     get_activity: (r) => activity(state.flat(), r.scope),

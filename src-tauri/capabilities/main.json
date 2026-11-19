@@ -12,6 +12,7 @@
     "allow-get-usage",
     "allow-get-cost",
     "allow-get-cost-assumptions",
+    "allow-get-what-if",
     "allow-get-cache",
     "allow-get-models",
     "allow-get-activity",

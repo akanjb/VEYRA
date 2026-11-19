@@ -18,6 +18,7 @@ mod sources;
 mod storage;
 mod tools;
 mod usage;
+mod what_if;
 
 pub use activity::{Activity, ActivityDay, ActivityKpis, ActivityRequest, LengthBin, LongSession};
 pub use analytics::{
@@ -68,3 +69,4 @@ pub use usage::{
     Breakdown, BreakdownDimension, SizeBinCount, SizePoint, TokenMixPoint, Usage, UsageKpis,
     UsageRequest,
 };
+pub use what_if::{WhatIf, WhatIfChoice, WhatIfComparison, WhatIfRequest, WhatIfRow};

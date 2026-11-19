@@ -14,7 +14,7 @@ use veyra_app::ApiError;
 use veyra_app::dto::{
     BillingEntryInput, BillingKind, BillingRecurrence, BillingRequest, BudgetInput, BudgetLevel,
     Cost, CostAssumptionsRequest, CostRequest, DeleteBillingEntryRequest, DeleteBudgetRequest,
-    SaveBillingEntryRequest, SaveBudgetRequest,
+    SaveBillingEntryRequest, SaveBudgetRequest, WhatIfRequest,
 };
 
 use support::{api, engine_value, ingested, scope};
@@ -327,4 +327,41 @@ fn cost_assumptions_add_up_to_the_estimate() {
     );
     assert_eq!(panel.stale_after_days, 120);
     assert_ne!(panel.catalog_version, "");
+}
+
+#[test]
+fn the_what_if_card_reprices_the_same_tokens_on_another_model() {
+    let data = ingested();
+    let api = api(&data);
+    let request = |model: Option<String>| WhatIfRequest {
+        scope: scope(),
+        model,
+    };
+    let choices = api.get_what_if(request(None)).unwrap();
+    assert!(choices.comparison.is_none());
+    assert_ne!(choices.choices.len(), 0, "the catalogue prices models");
+
+    let estimate = engine_value(&data.store, MetricId::ApiEquivalentCost).unwrap();
+    for choice in &choices.choices {
+        let page = api
+            .get_what_if(request(Some(choice.model.key.clone())))
+            .unwrap();
+        let comparison = page.comparison.unwrap();
+        assert_eq!(comparison.target, *choice);
+        // The rows add up to the totals on both sides.
+        let rows = &comparison.rows;
+        let current: i64 = rows.iter().map(|r| r.current_nano_usd).sum();
+        let repriced: i64 = rows.iter().map(|r| r.repriced_nano_usd).sum();
+        assert_eq!(current, comparison.current_nano_usd);
+        assert_eq!(repriced, comparison.repriced_nano_usd);
+        // Only models whose every request was priced are compared, so the recorded side
+        // never exceeds the scope's estimate.
+        assert!(as_f64(comparison.current_nano_usd) <= estimate + 1.0);
+        assert!(comparison.tokens_compared > 0);
+    }
+
+    let unknown = api
+        .get_what_if(request(Some("no-such-model".to_owned())))
+        .unwrap_err();
+    assert!(matches!(unknown, ApiError::Validation { .. }));
 }

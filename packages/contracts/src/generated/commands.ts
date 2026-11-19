@@ -55,6 +55,8 @@ import type { ToolsRequest } from "./ToolsRequest";
 import type { UnmergeProjectRequest } from "./UnmergeProjectRequest";
 import type { Usage } from "./Usage";
 import type { UsageRequest } from "./UsageRequest";
+import type { WhatIf } from "./WhatIf";
+import type { WhatIfRequest } from "./WhatIfRequest";
 
 /** Request and response types of every command, keyed by command name. */
 export interface CommandMap {
@@ -66,6 +68,7 @@ export interface CommandMap {
   get_usage: { request: UsageRequest; response: Usage };
   get_cost: { request: CostRequest; response: Cost };
   get_cost_assumptions: { request: CostAssumptionsRequest; response: CostAssumptions };
+  get_what_if: { request: WhatIfRequest; response: WhatIf };
   get_cache: { request: CacheRequest; response: Cache };
   get_models: { request: ModelsRequest; response: Models };
   get_activity: { request: ActivityRequest; response: Activity };
@@ -101,6 +104,7 @@ export const COMMAND_NAMES = [
   "get_usage",
   "get_cost",
   "get_cost_assumptions",
+  "get_what_if",
   "get_cache",
   "get_models",
   "get_activity",

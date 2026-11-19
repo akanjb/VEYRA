@@ -19,6 +19,7 @@ pub(crate) mod storage;
 mod time_grids;
 pub(crate) mod tools;
 pub(crate) mod usage;
+pub(crate) mod what_if;
 
 use std::thread::ScopedJoinHandle;
 

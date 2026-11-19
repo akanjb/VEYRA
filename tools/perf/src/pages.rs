@@ -7,7 +7,7 @@ use std::sync::Arc;
 use veyra_app::dto::{
     ActivityRequest, BuildProfile, CacheRequest, Comparison, CostAssumptionsRequest, CostRequest,
     ModelsRequest, OverviewRequest, ProjectsRequest, Scope, ScopeFilters, SessionSort,
-    SessionsRequest, ToolsRequest, UsageRequest,
+    SessionsRequest, ToolsRequest, UsageRequest, WhatIfRequest,
 };
 use veyra_app::{Api, ApiError, AppControl, AppMetadata, DataServices, DisplayNames, FileSaver};
 use veyra_domain::pricing::PriceCatalog;
@@ -88,7 +88,7 @@ fn scope() -> Scope {
 type PageCall = fn(&Api) -> Result<(), ApiError>;
 
 /// Each page and the command it loads.
-const PAGES: [(&str, PageCall); 10] = [
+const PAGES: [(&str, PageCall); 11] = [
     ("Overview", |api| {
         api.get_overview(OverviewRequest { scope: scope() })
             .map(drop)
@@ -102,6 +102,13 @@ const PAGES: [(&str, PageCall); 10] = [
     ("Cost assumptions", |api| {
         api.get_cost_assumptions(CostAssumptionsRequest { scope: scope() })
             .map(drop)
+    }),
+    ("What if (Claude Haiku 5.5)", |api| {
+        api.get_what_if(WhatIfRequest {
+            scope: scope(),
+            model: Some("claude-haiku-5-5".to_owned()),
+        })
+        .map(drop)
     }),
     ("Cache", |api| {
         api.get_cache(CacheRequest { scope: scope() }).map(drop)

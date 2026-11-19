@@ -26,7 +26,7 @@ use crate::dto::{
     RestoreScheduled, SaveBillingEntryRequest, SaveBudgetRequest, SessionDetail, SessionList,
     SessionRequest, SessionsRequest, SetSourceEnabledRequest, SourceList, SourceSummary,
     StorageOverview, StorageRequest, Tools, ToolsRequest, UnmergeProjectRequest, Usage,
-    UsageRequest,
+    UsageRequest, WhatIf, WhatIfRequest,
 };
 use crate::error::ApiError;
 use crate::export::{self, FileSaver};
@@ -243,6 +243,21 @@ impl Api {
         let CostAssumptionsRequest { scope: requested } = request;
         let resolved = scope::resolve(&requested)?;
         views::pricing::cost_assumptions(self.data()?, &resolved, UtcMillis::now())
+    }
+
+    /// The models with a current published price and, when one is asked for, the
+    /// scope's tokens priced on it beside their API-equivalent cost.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an invalid scope or a model with no current price;
+    /// [`ApiError::Busy`] while starting; [`ApiError::Internal`] on database failure.
+    pub fn get_what_if(&self, request: WhatIfRequest) -> Result<WhatIf, ApiError> {
+        let WhatIfRequest {
+            scope: requested,
+            model,
+        } = request;
+        let resolved = scope::resolve(&requested)?;
+        views::what_if::what_if_view(self.data()?, &resolved, model.as_deref(), UtcMillis::now())
     }
 
     /// Every billing entry and budget, for editing.

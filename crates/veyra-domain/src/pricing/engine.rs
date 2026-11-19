@@ -240,6 +240,25 @@ pub fn price_event(event: &UsageEvent, catalog: &PriceCatalog) -> EventCost {
     }
 }
 
+/// Prices token counts summed over many requests at a rule's standard rates.
+///
+/// The counts carry no per-request prompt size, so prompt-length tiers cannot apply and
+/// the base rates are used (recorded when the rule has tiers); every request is taken to
+/// have used the standard service tier.
+#[must_use]
+pub fn price_tokens(tokens: &TokenCounts, rule: &PriceRule) -> (CostBreakdown, Assumptions) {
+    let mut assumptions = Assumptions::default();
+    if !rule.tiers.is_empty() {
+        assumptions.insert(Assumption::PromptSizeUnknownBaseTierUsed);
+    }
+    let standard = Factors {
+        main: Multiplier::ONE,
+        cache_read: Multiplier::ONE,
+    };
+    let breakdown = compute(tokens, &rule.base, standard, &mut assumptions);
+    (breakdown, assumptions)
+}
+
 fn select_rates<'r>(
     rule: &'r PriceRule,
     event: &UsageEvent,

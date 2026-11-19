@@ -1,6 +1,6 @@
 //! Pricing calculation tests. Every expected figure is derived by hand in the comments.
 
-use super::{Assumption, CostStatus, price_event};
+use super::{Assumption, CostStatus, price_event, price_tokens};
 use crate::accuracy::{Accuracy, AccuracyMap};
 use crate::event::{
     Attribution, DedupKey, EventContext, Granularity, ServiceTier, SourceRef, UsageEvent,
@@ -368,4 +368,29 @@ fn tiers_can_discount_cache_reads_differently() {
     assert_eq!(cost.breakdown.cache_read, NanoUsd(100_000_000));
     // saving: avoided batch input $1.00 − actual read $0.10 = $0.90
     assert_eq!(cost.breakdown.cache_read_saving, Some(NanoUsd(900_000_000)));
+}
+
+#[test]
+fn summed_tokens_are_priced_at_standard_base_rates() {
+    let mut r = rule("r", None);
+    r.modifiers.batch = Some(TierFactor {
+        factor: Multiplier(5_000),
+        cache_read: None,
+    });
+    let (breakdown, assumptions) = price_tokens(&typical_tokens(), &r);
+    // Same figures as one standard request: 13 000 000 n$ in total.
+    assert_eq!(breakdown.total(), NanoUsd(13_000_000));
+    assert_eq!(assumptions.iter().count(), 0);
+
+    r.tiers = vec![PromptTier {
+        above_prompt_tokens: 1,
+        rates: RateCard {
+            input: usd(4.0),
+            ..full_rates()
+        },
+    }];
+    let (breakdown, assumptions) = price_tokens(&typical_tokens(), &r);
+    // The prompt size of each request is unknown, so the tier is not used.
+    assert_eq!(breakdown.input, NanoUsd(2_000_000));
+    assert!(assumptions.contains(Assumption::PromptSizeUnknownBaseTierUsed));
 }
