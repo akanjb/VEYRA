@@ -16,6 +16,7 @@ mod projects;
 mod sessions;
 mod sources;
 mod storage;
+mod telemetry;
 mod tools;
 mod usage;
 mod what_if;
@@ -61,6 +62,7 @@ pub use storage::{
     BackupInfo, CreateBackupRequest, DataDeleted, DeleteDataRequest, DeletePreview, MonthEvents,
     RestorePreview, RestoreRequest, RestoreScheduled, StorageOverview, StorageRequest, TableBytes,
 };
+pub use telemetry::{SetTelemetryReceiverRequest, TelemetryReceiverInfo, TelemetryReceiverRequest};
 pub use tools::{
     McpServerRow, ToolCallCounts, ToolKind, ToolKindRow, ToolRow, Tools, ToolsDay, ToolsKpis,
     ToolsRequest,

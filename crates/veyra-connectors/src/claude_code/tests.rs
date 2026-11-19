@@ -259,3 +259,84 @@ fn chunked_reads_report_absolute_offsets() {
     assert_eq!(second.issues.len(), 1);
     assert_eq!(second.issues[0].offset, main_session().issues[0].offset);
 }
+
+/// A documented `api_request` OpenTelemetry record (ADR-038), with `extra` attributes.
+fn api_request(extra: &[(&str, &str)]) -> veyra_domain::telemetry::TelemetryRecord {
+    let mut attributes: std::collections::HashMap<String, String> = [
+        ("event.name", "api_request"),
+        ("event.timestamp", "2026-11-08T10:00:03.000Z"),
+        ("request_id", "req_A"),
+        ("session.id", SESSION),
+        ("model", "claude-opus-5-5"),
+        ("input_tokens", "4"),
+        ("output_tokens", "120"),
+        ("cache_read_tokens", "10000"),
+        ("cache_creation_tokens", "2000"),
+        ("cache_creation_5m_tokens", "2000"),
+        ("cache_creation_1h_tokens", "0"),
+        ("cost_usd", "0.5"),
+        ("prompt", "never read"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_owned(), v.to_owned()))
+    .collect();
+    attributes.extend(
+        extra
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned())),
+    );
+    veyra_domain::telemetry::TelemetryRecord {
+        service: "claude-code".to_owned(),
+        service_version: Some("2.1.400".to_owned()),
+        time: None,
+        attributes,
+    }
+}
+
+#[test]
+fn telemetry_gives_the_same_request_key_and_tokens_as_the_log() {
+    let connector = ClaudeCode::new();
+    assert_eq!(connector.telemetry_service(), Some("claude-code"));
+    let pushed = connector.telemetry_usage(&api_request(&[])).unwrap();
+    let logged = record(&main_session(), "req_A").clone();
+    assert_eq!(pushed.natural_key, logged.natural_key);
+    assert_eq!(pushed.tokens.input_uncached, logged.tokens.input_uncached);
+    assert_eq!(pushed.tokens.cache_read, logged.tokens.cache_read);
+    assert_eq!(pushed.tokens.cache_write_short, Some(2_000));
+    assert_eq!(pushed.tokens.cache_write_long, Some(0));
+    assert_eq!(pushed.tokens.output_total, logged.tokens.output_total);
+    assert_eq!(pushed.session_key, logged.session_key);
+    assert_eq!(pushed.occurred_at, at(3));
+    assert_eq!(pushed.tool_version.as_deref(), Some("2.1.400"));
+    // Claude Code's own estimate is not a charge, and nothing names a project.
+    assert_eq!((pushed.reported_cost, pushed.cwd), (None, None));
+    // The completed log line, which knows the project, always supersedes it.
+    assert!(pushed.precedence < logged.precedence);
+}
+
+#[test]
+fn telemetry_reads_only_api_requests_with_a_request_id() {
+    let connector = ClaudeCode::new();
+    let other = api_request(&[("event.name", "user_prompt")]);
+    assert!(connector.telemetry_usage(&other).is_none());
+    let mut anonymous = api_request(&[]);
+    anonymous.attributes.remove("request_id");
+    assert!(connector.telemetry_usage(&anonymous).is_none());
+}
+
+#[test]
+fn telemetry_maps_fast_mode_and_subagents() {
+    let usage = ClaudeCode::new()
+        .telemetry_usage(&api_request(&[("speed", "fast"), ("agent_id", "a1")]))
+        .unwrap();
+    assert_eq!(usage.service_tier, ServiceTier::Fast);
+    assert!(usage.is_subagent);
+    assert_eq!(
+        usage.session_key.as_deref(),
+        Some(format!("claude-code:{SESSION}:a1").as_str())
+    );
+    assert_eq!(
+        usage.parent_session_key.as_deref(),
+        Some(format!("claude-code:{SESSION}").as_str())
+    );
+}

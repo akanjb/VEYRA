@@ -20,6 +20,14 @@ fn a_setting_keeps_the_value_stored_first() {
 }
 
 #[test]
+fn setting_a_value_replaces_the_stored_one() {
+    let db = TempDb::new();
+    db.store.set_setting("k", "true").unwrap();
+    db.store.set_setting("k", "false").unwrap();
+    assert_eq!(db.store.setting("k").unwrap().as_deref(), Some("false"));
+}
+
+#[test]
 fn audit_entries_come_back_newest_first() {
     let db = TempDb::new();
     for (at, detail) in [(1, "first"), (2, "second")] {

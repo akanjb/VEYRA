@@ -24,7 +24,8 @@ This document builds on the source-coverage matrix ([00-research.md §0.3](00-re
 | Provider | Surface | How | Accuracy | Status |
 |---|---|---|---|---|
 | Anthropic | Claude Code (CLI, Desktop Code tab, IDE) | Local JSONL | Exact | **Automatic, shipped** |
-| Anthropic | Claude Code via OTel, statusline quota | OTLP receiver, statusline forwarder | Exact; quota observed | Integration (M7) |
+| Anthropic | Claude Code via OTel | Local OTLP receiver | Exact | **Integration, shipped** (ADR-038) |
+| Anthropic | Claude Code statusline quota | Statusline forwarder | Quota observed | Integration (M7) |
 | Anthropic | Claude API | Capture proxy (§3.2) or Admin usage/cost API | Exact / Provider-reported | Integration |
 | Anthropic | Claude.ai web, desktop chat, mobile | Official data export (§3.3) | Messages exact; tokens Estimated | Integration (import) |
 | OpenAI | Codex CLI | Local JSONL | Exact | **Automatic, shipped** |

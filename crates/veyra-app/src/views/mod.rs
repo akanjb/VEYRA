@@ -16,6 +16,7 @@ mod rankings;
 pub(crate) mod sessions;
 pub(crate) mod sources;
 pub(crate) mod storage;
+pub(crate) mod telemetry;
 mod time_grids;
 pub(crate) mod tools;
 pub(crate) mod usage;

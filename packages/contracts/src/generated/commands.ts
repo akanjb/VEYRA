@@ -49,10 +49,13 @@ import type { SessionList } from "./SessionList";
 import type { SessionRequest } from "./SessionRequest";
 import type { SessionsRequest } from "./SessionsRequest";
 import type { SetSourceEnabledRequest } from "./SetSourceEnabledRequest";
+import type { SetTelemetryReceiverRequest } from "./SetTelemetryReceiverRequest";
 import type { SourceList } from "./SourceList";
 import type { SourceSummary } from "./SourceSummary";
 import type { StorageOverview } from "./StorageOverview";
 import type { StorageRequest } from "./StorageRequest";
+import type { TelemetryReceiverInfo } from "./TelemetryReceiverInfo";
+import type { TelemetryReceiverRequest } from "./TelemetryReceiverRequest";
 import type { Tools } from "./Tools";
 import type { ToolsRequest } from "./ToolsRequest";
 import type { UnmergeProjectRequest } from "./UnmergeProjectRequest";
@@ -67,6 +70,8 @@ export interface CommandMap {
   list_sources: { request: ListSourcesRequest; response: SourceList };
   set_source_enabled: { request: SetSourceEnabledRequest; response: SourceSummary };
   request_rescan: { request: RescanRequest; response: RescanAccepted };
+  get_telemetry_receiver: { request: TelemetryReceiverRequest; response: TelemetryReceiverInfo };
+  set_telemetry_receiver: { request: SetTelemetryReceiverRequest; response: TelemetryReceiverInfo };
   get_overview: { request: OverviewRequest; response: Overview };
   get_usage: { request: UsageRequest; response: Usage };
   get_cost: { request: CostRequest; response: Cost };
@@ -105,6 +110,8 @@ export const COMMAND_NAMES = [
   "list_sources",
   "set_source_enabled",
   "request_rescan",
+  "get_telemetry_receiver",
+  "set_telemetry_receiver",
   "get_overview",
   "get_usage",
   "get_cost",

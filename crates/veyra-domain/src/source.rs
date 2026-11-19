@@ -12,6 +12,7 @@ use crate::connector::{Capabilities, Reading, SideFile};
 use crate::event::{Granularity, ServiceTier};
 use crate::identity::{AppId, ConnectorId, Interface};
 use crate::money::NanoUsd;
+use crate::telemetry::TelemetryRecord;
 use crate::time::UtcMillis;
 use crate::tokens::TokenCounts;
 use crate::tooling::{ToolCall, ToolOutcome};
@@ -196,4 +197,16 @@ pub trait SourceConnector: Send + Sync {
     /// Parses data read as [`reading`](Self::reading) declares: complete lines of an
     /// append-only file, a whole file, or one JSON line per database row.
     fn parse(&self, context: &FileContext<'_>, data: &[u8]) -> ParsedRecords;
+
+    /// The `service.name` the tool reports in OpenTelemetry, when it emits usage there
+    /// (ADR-038).
+    fn telemetry_service(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// The usage in one OpenTelemetry log record from [`telemetry_service`](Self::telemetry_service),
+    /// read from the tool's documented attributes only; `None` for any other record.
+    fn telemetry_usage(&self, _record: &TelemetryRecord) -> Option<RawUsage> {
+        None
+    }
 }

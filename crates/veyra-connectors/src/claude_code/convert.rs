@@ -15,10 +15,11 @@ use veyra_domain::accuracy::{Accuracy, AccuracyMap};
 use veyra_domain::event::{Granularity, ServiceTier};
 use veyra_domain::identity::Interface;
 use veyra_domain::source::RawUsage;
+use veyra_domain::telemetry::TelemetryRecord;
 use veyra_domain::tokens::TokenCounts;
 use veyra_domain::tooling::{ToolCall, ToolOutcome};
 
-use super::record::{Block, Content, Line, Usage};
+use super::record::{Block, CacheCreation, Content, Line, Usage};
 use crate::shared::{plain_components, utc_millis};
 
 const SYNTHETIC_MODEL: &str = "<synthetic>";
@@ -95,7 +96,8 @@ pub fn usage(line: &Line, file: &FileKind) -> Result<Option<RawUsage>, &'static 
         FileKind::Subagent { agent } => Some(agent.clone()),
         FileKind::Main => None,
     });
-    let session = line.session_id.as_deref();
+    let (session_key, parent_session_key) =
+        session_keys(line.session_id.as_deref(), is_subagent, agent.as_deref());
 
     Ok(Some(RawUsage {
         natural_key: format!("anthropic:{request}"),
@@ -111,28 +113,12 @@ pub fn usage(line: &Line, file: &FileKind) -> Result<Option<RawUsage>, &'static 
         service_tier: service_tier(usage),
         inference_geo_us: usage.inference_geo.as_deref() == Some("us"),
         granularity: Granularity::Request,
-        session_key: session.map(|s| match (is_subagent, &agent) {
-            (true, Some(agent)) => format!("claude-code:{s}:{agent}"),
-            _ => format!("claude-code:{s}"),
-        }),
-        parent_session_key: session
-            .filter(|_| is_subagent && agent.is_some())
-            .map(|s| format!("claude-code:{s}")),
+        session_key,
+        parent_session_key,
         is_subagent,
         cwd: line.cwd.clone(),
         tool_version: line.version.clone(),
-        accuracy: AccuracyMap {
-            tokens: Accuracy::Exact,
-            cache: Accuracy::Exact,
-            reasoning: if reasoning_consistent {
-                Accuracy::Exact
-            } else {
-                Accuracy::Partial
-            },
-            requests: Accuracy::Exact,
-            // Cost is always derived from tokens and published prices.
-            cost: Accuracy::Estimated,
-        },
+        accuracy: accuracy(reasoning_consistent),
         tool_calls: blocks(line)
             .iter()
             .filter(|b| b.kind.as_deref() == Some("tool_use"))
@@ -144,6 +130,102 @@ pub fn usage(line: &Line, file: &FileKind) -> Result<Option<RawUsage>, &'static 
             })
             .collect(),
     }))
+}
+
+/// The usage in Claude Code's documented `api_request` OpenTelemetry event (ADR-038).
+///
+/// - The request id gives the same natural key as the log line of the same request, so
+///   enabling both sources never counts a request twice.
+/// - The event has no `stop_reason`, so its precedence is that of an incomplete line:
+///   the completed log line, which also knows the project, always supersedes it.
+/// - `cost_usd` is Claude Code's own estimate, not a charge, so it is not kept.
+pub fn telemetry_usage(record: &TelemetryRecord) -> Option<RawUsage> {
+    if record.text("event.name") != Some("api_request") {
+        return None;
+    }
+    let request = record.text("request_id")?;
+    let occurred_at = record
+        .text("event.timestamp")
+        .and_then(utc_millis)
+        .or(record.time)?;
+    let usage = Usage {
+        input_tokens: record.count("input_tokens"),
+        output_tokens: record.count("output_tokens"),
+        cache_creation_input_tokens: record.count("cache_creation_tokens"),
+        cache_read_input_tokens: record.count("cache_read_tokens"),
+        cache_creation: match (
+            record.count("cache_creation_5m_tokens"),
+            record.count("cache_creation_1h_tokens"),
+        ) {
+            (None, None) => None,
+            (short, long) => Some(CacheCreation {
+                ephemeral_5m_input_tokens: short,
+                ephemeral_1h_input_tokens: long,
+            }),
+        },
+        output_tokens_details: None,
+        service_tier: None,
+        inference_geo: None,
+        speed: record.text("speed").map(str::to_owned),
+    };
+    let (tokens, reasoning_consistent) = canonical_tokens(&usage);
+    let agent = record.text("agent_id");
+    let is_subagent = agent.is_some();
+    let (session_key, parent_session_key) =
+        session_keys(record.text("session.id"), is_subagent, agent);
+    Some(RawUsage {
+        natural_key: format!("anthropic:{request}"),
+        precedence: precedence(false, &tokens),
+        occurred_at,
+        model: record.text("model").map(str::to_owned),
+        provider: Some("anthropic".to_owned()),
+        gateway: None,
+        tokens,
+        requests: Some(1),
+        reported_cost: None,
+        interface: interface(record.text("app.entrypoint")),
+        service_tier: service_tier(&usage),
+        inference_geo_us: false,
+        granularity: Granularity::Request,
+        session_key,
+        parent_session_key,
+        is_subagent,
+        cwd: None,
+        tool_version: record.service_version.clone(),
+        accuracy: accuracy(reasoning_consistent),
+        tool_calls: Vec::new(),
+    })
+}
+
+/// Session keys: a subagent with a known id is its own session under the main one.
+fn session_keys(
+    session: Option<&str>,
+    is_subagent: bool,
+    agent: Option<&str>,
+) -> (Option<String>, Option<String>) {
+    match (session, is_subagent, agent) {
+        (Some(s), true, Some(agent)) => (
+            Some(format!("claude-code:{s}:{agent}")),
+            Some(format!("claude-code:{s}")),
+        ),
+        (session, _, _) => (session.map(|s| format!("claude-code:{s}")), None),
+    }
+}
+
+/// Token counts come straight from the API; cost is always derived from published
+/// prices.
+const fn accuracy(reasoning_consistent: bool) -> AccuracyMap {
+    AccuracyMap {
+        tokens: Accuracy::Exact,
+        cache: Accuracy::Exact,
+        reasoning: if reasoning_consistent {
+            Accuracy::Exact
+        } else {
+            Accuracy::Partial
+        },
+        requests: Accuracy::Exact,
+        cost: Accuracy::Estimated,
+    }
 }
 
 /// Canonical tokens, and whether the reported reasoning was consistent with output.

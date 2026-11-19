@@ -15,6 +15,7 @@ use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_app::dto::{Comparison, Scope, ScopeFilters};
 use veyra_app::{Api, AppControl, AppMetadata, DataServices, DisplayNames, FileSaver};
 use veyra_domain::source::{DiscoveryEnv, IngestControl};
+use veyra_domain::telemetry::{ReceiverStatus, TelemetryReceiver};
 use veyra_ingest::{DEFAULT_CHUNK_BYTES, IngestContext, discover, scan_all};
 use veyra_registry::Registry;
 use veyra_store::{Storage, Store};
@@ -25,6 +26,16 @@ struct NoIngest;
 impl IngestControl for NoIngest {
     fn request_scan(&self) {}
     fn sources_changed(&self) {}
+}
+
+/// No receiver runs in these tests.
+struct NoReceiver;
+
+impl TelemetryReceiver for NoReceiver {
+    fn set_enabled(&self, _: bool) {}
+    fn status(&self) -> ReceiverStatus {
+        ReceiverStatus::default()
+    }
 }
 
 /// Files "saved" by exports, as (suggested name, bytes), newest last.
@@ -143,6 +154,7 @@ pub fn api_with_restarts(data: &Ingested) -> (Api, SavedFiles, Arc<AtomicUsize>)
         connectors,
         names,
         ingest: Box::new(NoIngest),
+        telemetry: Box::new(NoReceiver),
         files: Box::new(MemoryFiles(Arc::clone(&files))),
         control: Box::new(Restarts(Arc::clone(&restarts))),
     })));

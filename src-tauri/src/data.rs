@@ -10,7 +10,10 @@ use veyra_app::dto::DataChanged;
 use veyra_app::events::DATA_CHANGED;
 use veyra_app::{Api, AppControl, DataServices, DisplayNames};
 use veyra_domain::time::UtcMillis;
-use veyra_ingest::{IngestWorker, WorkerConfig, discovery_env};
+use veyra_ingest::{
+    ChangeListener, DEFAULT_PORT, IngestWorker, Receiver, ReceiverParts, WorkerConfig,
+    discovery_env,
+};
 use veyra_registry::Registry;
 use veyra_store::{Storage, Store};
 
@@ -31,6 +34,19 @@ impl<R: Runtime> AppControl for Restart<R> {
     fn restart(&self) {
         self.0.request_restart();
     }
+}
+
+/// Tells the dashboard that stored usage changed. Nothing is listening before the
+/// dashboard loads; the next change re-emits.
+fn notify_changes<R: Runtime>(app: &AppHandle<R>) -> ChangeListener {
+    let emitter = app.clone();
+    Box::new(move |report| {
+        let payload = DataChanged {
+            inserted: report.inserted,
+            updated: report.updated,
+        };
+        let _ = emitter.emit(DATA_CHANGED, payload);
+    })
 }
 
 /// Takes a backup once a day, in the background.
@@ -83,21 +99,23 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
         &descriptors,
     );
     let catalog = Arc::new(registry.catalog().clone());
-    let emitter = app.clone();
+    // Off until the user turns it on; the API applies the kept choice when attached.
+    let telemetry = Receiver::new(
+        ReceiverParts {
+            store: Arc::clone(&store),
+            registry: Arc::clone(&registry),
+            connectors: veyra_connectors::all(),
+            on_change: notify_changes(app),
+        },
+        DEFAULT_PORT,
+    );
     let worker = IngestWorker {
         store: Arc::clone(&store),
         registry,
         connectors,
         env: discovery_env(),
         config: WorkerConfig::default(),
-        on_change: Box::new(move |report| {
-            let payload = DataChanged {
-                inserted: report.inserted,
-                updated: report.updated,
-            };
-            // Nothing is listening before the dashboard loads; the next scan re-emits.
-            let _ = emitter.emit(DATA_CHANGED, payload);
-        }),
+        on_change: notify_changes(app),
     };
     let ingest = veyra_ingest::spawn(worker).map_err(|e| format!("cannot start ingestion: {e}"))?;
     Ok(DataServices {
@@ -112,6 +130,7 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
         connectors: descriptors,
         names,
         ingest: Box::new(ingest),
+        telemetry: Box::new(telemetry),
         files: Box::new(DialogSaver { app: app.clone() }),
         control: Box::new(Restart(app.clone())),
     })

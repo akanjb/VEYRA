@@ -14,11 +14,16 @@ use std::path::{Path, PathBuf};
 use veyra_domain::connector::{Capabilities, Reading, Support};
 use veyra_domain::identity::{AppId, ConnectorId};
 use veyra_domain::source::{
-    ConnectorDescriptor, DiscoveryEnv, FileContext, ParseIssue, ParsedRecords, SourceConnector,
+    ConnectorDescriptor, DiscoveryEnv, FileContext, ParseIssue, ParsedRecords, RawUsage,
+    SourceConnector,
 };
+use veyra_domain::telemetry::TelemetryRecord;
 
 use crate::lines;
 use crate::shared::{BestByKey, plain_components};
+
+/// The `service.name` of Claude Code's OpenTelemetry resources.
+const TELEMETRY_SERVICE: &str = "claude-code";
 
 /// Bump when parsing changes so files are re-read with the new rules.
 const PARSER_VERSION: u32 = 1;
@@ -123,6 +128,14 @@ impl SourceConnector for ClaudeCode {
         }
         out.usage = best.into_records();
         out
+    }
+
+    fn telemetry_service(&self) -> Option<&'static str> {
+        Some(TELEMETRY_SERVICE)
+    }
+
+    fn telemetry_usage(&self, record: &TelemetryRecord) -> Option<RawUsage> {
+        convert::telemetry_usage(record)
     }
 }
 

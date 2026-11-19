@@ -12,6 +12,7 @@ use veyra_app::dto::{
 use veyra_app::{Api, ApiError, AppControl, AppMetadata, DataServices, DisplayNames, FileSaver};
 use veyra_domain::pricing::PriceCatalog;
 use veyra_domain::source::IngestControl;
+use veyra_domain::telemetry::{ReceiverStatus, TelemetryReceiver};
 use veyra_store::{Storage, Store};
 
 use crate::timing::{Budget, timed};
@@ -27,6 +28,16 @@ struct NoIngest;
 impl IngestControl for NoIngest {
     fn request_scan(&self) {}
     fn sources_changed(&self) {}
+}
+
+/// No receiver runs while pages are timed.
+struct NoReceiver;
+
+impl TelemetryReceiver for NoReceiver {
+    fn set_enabled(&self, _: bool) {}
+    fn status(&self) -> ReceiverStatus {
+        ReceiverStatus::default()
+    }
 }
 
 /// Nothing restarts while pages are timed.
@@ -69,6 +80,7 @@ fn api(store: &Arc<Store>, catalog: PriceCatalog, names: DisplayNames) -> Api {
         connectors: Vec::new(),
         names,
         ingest: Box::new(NoIngest),
+        telemetry: Box::new(NoReceiver),
         files: Box::new(NoFiles),
         control: Box::new(NoRestart),
     }));

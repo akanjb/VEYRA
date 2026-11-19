@@ -47,6 +47,18 @@ impl SettingsRepository for Store {
         transaction.commit().map_err(StoreError::from)?;
         Ok(value)
     }
+
+    fn set_setting(&self, key: &str, value: &str) -> Result<(), PortError> {
+        self.lock_writer()?
+            .prepare_cached(
+                "INSERT INTO settings (key, value_json, updated_at) VALUES (?1, ?2, ?3) \
+                 ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json, \
+                 updated_at = excluded.updated_at",
+            )
+            .and_then(|mut upsert| upsert.execute(params![key, value, UtcMillis::now().0]))
+            .map_err(StoreError::from)?;
+        Ok(())
+    }
 }
 
 impl AuditLog for Store {

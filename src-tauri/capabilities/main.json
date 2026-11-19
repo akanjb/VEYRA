@@ -8,6 +8,8 @@
     "allow-list-sources",
     "allow-set-source-enabled",
     "allow-request-rescan",
+    "allow-get-telemetry-receiver",
+    "allow-set-telemetry-receiver",
     "allow-get-overview",
     "allow-get-usage",
     "allow-get-cost",

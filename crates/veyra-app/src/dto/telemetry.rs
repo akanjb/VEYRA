@@ -1,0 +1,33 @@
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+/// Request for [`crate::Api::get_telemetry_receiver`]. Intentionally empty.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TelemetryReceiverRequest {}
+
+/// Request for [`crate::Api::set_telemetry_receiver`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SetTelemetryReceiverRequest {
+    pub enabled: bool,
+}
+
+/// The local OpenTelemetry receiver (ADR-038).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TelemetryReceiverInfo {
+    /// Whether the user turned it on (kept across restarts).
+    pub enabled: bool,
+    /// Whether it is accepting connections now.
+    pub listening: bool,
+    /// The OTLP/HTTP base address tools send to.
+    pub endpoint: String,
+    /// Why it is not listening although turned on, e.g. the port is taken.
+    pub error: Option<String>,
+    /// Usage records received since Veyra started.
+    #[ts(type = "number")]
+    pub records: u64,
+    /// UTC epoch milliseconds.
+    #[ts(type = "number | null")]
+    pub last_received_at: Option<i64>,
+}

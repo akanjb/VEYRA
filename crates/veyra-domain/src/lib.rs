@@ -16,6 +16,7 @@ pub mod project;
 pub mod settings;
 pub mod source;
 pub mod storage;
+pub mod telemetry;
 pub mod time;
 pub mod tokens;
 pub mod tooling;

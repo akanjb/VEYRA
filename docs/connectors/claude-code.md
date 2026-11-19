@@ -91,6 +91,31 @@ Lines whose model is `<synthetic>` are local placeholders, not API calls, and ar
 
 Each observation carries a **precedence**: a high bit when the line has a `stop_reason`, plus the token total. Within a parse, the connector keeps the highest-precedence copy of each request and merges the tool calls of all copies. Across chunks and files, the store applies the same rule: a lower precedence never replaces a higher one, and on a tie the earlier timestamp wins. The result is therefore **independent of reading order**, which the store tests prove by writing observations in every order.
 
+## OpenTelemetry events
+
+With the local receiver turned on (ADR-038), Claude Code can push its documented `claude_code.api_request` log event instead of, or in addition to, the log files being read. Set these where Claude Code runs:
+
+```text
+CLAUDE_CODE_ENABLE_TELEMETRY=1
+OTEL_LOGS_EXPORTER=otlp
+OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/json
+OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://127.0.0.1:4318/v1/logs
+```
+
+| Attribute | Use |
+|---|---|
+| `request_id` | Natural key `anthropic:<request_id>`, the same as the log line |
+| `event.timestamp` | Time of the request (the record time when absent) |
+| `model` | Model, resolved through the registry |
+| `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens` | Token counts, with the same meaning as the API usage block |
+| `cache_creation_5m_tokens`, `cache_creation_1h_tokens` | Cache-write TTL split; kept only when it adds up to the total |
+| `speed` | `fast` prices at the Fast tier |
+| `session.id`, `agent_id` | Session, and subagent session under it |
+| `app.entrypoint` | Interface, when Claude Code is set to include it |
+| `service.version` | Claude Code version |
+
+Every other attribute is ignored, including `cost_usd` (Claude Code's own estimate), account and email identifiers, and any prompt or tool content. The event has no stop reason, so it ranks below a completed log line: whichever arrives first, the stored request ends up as the log line describes it.
+
 ## Diagnostics
 
 Problems are counted per file and kind in `ingest_issues`, with the byte offset of the first occurrence. Content is never recorded.

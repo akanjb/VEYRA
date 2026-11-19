@@ -13,6 +13,7 @@ use veyra_domain::project::ProjectRepository;
 use veyra_domain::settings::SettingsRepository;
 use veyra_domain::source::{ConnectorDescriptor, IngestControl, SourceRepository};
 use veyra_domain::storage::{BackupError, StorageRepository};
+use veyra_domain::telemetry::TelemetryReceiver;
 use veyra_domain::time::UtcMillis;
 
 use crate::dto::{
@@ -25,7 +26,8 @@ use crate::dto::{
     ProjectRequest, ProjectsChanged, ProjectsRequest, RenameProjectRequest, RescanAccepted,
     RescanRequest, RestorePreview, RestoreRequest, RestoreScheduled, SaveBillingEntryRequest,
     SaveBudgetRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
-    SetSourceEnabledRequest, SourceList, SourceSummary, StorageOverview, StorageRequest, Tools,
+    SetSourceEnabledRequest, SetTelemetryReceiverRequest, SourceList, SourceSummary,
+    StorageOverview, StorageRequest, TelemetryReceiverInfo, TelemetryReceiverRequest, Tools,
     ToolsRequest, UnmergeProjectRequest, Usage, UsageRequest, WhatIf, WhatIfRequest,
 };
 use crate::error::ApiError;
@@ -85,6 +87,8 @@ pub struct DataServices {
     /// Display names of providers, models and applications.
     pub names: DisplayNames,
     pub ingest: Box<dyn IngestControl>,
+    /// The local OpenTelemetry receiver (ADR-038).
+    pub telemetry: Box<dyn TelemetryReceiver>,
     /// Saves reports where the user chooses.
     pub files: Box<dyn FileSaver>,
     /// Restarts Veyra, to apply a restored backup.
@@ -121,9 +125,14 @@ impl Api {
     /// Attaches the data services, or records why they failed to start. Only the first
     /// call has an effect; returns whether it was this one.
     pub fn attach(&self, services: Result<DataServices, String>) -> bool {
-        self.data
+        let attached = self
+            .data
             .set(services.map_err(|reason| ApiError::internal(&reason)))
-            .is_ok()
+            .is_ok();
+        if attached && let Ok(data) = self.data() {
+            views::telemetry::restore(data);
+        }
+        attached
     }
 
     fn data(&self) -> Result<&DataServices, ApiError> {
@@ -182,6 +191,29 @@ impl Api {
             .into_iter()
             .find(|s| s.id == record.id)
             .unwrap_or_else(|| views::sources::summary(data, &record, None, 0)))
+    }
+
+    /// The local OpenTelemetry receiver: whether it is on, and what it has received.
+    ///
+    /// # Errors
+    /// [`ApiError::Busy`] while starting; [`ApiError::Internal`] on database failure.
+    pub fn get_telemetry_receiver(
+        &self,
+        _request: TelemetryReceiverRequest,
+    ) -> Result<TelemetryReceiverInfo, ApiError> {
+        views::telemetry::info(self.data()?)
+    }
+
+    /// Turns the local OpenTelemetry receiver on or off and keeps the choice. A port
+    /// that cannot be opened is reported in the result, not as an error.
+    ///
+    /// # Errors
+    /// [`ApiError::Busy`] while starting; [`ApiError::Internal`] on database failure.
+    pub fn set_telemetry_receiver(
+        &self,
+        request: SetTelemetryReceiverRequest,
+    ) -> Result<TelemetryReceiverInfo, ApiError> {
+        views::telemetry::set(self.data()?, request.enabled)
     }
 
     /// Queues a scan of every enabled source; changes arrive as `data-changed` events.
@@ -692,9 +724,10 @@ fn row_count(table: &export::Table) -> u32 {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use veyra_domain::source::IngestControl;
+    use veyra_domain::telemetry::{ReceiverStatus, TelemetryReceiver};
     use veyra_domain::time::UtcMillis;
     use veyra_store::Store;
 
@@ -703,7 +736,7 @@ mod tests {
     use crate::dto::{
         AppInfoRequest, BuildProfile, Comparison, ListSourcesRequest, OverviewRequest,
         RescanRequest, Scope, ScopeFilters, SessionRequest, SessionSort, SessionsRequest,
-        SetSourceEnabledRequest,
+        SetSourceEnabledRequest, SetTelemetryReceiverRequest, TelemetryReceiverRequest,
     };
 
     fn api() -> Api {
@@ -718,6 +751,22 @@ mod tests {
     struct Calls {
         scans: AtomicUsize,
         changes: AtomicUsize,
+        receiver_on: AtomicBool,
+    }
+
+    struct FakeReceiver(Arc<Calls>);
+
+    impl TelemetryReceiver for FakeReceiver {
+        fn set_enabled(&self, enabled: bool) {
+            self.0.receiver_on.store(enabled, Ordering::Relaxed);
+        }
+        fn status(&self) -> ReceiverStatus {
+            ReceiverStatus {
+                listening: self.0.receiver_on.load(Ordering::Relaxed),
+                endpoint: "http://127.0.0.1:4318".to_owned(),
+                ..ReceiverStatus::default()
+            }
+        }
     }
 
     struct FakeIngest(Arc<Calls>);
@@ -780,6 +829,7 @@ mod tests {
                     .collect(),
                 names: DisplayNames::default(),
                 ingest: Box::new(FakeIngest(Arc::clone(&calls))),
+                telemetry: Box::new(FakeReceiver(Arc::clone(&calls))),
                 files: Box::new(NoFiles),
                 control: Box::new(NoRestart),
             }))
@@ -894,6 +944,36 @@ mod tests {
 
         api.request_rescan(RescanRequest {}).unwrap();
         assert_eq!(calls.scans.load(Ordering::Relaxed), 1);
+        drop((api, store));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_receiver_switch_is_kept_and_applied() {
+        let (api, store, calls, dir) = attached("receiver");
+        let off = api
+            .get_telemetry_receiver(TelemetryReceiverRequest {})
+            .unwrap();
+        assert!(
+            !off.enabled && !off.listening,
+            "off until the user turns it on"
+        );
+
+        let on = api
+            .set_telemetry_receiver(SetTelemetryReceiverRequest { enabled: true })
+            .unwrap();
+        assert!(on.enabled && on.listening);
+        assert_eq!(on.endpoint, "http://127.0.0.1:4318");
+
+        // At the next launch the kept choice starts it again.
+        calls.receiver_on.store(false, Ordering::Relaxed);
+        crate::views::telemetry::restore(api.data().unwrap());
+        assert!(calls.receiver_on.load(Ordering::Relaxed));
+
+        let off = api
+            .set_telemetry_receiver(SetTelemetryReceiverRequest { enabled: false })
+            .unwrap();
+        assert!(!off.enabled && !off.listening);
         drop((api, store));
         let _ = std::fs::remove_dir_all(dir);
     }
