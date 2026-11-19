@@ -166,6 +166,7 @@ fn stores_pushed_usage_once_per_request() {
     assert_eq!(totals.events_unpriced, 0);
 
     let status = fixture.receiver.status();
+    assert_eq!(status.exports, 2);
     assert_eq!(status.records, 2);
     assert!(status.last_received_at.is_some());
     assert_eq!(
@@ -194,7 +195,8 @@ fn ignores_records_of_unknown_tools_and_events() {
     assert_eq!(fixture.post(&other_tool), 200);
     assert_eq!(fixture.post(&other_event), 200);
     assert_eq!(fixture.totals().events, 0);
-    assert_eq!(fixture.receiver.status().records, 0);
+    let status = fixture.receiver.status();
+    assert_eq!((status.exports, status.records), (2, 0));
 }
 
 #[test]
@@ -232,6 +234,18 @@ fn refuses_anything_but_local_json_log_exports() {
     }
     assert_eq!(fixture.post("not json"), 400);
     assert_eq!(fixture.totals().events, 0);
+    let status = fixture.receiver.status();
+    assert_eq!(status.exports, 0);
+    assert_eq!(
+        status.refusal.as_deref(),
+        Some("the body is not an OTLP JSON log export (HTTP 400)")
+    );
+    assert_eq!(fixture.post(&export("req_X")), 200);
+    assert_eq!(
+        fixture.receiver.status().refusal,
+        None,
+        "cleared once one is accepted"
+    );
 }
 
 #[test]

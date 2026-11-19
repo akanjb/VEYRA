@@ -45,9 +45,14 @@ pub struct ReceiverStatus {
     pub endpoint: String,
     /// Why it could not start, e.g. the port is taken.
     pub error: Option<String>,
+    /// Exports accepted since Veyra started, whether or not they carried usage.
+    pub exports: u64,
     /// Usage records received since Veyra started.
     pub records: u64,
     pub last_received_at: Option<UtcMillis>,
+    /// Why the latest export was refused, until one is accepted, e.g.
+    /// `send OTLP as http/json (HTTP 415)`.
+    pub refusal: Option<String>,
 }
 
 /// Control of the local receiver (implemented by the ingest layer).

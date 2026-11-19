@@ -20,7 +20,7 @@ function statusText(info: TelemetryReceiverInfo): string {
   if (!info.listening) return "Off. No port is open.";
   const last =
     info.lastReceivedAt === null ? "nothing yet" : `last at ${fmt.dateTime(info.lastReceivedAt)}`;
-  return `Listening on ${info.endpoint}: ${fmt.integer(info.records)} requests received since Veyra started, ${last}.`;
+  return `Listening on ${info.endpoint}: ${fmt.integer(info.exports)} exports and ${fmt.integer(info.records)} requests received since Veyra started, ${last}.`;
 }
 
 function Setup({ endpoint }: { endpoint: string }) {
@@ -75,6 +75,11 @@ export function ReceiverCard() {
         >
           {statusText(info)}
         </p>
+        {info.listening && info.lastRefusal !== null ? (
+          <p className="text-xs text-warning">
+            The latest export was refused: {info.lastRefusal}. Check the settings below.
+          </p>
+        ) : null}
         <FormError error={toggle.error} />
         {info.listening ? <Setup endpoint={info.endpoint} /> : null}
       </div>

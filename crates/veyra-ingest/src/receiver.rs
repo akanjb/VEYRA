@@ -62,8 +62,10 @@ struct Shared {
 #[derive(Default)]
 struct Stats {
     error: Option<String>,
+    exports: u64,
     records: u64,
     last_received_at: Option<UtcMillis>,
+    refusal: Option<String>,
 }
 
 struct Running {
@@ -153,8 +155,10 @@ impl TelemetryReceiver for Receiver {
             listening: running.is_some(),
             endpoint: format!("http://127.0.0.1:{port}"),
             error: stats.error.clone(),
+            exports: stats.exports,
             records: stats.records,
             last_received_at: stats.last_received_at,
+            refusal: stats.refusal.clone(),
         }
     }
 }
@@ -184,6 +188,7 @@ fn handle(mut stream: TcpStream, shared: &Shared, port: u16) {
         Ok(request) => respond(&request, shared, port),
         Err(status) => status,
     };
+    shared.note(status);
     let _ = write_response(&mut stream, status);
 }
 
@@ -238,6 +243,18 @@ fn check(request: &Request, port: u16) -> Result<(), Status> {
 }
 
 impl Shared {
+    /// Counts an accepted export, or keeps why one was refused so the user can fix
+    /// the tool's settings.
+    fn note(&self, answer: Status) {
+        let mut stats = lock(&self.stats);
+        if answer == Status::OK {
+            stats.exports += 1;
+            stats.refusal = None;
+        } else {
+            stats.refusal = Some(format!("{} (HTTP {})", answer.message, answer.code));
+        }
+    }
+
     /// Normalises, prices and stores the usage in `records`.
     fn ingest(&self, records: &[TelemetryRecord]) -> Result<(), StoreError> {
         let events: Vec<PricedEvent> = records

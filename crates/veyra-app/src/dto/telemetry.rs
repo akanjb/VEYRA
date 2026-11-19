@@ -24,10 +24,15 @@ pub struct TelemetryReceiverInfo {
     pub endpoint: String,
     /// Why it is not listening although turned on, e.g. the port is taken.
     pub error: Option<String>,
+    /// Exports accepted since Veyra started, whether or not they carried usage.
+    #[ts(type = "number")]
+    pub exports: u64,
     /// Usage records received since Veyra started.
     #[ts(type = "number")]
     pub records: u64,
     /// UTC epoch milliseconds.
     #[ts(type = "number | null")]
     pub last_received_at: Option<i64>,
+    /// Why the latest export was refused, until one is accepted.
+    pub last_refusal: Option<String>,
 }

@@ -25,8 +25,10 @@ pub fn info(data: &DataServices) -> Result<TelemetryReceiverInfo, ApiError> {
         listening: status.listening,
         endpoint: status.endpoint,
         error: status.error,
+        exports: status.exports,
         records: status.records,
         last_received_at: status.last_received_at.map(|at| at.0),
+        last_refusal: status.refusal,
     })
 }
 

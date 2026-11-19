@@ -232,8 +232,10 @@ function telemetryHandlers(): Pick<Handlers, "get_telemetry_receiver" | "set_tel
     listening: enabled,
     endpoint: "http://127.0.0.1:4318",
     error: null,
+    exports: 0,
     records: 0,
     lastReceivedAt: null,
+    lastRefusal: null,
   });
   return {
     get_telemetry_receiver: info,

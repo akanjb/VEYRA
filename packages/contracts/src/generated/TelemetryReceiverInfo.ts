@@ -21,10 +21,18 @@ endpoint: string,
  */
 error: string | null, 
 /**
+ * Exports accepted since Veyra started, whether or not they carried usage.
+ */
+exports: number, 
+/**
  * Usage records received since Veyra started.
  */
 records: number, 
 /**
  * UTC epoch milliseconds.
  */
-lastReceivedAt: number | null, };
+lastReceivedAt: number | null, 
+/**
+ * Why the latest export was refused, until one is accepted.
+ */
+lastRefusal: string | null, };
