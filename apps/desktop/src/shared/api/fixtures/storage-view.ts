@@ -2,7 +2,13 @@
  * Storage over the synthetic dataset, shaped like the core's `get_storage` and backup
  * commands. Sizes are illustrative; the core measures the real database.
  */
-import type { BackupInfo, RestorePreview, StorageOverview } from "@veyra/contracts";
+import type {
+  BackupInfo,
+  DeleteDataRequest,
+  DeletePreview,
+  RestorePreview,
+  StorageOverview,
+} from "@veyra/contracts";
 
 import { ApiCallError } from "../api-errors";
 import { localDay, type Flat } from "./aggregate";
@@ -64,4 +70,25 @@ export class FixtureStorage {
       currentEvents: flat.length,
     };
   }
+}
+
+/** The fixture events a deletion request covers (every fixture event is Claude Code's). */
+export function deletionMatches(flat: readonly Flat[], request: DeleteDataRequest): Flat[] {
+  if (request.connectorId !== null && request.connectorId !== "claude-code") return [];
+  return flat.filter(({ event }) => {
+    const day = localDay(event.at, request.timeZone);
+    return (
+      (request.start === null || day >= request.start) &&
+      (request.end === null || day <= request.end)
+    );
+  });
+}
+
+export function deletePreview(matched: readonly Flat[]): DeletePreview {
+  const times = matched.map((f) => f.event.at);
+  return {
+    events: times.length,
+    firstEventAt: times.length === 0 ? null : Math.min(...times),
+    lastEventAt: times.length === 0 ? null : Math.max(...times),
+  };
 }

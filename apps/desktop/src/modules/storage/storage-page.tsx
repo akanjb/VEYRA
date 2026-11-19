@@ -8,6 +8,7 @@ import { systemTimeZone } from "@/shared/filters";
 import { fmt } from "@/shared/format";
 import { Button, Card, ErrorState, FormError, Skeleton, Stat } from "@/shared/ui";
 
+import { DeleteData } from "./delete-data";
 import { RestoreDialog } from "./restore-dialog";
 
 function Footprint({ storage }: { storage: StorageOverview }) {
@@ -99,6 +100,7 @@ export function StoragePage() {
     <div className="grid max-w-5xl gap-4">
       <Footprint storage={data} />
       <Backups storage={data} />
+      <DeleteData />
       <div className="grid gap-4 xl:grid-cols-2">
         <Card title="Events per month">
           <DataTable<MonthEvents>

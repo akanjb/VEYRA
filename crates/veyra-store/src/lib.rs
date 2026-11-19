@@ -7,6 +7,7 @@
 
 mod billing;
 mod connection;
+mod deletion;
 mod error;
 mod fingerprint;
 mod mapping;

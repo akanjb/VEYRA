@@ -98,3 +98,41 @@ pub struct RestorePreview {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RestoreScheduled {}
+
+/// Request for [`crate::Api::preview_delete`] and [`crate::Api::delete_data`]: which
+/// stored usage to delete. Every part left out widens the scope; all left out means
+/// everything Veyra stored.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteDataRequest {
+    /// IANA time zone the days are in.
+    pub time_zone: String,
+    /// First local day (`YYYY-MM-DD`), inclusive.
+    pub start: Option<String>,
+    /// Last local day (`YYYY-MM-DD`), inclusive.
+    pub end: Option<String>,
+    /// Only usage read by this connector.
+    pub connector_id: Option<String>,
+}
+
+/// The stored usage a deletion covers, before anything changes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DeletePreview {
+    #[ts(type = "number")]
+    pub events: u64,
+    #[ts(type = "number | null")]
+    pub first_event_at: Option<i64>,
+    #[ts(type = "number | null")]
+    pub last_event_at: Option<i64>,
+}
+
+/// Stored usage was deleted after a backup was taken.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DataDeleted {
+    #[ts(type = "number")]
+    pub events: u64,
+    /// The backup taken just before, which undoes the deletion when restored.
+    pub backup: BackupInfo,
+}

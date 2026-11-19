@@ -22,6 +22,8 @@ pub enum AuditAction {
     Export,
     /// A backup was set to replace the database at the next start.
     Restore,
+    /// Stored usage was deleted from Veyra.
+    Delete,
 }
 
 impl AuditAction {
@@ -31,6 +33,7 @@ impl AuditAction {
         match self {
             Self::Export => "export",
             Self::Restore => "restore",
+            Self::Delete => "delete",
         }
     }
 
@@ -40,6 +43,7 @@ impl AuditAction {
         match name {
             "export" => Some(Self::Export),
             "restore" => Some(Self::Restore),
+            "delete" => Some(Self::Delete),
             _ => None,
         }
     }

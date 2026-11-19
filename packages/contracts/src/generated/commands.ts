@@ -16,8 +16,11 @@ import type { CostAssumptions } from "./CostAssumptions";
 import type { CostAssumptionsRequest } from "./CostAssumptionsRequest";
 import type { CostRequest } from "./CostRequest";
 import type { CreateBackupRequest } from "./CreateBackupRequest";
+import type { DataDeleted } from "./DataDeleted";
 import type { DeleteBillingEntryRequest } from "./DeleteBillingEntryRequest";
 import type { DeleteBudgetRequest } from "./DeleteBudgetRequest";
+import type { DeleteDataRequest } from "./DeleteDataRequest";
+import type { DeletePreview } from "./DeletePreview";
 import type { ExportPreview } from "./ExportPreview";
 import type { ExportRequest } from "./ExportRequest";
 import type { ExportSaved } from "./ExportSaved";
@@ -89,6 +92,8 @@ export interface CommandMap {
   create_backup: { request: CreateBackupRequest; response: BackupInfo };
   preview_restore: { request: RestoreRequest; response: RestorePreview };
   restore_backup: { request: RestoreRequest; response: RestoreScheduled };
+  preview_delete: { request: DeleteDataRequest; response: DeletePreview };
+  delete_data: { request: DeleteDataRequest; response: DataDeleted };
   list_sessions: { request: SessionsRequest; response: SessionList };
   get_session: { request: SessionRequest; response: SessionDetail };
 }
@@ -125,6 +130,8 @@ export const COMMAND_NAMES = [
   "create_backup",
   "preview_restore",
   "restore_backup",
+  "preview_delete",
+  "delete_data",
   "list_sessions",
   "get_session",
 ] as const satisfies readonly CommandName[];

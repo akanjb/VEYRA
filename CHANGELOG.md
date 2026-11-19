@@ -5,6 +5,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Delete stored usage** (ADR-037). A card on the Storage page and commands `preview_delete` and `delete_data`: choose an application and, optionally, the first and last day; see how many events match and their dates; confirm. Veyra takes a backup first, deletes the events with their costs and tool calls, rebuilds the summaries of the time they covered in the same transaction, and records the deletion in the audit log. The tools' own files are never touched.
 - **What if another model did the work** (ADR-036). A card on the Cost page and command `get_what_if`: pick any model with a current published price to see what the period's tokens would cost on it, per model used and in total, beside their API-equivalent cost. Models with unpriced requests are left out of both sides, and anything the pricing had to assume is listed.
 - **Tools & Agents page** (ADR-034).
   - Command `get_tools`: tool calls, calls per request, failure rate, MCP share and the share made by subagents, each compared with the previous period; calls per day by kind; the most used tools; MCP servers with the tools used and their failure rate; and the tools that fail most.

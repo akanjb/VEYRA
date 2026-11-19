@@ -42,3 +42,4 @@ Each record documents one significant decision: its context, the decision itself
 | [034](0034-tools-and-agents-page.md) | Tools & Agents page and the tool rollup | Accepted |
 | [035](0035-source-available-licence.md) | Source-available licence | Accepted |
 | [036](0036-what-if-repricing.md) | Pricing a period on another model | Accepted |
+| [037](0037-deleting-stored-usage.md) | Deleting stored usage | Accepted |

@@ -13,7 +13,7 @@ use std::sync::Arc;
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use veyra_domain::source::PortError;
 use veyra_domain::storage::{
-    Backup, BackupContents, BackupError, Footprint, StorageRepository, TableSize,
+    Backup, BackupContents, BackupError, DeletionScope, Footprint, StorageRepository, TableSize,
 };
 use veyra_domain::time::UtcMillis;
 
@@ -225,6 +225,14 @@ impl StorageRepository for Storage {
         fs::copy(&path, &partial)?;
         fs::rename(&partial, &target)?;
         Ok(())
+    }
+
+    fn deletion_preview(&self, scope: &DeletionScope) -> Result<BackupContents, PortError> {
+        self.store.deletion_preview(scope)
+    }
+
+    fn delete_events(&self, scope: &DeletionScope) -> Result<u64, PortError> {
+        self.store.delete_events(scope)
     }
 }
 

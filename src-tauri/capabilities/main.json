@@ -33,6 +33,8 @@
     "allow-create-backup",
     "allow-preview-restore",
     "allow-restore-backup",
+    "allow-preview-delete",
+    "allow-delete-data",
     "allow-list-sessions",
     "allow-get-session",
     "core:event:allow-listen",

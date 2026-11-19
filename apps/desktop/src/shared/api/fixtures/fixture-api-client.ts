@@ -21,7 +21,7 @@ import { FixtureBilling } from "./billing-view";
 import { cache } from "./cache-view";
 import { costView } from "./cost-view";
 import { exportPreview } from "./export-view";
-import { FixtureStorage } from "./storage-view";
+import { FixtureStorage, deletePreview, deletionMatches } from "./storage-view";
 import { models } from "./models-view";
 import { costAssumptions } from "./pricing-view";
 import { FixtureProjects } from "./projects-view";
@@ -58,6 +58,8 @@ class FixtureState {
   private enabled: boolean;
   private consentedAt: number | null;
   private readonly listeners = new Map<string, Set<(payload: never) => void>>();
+  /** Events deleted from Veyra in this session. */
+  private readonly deleted = new WeakSet<object>();
 
   constructor(private readonly options: Required<FixtureOptions>) {
     this.all = generateSessions(options.now);
@@ -79,8 +81,15 @@ class FixtureState {
     return this.all.flatMap((original) => {
       const projectId = this.projects.effective(original.projectId);
       const session = projectId === original.projectId ? original : { ...original, projectId };
-      return session.events.map((event) => ({ session, event }));
+      return session.events
+        .filter((event) => !this.deleted.has(event))
+        .map((event) => ({ session, event }));
     });
+  }
+
+  /** Forgets events, as deleting them from the database would. */
+  delete(events: readonly Flat[]): void {
+    for (const { event } of events) this.deleted.add(event);
   }
 
   source(): SourceSummary {
@@ -187,7 +196,13 @@ function exportHandlers(state: FixtureState): Pick<Handlers, "preview_export" | 
   };
 }
 
-type StorageCommand = "get_storage" | "create_backup" | "preview_restore" | "restore_backup";
+type StorageCommand =
+  | "get_storage"
+  | "create_backup"
+  | "preview_restore"
+  | "restore_backup"
+  | "preview_delete"
+  | "delete_data";
 
 function storageHandlers(state: FixtureState): Pick<Handlers, StorageCommand> {
   return {
@@ -198,6 +213,13 @@ function storageHandlers(state: FixtureState): Pick<Handlers, StorageCommand> {
     restore_backup: (r) => {
       state.storage.preview(state.flat(), r.name);
       return {};
+    },
+    preview_delete: (r) => deletePreview(deletionMatches(state.flat(), r)),
+    delete_data: (r) => {
+      const backup = state.storage.create(state.flat(), Date.now());
+      const matched = deletionMatches(state.flat(), r);
+      state.delete(matched);
+      return { events: matched.length, backup };
     },
   };
 }

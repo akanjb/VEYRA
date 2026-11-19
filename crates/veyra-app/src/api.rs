@@ -19,14 +19,14 @@ use crate::dto::{
     Activity, ActivityRequest, AppInfo, AppInfoRequest, BackupInfo, BillingChanged,
     BillingEntryInfo, BillingRequest, BillingSettings, BudgetInfo, BuildProfile, Cache,
     CacheRequest, Cost, CostAssumptions, CostAssumptionsRequest, CostRequest, CreateBackupRequest,
-    DeleteBillingEntryRequest, DeleteBudgetRequest, ExportPreview, ExportRequest, ExportSaved,
-    ListSourcesRequest, MergeProjectRequest, Models, ModelsRequest, Overview, OverviewRequest,
-    ProjectDetail, ProjectInfo, ProjectList, ProjectRequest, ProjectsChanged, ProjectsRequest,
-    RenameProjectRequest, RescanAccepted, RescanRequest, RestorePreview, RestoreRequest,
-    RestoreScheduled, SaveBillingEntryRequest, SaveBudgetRequest, SessionDetail, SessionList,
-    SessionRequest, SessionsRequest, SetSourceEnabledRequest, SourceList, SourceSummary,
-    StorageOverview, StorageRequest, Tools, ToolsRequest, UnmergeProjectRequest, Usage,
-    UsageRequest, WhatIf, WhatIfRequest,
+    DataDeleted, DeleteBillingEntryRequest, DeleteBudgetRequest, DeleteDataRequest, DeletePreview,
+    ExportPreview, ExportRequest, ExportSaved, ListSourcesRequest, MergeProjectRequest, Models,
+    ModelsRequest, Overview, OverviewRequest, ProjectDetail, ProjectInfo, ProjectList,
+    ProjectRequest, ProjectsChanged, ProjectsRequest, RenameProjectRequest, RescanAccepted,
+    RescanRequest, RestorePreview, RestoreRequest, RestoreScheduled, SaveBillingEntryRequest,
+    SaveBudgetRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
+    SetSourceEnabledRequest, SourceList, SourceSummary, StorageOverview, StorageRequest, Tools,
+    ToolsRequest, UnmergeProjectRequest, Usage, UsageRequest, WhatIf, WhatIfRequest,
 };
 use crate::error::ApiError;
 use crate::export::{self, FileSaver};
@@ -621,6 +621,54 @@ impl Api {
             .map_err(|e| ApiError::internal(&e))?;
         data.control.restart();
         Ok(RestoreScheduled {})
+    }
+
+    /// The stored usage a deletion would remove, before anything changes.
+    ///
+    /// # Errors
+    /// [`ApiError::Validation`] for an unknown time zone or connector, a malformed day or
+    /// a last day before the first; [`ApiError::Busy`] while starting;
+    /// [`ApiError::Internal`] on database failure.
+    pub fn preview_delete(&self, request: DeleteDataRequest) -> Result<DeletePreview, ApiError> {
+        let data = self.data()?;
+        let scope = views::storage::deletion_scope(data, request)?;
+        let held = data
+            .storage
+            .deletion_preview(&scope)
+            .map_err(|e| ApiError::internal(&e))?;
+        Ok(views::storage::delete_preview(&held))
+    }
+
+    /// Backs up the database, then deletes the stored usage the request covers and records
+    /// the deletion in the audit log (ADR-037). The tools' own files are never touched.
+    ///
+    /// # Errors
+    /// As [`Self::preview_delete`]; [`ApiError::Internal`] when the backup or the deletion
+    /// fails, in which case nothing is deleted.
+    pub fn delete_data(&self, request: DeleteDataRequest) -> Result<DataDeleted, ApiError> {
+        let data = self.data()?;
+        let scope = views::storage::deletion_scope(data, request)?;
+        let now = UtcMillis::now();
+        let backup = data
+            .storage
+            .create_backup(now)
+            .map_err(|e| ApiError::internal(&e))?;
+        let events = data
+            .storage
+            .delete_events(&scope)
+            .map_err(|e| ApiError::internal(&e))?;
+        data.audit
+            .record(&AuditEntry {
+                at: now,
+                actor: AuditActor::User,
+                action: AuditAction::Delete,
+                detail: format!("{events} stored events deleted after a backup"),
+            })
+            .map_err(|e| ApiError::internal(&e))?;
+        Ok(DataDeleted {
+            events,
+            backup: views::storage::backup_info(backup),
+        })
     }
 }
 

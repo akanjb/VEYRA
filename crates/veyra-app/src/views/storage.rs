@@ -3,13 +3,16 @@
 use jiff::tz::TimeZone;
 use veyra_analytics::dimension::Filters;
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
-use veyra_domain::storage::{Backup, Footprint};
+use veyra_domain::storage::{Backup, BackupContents, DeletionScope, Footprint};
 use veyra_domain::time::UtcMillis;
 
 use super::{evaluated, internal, local_time};
 use crate::DataServices;
-use crate::dto::{BackupInfo, MonthEvents, StorageOverview, TableBytes};
+use crate::dto::{
+    BackupInfo, DeleteDataRequest, DeletePreview, MonthEvents, StorageOverview, TableBytes,
+};
 use crate::error::ApiError;
+use crate::scope::date;
 
 pub(crate) fn backup_info(backup: Backup) -> BackupInfo {
     BackupInfo {
@@ -86,4 +89,50 @@ pub(crate) fn overview(
         backups: backups.into_iter().map(backup_info).collect(),
         kept_backups: data.storage.kept_backups(),
     })
+}
+
+/// The stored events a deletion request covers: its local days as UTC bounds on bucket
+/// edges, and its connector.
+///
+/// # Errors
+/// [`ApiError::Validation`] for an unknown time zone or connector, a malformed day, or a
+/// last day before the first.
+pub(crate) fn deletion_scope(
+    data: &DataServices,
+    request: DeleteDataRequest,
+) -> Result<DeletionScope, ApiError> {
+    let invalid = |message: String| ApiError::Validation { message };
+    let zone = TimeZone::get(&request.time_zone)
+        .map_err(|_| invalid(format!("unknown time zone `{}`", request.time_zone)))?;
+    let start = request
+        .start
+        .as_deref()
+        .map(|d| date(d, "start"))
+        .transpose()?;
+    let end = request.end.as_deref().map(|d| date(d, "end")).transpose()?;
+    if let (Some(start), Some(end)) = (start, end)
+        && end < start
+    {
+        return Err(invalid("the last day is before the first".to_owned()));
+    }
+    let day = |date| Period::local_days(date, 1, &zone).map_err(|e| invalid(e.to_string()));
+    if let Some(connector) = &request.connector_id
+        && !data.connectors.iter().any(|c| c.id.as_str() == connector)
+    {
+        return Err(invalid(format!("unknown connector `{connector}`")));
+    }
+    Ok(DeletionScope {
+        from: start.map(day).transpose()?.map(|p| p.from()),
+        until: end.map(day).transpose()?.map(|p| p.until()),
+        connector: request.connector_id,
+    })
+}
+
+/// What a deletion covers, for the dashboard.
+pub(crate) fn delete_preview(held: &BackupContents) -> DeletePreview {
+    DeletePreview {
+        events: held.events,
+        first_event_at: held.first_event_at.map(|at| at.0),
+        last_event_at: held.last_event_at.map(|at| at.0),
+    }
 }

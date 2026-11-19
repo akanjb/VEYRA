@@ -32,7 +32,7 @@ fn validation(message: impl Into<String>) -> ApiError {
     }
 }
 
-fn date(value: &str, what: &str) -> Result<Date, ApiError> {
+pub(crate) fn date(value: &str, what: &str) -> Result<Date, ApiError> {
     value
         .parse::<Date>()
         .map_err(|_| validation(format!("{what} `{value}` is not a YYYY-MM-DD date")))

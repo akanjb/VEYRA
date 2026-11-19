@@ -32,12 +32,24 @@ pub struct Backup {
     pub bytes: u64,
 }
 
-/// What a backup holds, shown before restoring it.
+/// What a backup, or the events a deletion covers, holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackupContents {
     pub events: u64,
     pub first_event_at: Option<UtcMillis>,
     pub last_event_at: Option<UtcMillis>,
+}
+
+/// Which of Veyra's stored events to delete: those in a time range, of one application's
+/// connector, or both. Every bound left out widens the scope; all left out means every
+/// event. The tools' own files are never touched.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DeletionScope {
+    /// Inclusive; a multiple of 15 minutes, as every local midnight is.
+    pub from: Option<UtcMillis>,
+    /// Exclusive; a multiple of 15 minutes.
+    pub until: Option<UtcMillis>,
+    pub connector: Option<String>,
 }
 
 /// Why a backup cannot be used.
@@ -86,4 +98,17 @@ pub trait StorageRepository: Send + Sync {
     /// [`BackupError`] inside [`PortError`] for an unknown or unusable backup, or a
     /// failure to copy it.
     fn schedule_restore(&self, name: &str) -> Result<(), PortError>;
+
+    /// The stored events `scope` covers, before anything is deleted.
+    ///
+    /// # Errors
+    /// Returns [`PortError`] when the database cannot be read.
+    fn deletion_preview(&self, scope: &DeletionScope) -> Result<BackupContents, PortError>;
+
+    /// Deletes the stored events `scope` covers, with their costs and tool calls, and
+    /// rebuilds the summaries of the time they covered. Returns the events deleted.
+    ///
+    /// # Errors
+    /// Returns [`PortError`] when the database cannot be changed; nothing is deleted then.
+    fn delete_events(&self, scope: &DeletionScope) -> Result<u64, PortError>;
 }

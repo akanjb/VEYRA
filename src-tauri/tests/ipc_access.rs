@@ -79,6 +79,8 @@ fn valid_request(cmd: &str) -> Value {
             "format": "csv", "redaction": { "hashProjectNames": true, "dropPaths": true } }),
         "get_what_if" => json!({ "scope": scope, "model": null }),
         "get_storage" => json!({ "timeZone": "UTC" }),
+        "preview_delete" | "delete_data" => json!({ "timeZone": "UTC", "start": null,
+            "end": null, "connectorId": null }),
         "preview_restore" | "restore_backup" => json!({ "name": "veyra-1.db" }),
         "list_sessions" => {
             json!({ "scope": scope, "sort": "lastActive", "page": 0, "pageSize": 50 })

@@ -41,6 +41,8 @@ macro_rules! for_each_command {
             create_backup($crate::dto::CreateBackupRequest) -> $crate::dto::BackupInfo;
             preview_restore($crate::dto::RestoreRequest) -> $crate::dto::RestorePreview;
             restore_backup($crate::dto::RestoreRequest) -> $crate::dto::RestoreScheduled;
+            preview_delete($crate::dto::DeleteDataRequest) -> $crate::dto::DeletePreview;
+            delete_data($crate::dto::DeleteDataRequest) -> $crate::dto::DataDeleted;
             list_sessions($crate::dto::SessionsRequest) -> $crate::dto::SessionList;
             get_session($crate::dto::SessionRequest) -> $crate::dto::SessionDetail;
         }

@@ -58,8 +58,8 @@ pub use sources::{
     SetSourceEnabledRequest, SourceList, SourceSummary, SupportLevel,
 };
 pub use storage::{
-    BackupInfo, CreateBackupRequest, MonthEvents, RestorePreview, RestoreRequest, RestoreScheduled,
-    StorageOverview, StorageRequest, TableBytes,
+    BackupInfo, CreateBackupRequest, DataDeleted, DeleteDataRequest, DeletePreview, MonthEvents,
+    RestorePreview, RestoreRequest, RestoreScheduled, StorageOverview, StorageRequest, TableBytes,
 };
 pub use tools::{
     McpServerRow, ToolCallCounts, ToolKind, ToolKindRow, ToolRow, Tools, ToolsDay, ToolsKpis,
