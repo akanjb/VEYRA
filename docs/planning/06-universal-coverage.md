@@ -26,19 +26,20 @@ This document builds on the source-coverage matrix ([00-research.md §0.3](00-re
 | Anthropic | Claude Code (CLI, Desktop Code tab, IDE) | Local JSONL | Exact | **Automatic, shipped** |
 | Anthropic | Claude Code via OTel | Local OTLP receiver | Exact | **Integration, shipped** (ADR-038) |
 | Anthropic | Claude Code statusline quota | Statusline forwarder | Quota observed | Integration (M7) |
-| Anthropic | Claude API | Capture proxy (§3.2) or Admin usage/cost API | Exact / Provider-reported | Integration |
+| Anthropic | Claude API | Capture proxy (§3.2) or Admin usage/cost API | Exact / Provider-reported | **Capture proxy shipped** (ADR-039); Admin API: Integration |
 | Anthropic | Claude.ai web, desktop chat, mobile | Official data export (§3.3) | Messages exact; tokens Estimated | Integration (import) |
 | OpenAI | Codex CLI | Local JSONL | Exact | **Automatic, shipped** |
-| OpenAI | OpenAI API (any model, including future ones) | Capture proxy or organisation usage/costs API | Exact / Provider-reported | Integration |
+| OpenAI | OpenAI API (any model, including future ones) | Capture proxy or organisation usage/costs API | Exact / Provider-reported | **Capture proxy shipped** (ADR-039); usage API: Integration |
 | OpenAI | ChatGPT (all models and plans) | Official data export | Messages and model per message; tokens Estimated | Integration (import) |
 | Google | Gemini CLI | Local JSONL | Exact | **Automatic, shipped** |
-| Google | Gemini API | Capture proxy | Exact | Integration |
+| Google | Gemini API | Capture proxy | Exact | **Capture proxy shipped** (ADR-039) |
 | Google | Gemini app | Google Takeout (Gemini Apps activity) | Prompts only; tokens Estimated; model often absent | Integration (import, Partial) |
 | xAI | xAI API | Capture proxy (OpenAI-compatible) or Management API billing | Exact / Provider-reported | Integration |
 | xAI | Grok app | Data export **UNVERIFIED** | At best Estimated | To verify |
 | Any | OpenCode, Copilot CLI | Local SQLite / JSONL | Exact / Partial | **Automatic, shipped** |
 | Any | Tools emitting OTel GenAI spans (Copilot in VS Code, agent frameworks) | OTLP receiver | Exact where emitted | Integration (M7) |
-| Any | Ollama, LM Studio, OpenRouter, Groq, DeepSeek, Mistral, Together and any OpenAI-compatible endpoint | Capture proxy; OpenRouter also through its activity API | Exact | Integration |
+| Any | OpenRouter | Capture proxy; also its activity API | Exact | **Capture proxy shipped** (ADR-039) |
+| Any | Ollama, LM Studio, Groq, DeepSeek, Mistral, Together and any OpenAI-compatible endpoint | Capture proxy (one route entry each) | Exact | Integration |
 | — | Windsurf, Antigravity, Zed, Cursor (exact), live chat-app quotas | No local data and no official per-user channel | — | **Not reliably capturable**: shown as Unsupported with the reason |
 
 ## 3. Architecture

@@ -116,8 +116,15 @@ pub(crate) fn deletion_scope(
         return Err(invalid("the last day is before the first".to_owned()));
     }
     let day = |date| Period::local_days(date, 1, &zone).map_err(|e| invalid(e.to_string()));
+    let known = |connector: &str| {
+        data.connectors.iter().any(|c| c.id.as_str() == connector)
+            || data
+                .capture_routes
+                .iter()
+                .any(|r| r.descriptor().id.as_str() == connector)
+    };
     if let Some(connector) = &request.connector_id
-        && !data.connectors.iter().any(|c| c.id.as_str() == connector)
+        && !known(connector)
     {
         return Err(invalid(format!("unknown connector `{connector}`")));
     }

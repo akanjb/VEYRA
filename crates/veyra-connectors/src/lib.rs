@@ -4,6 +4,7 @@
 //! raw usage records. Connectors never read files, open databases or use the network;
 //! the ingest pipeline does that and hands them complete lines (ADR-023).
 
+pub mod capture;
 pub mod claude_code;
 pub mod codex;
 pub mod copilot_cli;

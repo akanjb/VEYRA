@@ -10,6 +10,8 @@
     "allow-request-rescan",
     "allow-get-telemetry-receiver",
     "allow-set-telemetry-receiver",
+    "allow-get-capture-proxy",
+    "allow-set-capture-proxy",
     "allow-get-overview",
     "allow-get-usage",
     "allow-get-cost",

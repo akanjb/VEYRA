@@ -11,8 +11,8 @@ use veyra_app::events::DATA_CHANGED;
 use veyra_app::{Api, AppControl, DataServices, DisplayNames};
 use veyra_domain::time::UtcMillis;
 use veyra_ingest::{
-    ChangeListener, DEFAULT_PORT, IngestWorker, Receiver, ReceiverParts, WorkerConfig,
-    discovery_env,
+    ChangeListener, DEFAULT_PORT, IngestWorker, PROXY_PORT, Proxy, ProxyParts, Receiver,
+    ReceiverParts, WorkerConfig, discovery_env,
 };
 use veyra_registry::Registry;
 use veyra_store::{Storage, Store};
@@ -93,10 +93,15 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
     let registry = Arc::new(Registry::bundled().map_err(|e| e.to_string())?);
     let connectors = veyra_connectors::all();
     let descriptors: Vec<_> = connectors.iter().map(|c| c.descriptor().clone()).collect();
+    let applications: Vec<_> = descriptors
+        .iter()
+        .cloned()
+        .chain(veyra_connectors::capture::descriptors())
+        .collect();
     let names = DisplayNames::new(
         registry.provider_names(),
         registry.model_names(),
-        &descriptors,
+        &applications,
     );
     let catalog = Arc::new(registry.catalog().clone());
     // Off until the user turns it on; the API applies the kept choice when attached.
@@ -108,6 +113,15 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
             on_change: notify_changes(app),
         },
         DEFAULT_PORT,
+    );
+    let proxy = Proxy::new(
+        ProxyParts {
+            store: Arc::clone(&store),
+            registry: Arc::clone(&registry),
+            routes: veyra_connectors::capture::all(),
+            on_change: notify_changes(app),
+        },
+        PROXY_PORT,
     );
     let worker = IngestWorker {
         store: Arc::clone(&store),
@@ -131,6 +145,8 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
         names,
         ingest: Box::new(ingest),
         telemetry: Box::new(telemetry),
+        proxy: Box::new(proxy),
+        capture_routes: veyra_connectors::capture::all(),
         files: Box::new(DialogSaver { app: app.clone() }),
         control: Box::new(Restart(app.clone())),
     })

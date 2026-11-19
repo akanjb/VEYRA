@@ -18,6 +18,7 @@ import { sessionRow, tokensOf, type Flat } from "./aggregate";
 import { FIXTURE_PROJECTS, fixtureLabel, generateSessions } from "./dataset";
 import { activity } from "./activity-view";
 import { FixtureBilling } from "./billing-view";
+import { listenerHandlers } from "./listeners-view";
 import { cache } from "./cache-view";
 import { costView } from "./cost-view";
 import { exportPreview } from "./export-view";
@@ -224,28 +225,6 @@ function storageHandlers(state: FixtureState): Pick<Handlers, StorageCommand> {
   };
 }
 
-/** The receiver, as if it started on the standard port; nothing arrives in a browser. */
-function telemetryHandlers(): Pick<Handlers, "get_telemetry_receiver" | "set_telemetry_receiver"> {
-  let enabled = false;
-  const info = () => ({
-    enabled,
-    listening: enabled,
-    endpoint: "http://127.0.0.1:4318",
-    error: null,
-    exports: 0,
-    records: 0,
-    lastReceivedAt: null,
-    lastRefusal: null,
-  });
-  return {
-    get_telemetry_receiver: info,
-    set_telemetry_receiver: (r) => {
-      enabled = r.enabled;
-      return info();
-    },
-  };
-}
-
 function projectChanges(
   state: FixtureState,
 ): Pick<Handlers, "rename_project" | "merge_project" | "unmerge_project"> {
@@ -275,7 +254,7 @@ export function createFixtureApiClient(options: FixtureOptions = {}): ApiClient 
     }),
     list_sources: () => ({ sources: [state.source()], notFound: NOT_FOUND }),
     set_source_enabled: (r) => state.setEnabled(r.enabled),
-    ...telemetryHandlers(),
+    ...listenerHandlers(),
     request_rescan: () => {
       setTimeout(() => {
         state.emit("data-changed", { inserted: 0, updated: 0 });

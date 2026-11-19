@@ -11,6 +11,8 @@ import type { BillingSettings } from "./BillingSettings";
 import type { BudgetInfo } from "./BudgetInfo";
 import type { Cache } from "./Cache";
 import type { CacheRequest } from "./CacheRequest";
+import type { CaptureProxyInfo } from "./CaptureProxyInfo";
+import type { CaptureProxyRequest } from "./CaptureProxyRequest";
 import type { Cost } from "./Cost";
 import type { CostAssumptions } from "./CostAssumptions";
 import type { CostAssumptionsRequest } from "./CostAssumptionsRequest";
@@ -48,6 +50,7 @@ import type { SessionDetail } from "./SessionDetail";
 import type { SessionList } from "./SessionList";
 import type { SessionRequest } from "./SessionRequest";
 import type { SessionsRequest } from "./SessionsRequest";
+import type { SetCaptureProxyRequest } from "./SetCaptureProxyRequest";
 import type { SetSourceEnabledRequest } from "./SetSourceEnabledRequest";
 import type { SetTelemetryReceiverRequest } from "./SetTelemetryReceiverRequest";
 import type { SourceList } from "./SourceList";
@@ -72,6 +75,8 @@ export interface CommandMap {
   request_rescan: { request: RescanRequest; response: RescanAccepted };
   get_telemetry_receiver: { request: TelemetryReceiverRequest; response: TelemetryReceiverInfo };
   set_telemetry_receiver: { request: SetTelemetryReceiverRequest; response: TelemetryReceiverInfo };
+  get_capture_proxy: { request: CaptureProxyRequest; response: CaptureProxyInfo };
+  set_capture_proxy: { request: SetCaptureProxyRequest; response: CaptureProxyInfo };
   get_overview: { request: OverviewRequest; response: Overview };
   get_usage: { request: UsageRequest; response: Usage };
   get_cost: { request: CostRequest; response: Cost };
@@ -112,6 +117,8 @@ export const COMMAND_NAMES = [
   "request_rescan",
   "get_telemetry_receiver",
   "set_telemetry_receiver",
+  "get_capture_proxy",
+  "set_capture_proxy",
   "get_overview",
   "get_usage",
   "get_cost",

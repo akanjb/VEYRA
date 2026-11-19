@@ -11,6 +11,8 @@
 
 use std::path::Path;
 
+use serde::Deserialize as _;
+
 use veyra_domain::accuracy::{Accuracy, AccuracyMap};
 use veyra_domain::event::{Granularity, ServiceTier};
 use veyra_domain::identity::Interface;
@@ -262,6 +264,15 @@ fn canonical_tokens(usage: &Usage) -> (TokenCounts, bool) {
         tool_tokens: None,
     };
     (tokens, thinking.is_none() || reasoning.is_some())
+}
+
+/// Canonical tokens, service tier and reasoning consistency of an Anthropic Messages
+/// API `usage` block relayed by the capture proxy (ADR-039). It is the block Claude
+/// Code logs, so the same rules apply.
+pub(crate) fn api_usage(usage: &serde_json::Value) -> Option<(TokenCounts, ServiceTier, bool)> {
+    let usage = Usage::deserialize(usage).ok()?;
+    let (tokens, consistent) = canonical_tokens(&usage);
+    Some((tokens, service_tier(&usage), consistent))
 }
 
 fn precedence(completed: bool, tokens: &TokenCounts) -> i64 {

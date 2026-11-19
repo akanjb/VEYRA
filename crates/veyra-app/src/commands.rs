@@ -18,6 +18,8 @@ macro_rules! for_each_command {
             request_rescan($crate::dto::RescanRequest) -> $crate::dto::RescanAccepted;
             get_telemetry_receiver($crate::dto::TelemetryReceiverRequest) -> $crate::dto::TelemetryReceiverInfo;
             set_telemetry_receiver($crate::dto::SetTelemetryReceiverRequest) -> $crate::dto::TelemetryReceiverInfo;
+            get_capture_proxy($crate::dto::CaptureProxyRequest) -> $crate::dto::CaptureProxyInfo;
+            set_capture_proxy($crate::dto::SetCaptureProxyRequest) -> $crate::dto::CaptureProxyInfo;
             get_overview($crate::dto::OverviewRequest) -> $crate::dto::Overview;
             get_usage($crate::dto::UsageRequest) -> $crate::dto::Usage;
             get_cost($crate::dto::CostRequest) -> $crate::dto::Cost;

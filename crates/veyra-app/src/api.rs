@@ -8,6 +8,7 @@ use veyra_analytics::port::{
 use veyra_analytics::sessions::SessionReader;
 use veyra_domain::audit::{AuditAction, AuditActor, AuditEntry, AuditLog};
 use veyra_domain::billing::BillingRepository;
+use veyra_domain::capture::{CaptureProxy, CaptureRoute};
 use veyra_domain::pricing::PriceCatalog;
 use veyra_domain::project::ProjectRepository;
 use veyra_domain::settings::SettingsRepository;
@@ -19,16 +20,18 @@ use veyra_domain::time::UtcMillis;
 use crate::dto::{
     Activity, ActivityRequest, AppInfo, AppInfoRequest, BackupInfo, BillingChanged,
     BillingEntryInfo, BillingRequest, BillingSettings, BudgetInfo, BuildProfile, Cache,
-    CacheRequest, Cost, CostAssumptions, CostAssumptionsRequest, CostRequest, CreateBackupRequest,
-    DataDeleted, DeleteBillingEntryRequest, DeleteBudgetRequest, DeleteDataRequest, DeletePreview,
+    CacheRequest, CaptureProxyInfo, CaptureProxyRequest, Cost, CostAssumptions,
+    CostAssumptionsRequest, CostRequest, CreateBackupRequest, DataDeleted,
+    DeleteBillingEntryRequest, DeleteBudgetRequest, DeleteDataRequest, DeletePreview,
     ExportPreview, ExportRequest, ExportSaved, ListSourcesRequest, MergeProjectRequest, Models,
     ModelsRequest, Overview, OverviewRequest, ProjectDetail, ProjectInfo, ProjectList,
     ProjectRequest, ProjectsChanged, ProjectsRequest, RenameProjectRequest, RescanAccepted,
     RescanRequest, RestorePreview, RestoreRequest, RestoreScheduled, SaveBillingEntryRequest,
     SaveBudgetRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
-    SetSourceEnabledRequest, SetTelemetryReceiverRequest, SourceList, SourceSummary,
-    StorageOverview, StorageRequest, TelemetryReceiverInfo, TelemetryReceiverRequest, Tools,
-    ToolsRequest, UnmergeProjectRequest, Usage, UsageRequest, WhatIf, WhatIfRequest,
+    SetCaptureProxyRequest, SetSourceEnabledRequest, SetTelemetryReceiverRequest, SourceList,
+    SourceSummary, StorageOverview, StorageRequest, TelemetryReceiverInfo,
+    TelemetryReceiverRequest, Tools, ToolsRequest, UnmergeProjectRequest, Usage, UsageRequest,
+    WhatIf, WhatIfRequest,
 };
 use crate::error::ApiError;
 use crate::export::{self, FileSaver};
@@ -89,6 +92,10 @@ pub struct DataServices {
     pub ingest: Box<dyn IngestControl>,
     /// The local OpenTelemetry receiver (ADR-038).
     pub telemetry: Box<dyn TelemetryReceiver>,
+    /// The local capture proxy (ADR-039).
+    pub proxy: Box<dyn CaptureProxy>,
+    /// The providers the proxy forwards to, for their base URLs.
+    pub capture_routes: Vec<Box<dyn CaptureRoute>>,
     /// Saves reports where the user chooses.
     pub files: Box<dyn FileSaver>,
     /// Restarts Veyra, to apply a restored backup.
@@ -131,6 +138,7 @@ impl Api {
             .is_ok();
         if attached && let Ok(data) = self.data() {
             views::telemetry::restore(data);
+            views::capture::restore(data);
         }
         attached
     }
@@ -214,6 +222,30 @@ impl Api {
         request: SetTelemetryReceiverRequest,
     ) -> Result<TelemetryReceiverInfo, ApiError> {
         views::telemetry::set(self.data()?, request.enabled)
+    }
+
+    /// The local capture proxy: whether it is on, what it has relayed and the base URL
+    /// to give each provider's clients.
+    ///
+    /// # Errors
+    /// [`ApiError::Busy`] while starting; [`ApiError::Internal`] on database failure.
+    pub fn get_capture_proxy(
+        &self,
+        _request: CaptureProxyRequest,
+    ) -> Result<CaptureProxyInfo, ApiError> {
+        views::capture::info(self.data()?)
+    }
+
+    /// Turns the local capture proxy on or off and keeps the choice. A port that cannot
+    /// be opened is reported in the result, not as an error.
+    ///
+    /// # Errors
+    /// [`ApiError::Busy`] while starting; [`ApiError::Internal`] on database failure.
+    pub fn set_capture_proxy(
+        &self,
+        request: SetCaptureProxyRequest,
+    ) -> Result<CaptureProxyInfo, ApiError> {
+        views::capture::set(self.data()?, request.enabled)
     }
 
     /// Queues a scan of every enabled source; changes arrive as `data-changed` events.
@@ -726,6 +758,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
+    use veyra_domain::capture::{CaptureProxy, ProxyStatus};
     use veyra_domain::source::IngestControl;
     use veyra_domain::telemetry::{ReceiverStatus, TelemetryReceiver};
     use veyra_domain::time::UtcMillis;
@@ -734,9 +767,10 @@ mod tests {
     use super::{Api, AppMetadata, DataServices, DisplayNames};
     use crate::ApiError;
     use crate::dto::{
-        AppInfoRequest, BuildProfile, Comparison, ListSourcesRequest, OverviewRequest,
-        RescanRequest, Scope, ScopeFilters, SessionRequest, SessionSort, SessionsRequest,
-        SetSourceEnabledRequest, SetTelemetryReceiverRequest, TelemetryReceiverRequest,
+        AppInfoRequest, BuildProfile, CaptureProxyRequest, Comparison, ListSourcesRequest,
+        OverviewRequest, RescanRequest, Scope, ScopeFilters, SessionRequest, SessionSort,
+        SessionsRequest, SetCaptureProxyRequest, SetSourceEnabledRequest,
+        SetTelemetryReceiverRequest, TelemetryReceiverRequest,
     };
 
     fn api() -> Api {
@@ -752,6 +786,22 @@ mod tests {
         scans: AtomicUsize,
         changes: AtomicUsize,
         receiver_on: AtomicBool,
+        proxy_on: AtomicBool,
+    }
+
+    struct FakeProxy(Arc<Calls>);
+
+    impl CaptureProxy for FakeProxy {
+        fn set_enabled(&self, enabled: bool) {
+            self.0.proxy_on.store(enabled, Ordering::Relaxed);
+        }
+        fn status(&self) -> ProxyStatus {
+            ProxyStatus {
+                listening: self.0.proxy_on.load(Ordering::Relaxed),
+                endpoint: "http://127.0.0.1:4320".to_owned(),
+                ..ProxyStatus::default()
+            }
+        }
     }
 
     struct FakeReceiver(Arc<Calls>);
@@ -830,6 +880,8 @@ mod tests {
                 names: DisplayNames::default(),
                 ingest: Box::new(FakeIngest(Arc::clone(&calls))),
                 telemetry: Box::new(FakeReceiver(Arc::clone(&calls))),
+                proxy: Box::new(FakeProxy(Arc::clone(&calls))),
+                capture_routes: veyra_connectors::capture::all(),
                 files: Box::new(NoFiles),
                 control: Box::new(NoRestart),
             }))
@@ -972,6 +1024,42 @@ mod tests {
 
         let off = api
             .set_telemetry_receiver(SetTelemetryReceiverRequest { enabled: false })
+            .unwrap();
+        assert!(!off.enabled && !off.listening);
+        drop((api, store));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_proxy_switch_is_kept_and_applied_and_lists_base_urls() {
+        let (api, store, calls, dir) = attached("proxy");
+        let off = api.get_capture_proxy(CaptureProxyRequest {}).unwrap();
+        assert!(
+            !off.enabled && !off.listening,
+            "off until the user turns it on"
+        );
+
+        let on = api
+            .set_capture_proxy(SetCaptureProxyRequest { enabled: true })
+            .unwrap();
+        assert!(on.enabled && on.listening);
+        let openai = on
+            .providers
+            .iter()
+            .find(|p| p.name == "OpenAI API")
+            .unwrap();
+        assert_eq!(openai.base_url, "http://127.0.0.1:4320/openai/v1");
+        assert_eq!(openai.upstream, "https://api.openai.com/v1");
+
+        calls.proxy_on.store(false, Ordering::Relaxed);
+        crate::views::capture::restore(api.data().unwrap());
+        assert!(
+            calls.proxy_on.load(Ordering::Relaxed),
+            "kept for the next launch"
+        );
+
+        let off = api
+            .set_capture_proxy(SetCaptureProxyRequest { enabled: false })
             .unwrap();
         assert!(!off.enabled && !off.listening);
         drop((api, store));

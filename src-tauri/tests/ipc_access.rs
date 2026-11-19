@@ -66,7 +66,7 @@ fn valid_request(cmd: &str) -> Value {
     });
     match cmd {
         "set_source_enabled" => json!({ "sourceId": 1, "enabled": false }),
-        "set_telemetry_receiver" => json!({ "enabled": false }),
+        "set_telemetry_receiver" | "set_capture_proxy" => json!({ "enabled": false }),
         "get_overview"
         | "get_usage"
         | "get_cost"

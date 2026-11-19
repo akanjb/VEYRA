@@ -9,6 +9,8 @@
 mod convert;
 mod record;
 
+pub(crate) use convert::api_usage;
+
 use std::path::{Path, PathBuf};
 
 use veyra_domain::connector::{Capabilities, Reading, Support};

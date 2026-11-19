@@ -7,6 +7,7 @@
 pub mod accuracy;
 pub mod audit;
 pub mod billing;
+pub mod capture;
 pub mod connector;
 pub mod event;
 pub mod identity;

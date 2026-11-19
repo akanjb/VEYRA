@@ -8,6 +8,7 @@ mod analytics;
 mod app_info;
 mod billing;
 mod cache;
+mod capture;
 mod cost;
 mod export;
 mod models;
@@ -33,6 +34,7 @@ pub use billing::{
     DeleteBudgetRequest, SaveBillingEntryRequest, SaveBudgetRequest,
 };
 pub use cache::{Cache, CacheKpis, CachePoint, CacheRequest, CacheSession, RatioRow, TtlRow};
+pub use capture::{CaptureProvider, CaptureProxyInfo, CaptureProxyRequest, SetCaptureProxyRequest};
 pub use cost::{
     BudgetLevel, BudgetStatus, Cost, CostBreakdown, CostDay, CostDefinitions, CostKpis, CostMix,
     CostRequest, MonthOutlook, OutlookDay, RateRow, Waterfall, WaterfallStep,

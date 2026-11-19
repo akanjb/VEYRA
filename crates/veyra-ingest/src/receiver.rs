@@ -16,17 +16,16 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use veyra_domain::pricing::price_event;
 use veyra_domain::source::SourceConnector;
 use veyra_domain::telemetry::{ReceiverStatus, TelemetryReceiver, TelemetryRecord};
 use veyra_domain::time::UtcMillis;
 use veyra_registry::Registry;
-use veyra_store::{PricedEvent, Store, StoreError};
+use veyra_store::{Store, StoreError};
 
-use crate::http::{Request, Status, read_request, write_response};
-use crate::normalize::normalize;
+use crate::ChangeListener;
+use crate::http::{MAX_BODY, Request, Status, read_request, write_response};
 use crate::otlp::decode_logs;
-use crate::{ChangeListener, ScanReport};
+use crate::push::{local_only, store_usage};
 
 /// The standard OTLP/HTTP port.
 pub const DEFAULT_PORT: u16 = 4318;
@@ -184,7 +183,7 @@ fn serve(listener: &TcpListener, shared: &Shared, port: u16, stop: &AtomicBool) 
 fn handle(mut stream: TcpStream, shared: &Shared, port: u16) {
     let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
     let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
-    let status = match read_request(&mut BufReader::new(&stream)) {
+    let status = match read_request(&mut BufReader::new(&stream), MAX_BODY) {
         Ok(request) => respond(&request, shared, port),
         Err(status) => status,
     };
@@ -208,14 +207,7 @@ fn respond(request: &Request, shared: &Shared, port: u16) -> Status {
 }
 
 fn check(request: &Request, port: u16) -> Result<(), Status> {
-    if request.header("origin").is_some() {
-        return Err(Status::new(403, "requests from web pages are refused"));
-    }
-    let host = request.header("host").unwrap_or_default();
-    let local = [format!("127.0.0.1:{port}"), format!("localhost:{port}")];
-    if !local.iter().any(|h| h.eq_ignore_ascii_case(host)) {
-        return Err(Status::new(403, "the host must be 127.0.0.1 or localhost"));
-    }
+    local_only(request, port)?;
     if request.path != LOGS_PATH {
         return Err(Status::new(
             404,
@@ -257,42 +249,22 @@ impl Shared {
 
     /// Normalises, prices and stores the usage in `records`.
     fn ingest(&self, records: &[TelemetryRecord]) -> Result<(), StoreError> {
-        let events: Vec<PricedEvent> = records
-            .iter()
-            .filter_map(|record| {
-                let connector = self
-                    .connectors
-                    .iter()
-                    .find(|c| c.telemetry_service() == Some(record.service.as_str()))?;
-                let raw = connector.telemetry_usage(record)?;
-                let event = normalize(&raw, connector.descriptor(), &self.registry).ok()?;
-                let cost = price_event(&event, self.registry.catalog());
-                Some(PricedEvent {
-                    event,
-                    cost,
-                    precedence: raw.precedence,
-                    tool_calls: raw.tool_calls,
-                })
-            })
-            .collect();
-        if events.is_empty() {
+        let usage = records.iter().filter_map(|record| {
+            let connector = self
+                .connectors
+                .iter()
+                .find(|c| c.telemetry_service() == Some(record.service.as_str()))?;
+            Some((connector.telemetry_usage(record)?, connector.descriptor()))
+        });
+        let (stored, report) = store_usage(&self.store, &self.registry, usage)?;
+        if stored == 0 {
             return Ok(());
         }
-        let now = UtcMillis::now();
-        let summary = self.store.write_events(&events, now)?;
-        let count = |n: usize| u64::try_from(n).unwrap_or(u64::MAX);
         {
             let mut stats = lock(&self.stats);
-            stats.records += count(events.len());
-            stats.last_received_at = Some(now);
+            stats.records += stored;
+            stats.last_received_at = Some(UtcMillis::now());
         }
-        let report = ScanReport {
-            inserted: count(summary.inserted),
-            updated: count(summary.updated),
-            unchanged: count(summary.unchanged),
-            superseded: count(summary.superseded),
-            ..ScanReport::default()
-        };
         if report.changed() {
             (lock(&self.on_change))(&report);
         }

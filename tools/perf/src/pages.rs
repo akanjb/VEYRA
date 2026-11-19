@@ -10,6 +10,7 @@ use veyra_app::dto::{
     SessionsRequest, ToolsRequest, UsageRequest, WhatIfRequest,
 };
 use veyra_app::{Api, ApiError, AppControl, AppMetadata, DataServices, DisplayNames, FileSaver};
+use veyra_domain::capture::{CaptureProxy, ProxyStatus};
 use veyra_domain::pricing::PriceCatalog;
 use veyra_domain::source::IngestControl;
 use veyra_domain::telemetry::{ReceiverStatus, TelemetryReceiver};
@@ -37,6 +38,16 @@ impl TelemetryReceiver for NoReceiver {
     fn set_enabled(&self, _: bool) {}
     fn status(&self) -> ReceiverStatus {
         ReceiverStatus::default()
+    }
+}
+
+/// No proxy runs while pages are timed.
+struct NoProxy;
+
+impl CaptureProxy for NoProxy {
+    fn set_enabled(&self, _: bool) {}
+    fn status(&self) -> ProxyStatus {
+        ProxyStatus::default()
     }
 }
 
@@ -81,6 +92,8 @@ fn api(store: &Arc<Store>, catalog: PriceCatalog, names: DisplayNames) -> Api {
         names,
         ingest: Box::new(NoIngest),
         telemetry: Box::new(NoReceiver),
+        proxy: Box::new(NoProxy),
+        capture_routes: Vec::new(),
         files: Box::new(NoFiles),
         control: Box::new(NoRestart),
     }));

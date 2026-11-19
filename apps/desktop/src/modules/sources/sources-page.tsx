@@ -2,6 +2,7 @@ import { useCommand } from "@/shared/api";
 import { Card, EmptyState, ErrorState, Skeleton } from "@/shared/ui";
 
 import { PrivacyPromise } from "./privacy";
+import { ProxyCard } from "./proxy-card";
 import { ReceiverCard } from "./receiver-card";
 import { SourceCard } from "./source-card";
 
@@ -41,6 +42,7 @@ export function SourcesPage() {
         sources.data.sources.map((s) => <SourceCard key={s.id} source={s} />)
       )}
       <ReceiverCard />
+      <ProxyCard />
       <Card title="Other tools">
         <ul className="grid gap-3 text-sm">
           {otherTools(sources.data?.notFound ?? []).map((t) => (

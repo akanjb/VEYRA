@@ -14,6 +14,7 @@ use veyra_analytics::metrics::{MetricId, MetricValue};
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_app::dto::{Comparison, Scope, ScopeFilters};
 use veyra_app::{Api, AppControl, AppMetadata, DataServices, DisplayNames, FileSaver};
+use veyra_domain::capture::{CaptureProxy, ProxyStatus};
 use veyra_domain::source::{DiscoveryEnv, IngestControl};
 use veyra_domain::telemetry::{ReceiverStatus, TelemetryReceiver};
 use veyra_ingest::{DEFAULT_CHUNK_BYTES, IngestContext, discover, scan_all};
@@ -35,6 +36,16 @@ impl TelemetryReceiver for NoReceiver {
     fn set_enabled(&self, _: bool) {}
     fn status(&self) -> ReceiverStatus {
         ReceiverStatus::default()
+    }
+}
+
+/// No proxy runs in these tests.
+struct NoProxy;
+
+impl CaptureProxy for NoProxy {
+    fn set_enabled(&self, _: bool) {}
+    fn status(&self) -> ProxyStatus {
+        ProxyStatus::default()
     }
 }
 
@@ -155,6 +166,8 @@ pub fn api_with_restarts(data: &Ingested) -> (Api, SavedFiles, Arc<AtomicUsize>)
         names,
         ingest: Box::new(NoIngest),
         telemetry: Box::new(NoReceiver),
+        proxy: Box::new(NoProxy),
+        capture_routes: Vec::new(),
         files: Box::new(MemoryFiles(Arc::clone(&files))),
         control: Box::new(Restarts(Arc::clone(&restarts))),
     })));

@@ -1,12 +1,12 @@
-//! The small part of HTTP/1.1 the local receiver needs (ADR-038): one request per
-//! connection, a body framed by `Content-Length` or chunked transfer coding, and
-//! strict size limits. Anything else is refused with a status code.
+//! The small part of HTTP/1.1 the local receiver (ADR-038) and capture proxy (ADR-039)
+//! need: one request per connection, a body framed by `Content-Length` or chunked
+//! transfer coding, and strict size limits. Anything else is refused with a status code.
 
 use std::io::{self, BufRead, Read, Write};
 
 /// Longest request line plus headers accepted.
 const MAX_HEAD: u64 = 16 * 1024;
-/// Largest body accepted. Tools export in small batches, far below this.
+/// Largest telemetry body accepted. Tools export in small batches, far below this.
 pub const MAX_BODY: u64 = 8 * 1024 * 1024;
 
 /// A parsed request. Header names are lower case.
@@ -15,6 +15,8 @@ pub struct Request {
     pub method: String,
     /// The path, without any query.
     pub path: String,
+    /// The query after `?`, or empty.
+    pub query: String,
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
 }
@@ -62,17 +64,18 @@ impl Status {
             415 => "Unsupported Media Type",
             431 => "Request Header Fields Too Large",
             501 => "Not Implemented",
+            502 => "Bad Gateway",
             _ => "Service Unavailable",
         }
     }
 }
 
-/// Reads one request.
+/// Reads one request with a body of at most `max_body` bytes.
 ///
 /// # Errors
 /// The status to answer with when the request is malformed, too large or uses a
 /// framing this reader does not support; [`Status::BAD_REQUEST`] on read failures.
-pub fn read_request(reader: &mut impl BufRead) -> Result<Request, Status> {
+pub fn read_request(reader: &mut impl BufRead, max_body: u64) -> Result<Request, Status> {
     let mut head = reader.take(MAX_HEAD + 1);
     let request_line = read_line(&mut head)?;
     let mut parts = request_line.split_whitespace();
@@ -94,9 +97,11 @@ pub fn read_request(reader: &mut impl BufRead) -> Result<Request, Status> {
         headers.push((name.trim().to_ascii_lowercase(), value.trim().to_owned()));
     }
     let reader = head.into_inner();
+    let (path, query) = target.split_once('?').unwrap_or((target, ""));
     let mut request = Request {
         method: method.to_owned(),
-        path: target.split('?').next().unwrap_or_default().to_owned(),
+        path: path.to_owned(),
+        query: query.to_owned(),
         headers,
         body: Vec::new(),
     };
@@ -104,11 +109,13 @@ pub fn read_request(reader: &mut impl BufRead) -> Result<Request, Status> {
         request.header("transfer-encoding"),
         request.header("content-length"),
     ) {
-        (Some(coding), _) if coding.eq_ignore_ascii_case("chunked") => read_chunked(reader)?,
+        (Some(coding), _) if coding.eq_ignore_ascii_case("chunked") => {
+            read_chunked(reader, max_body)?
+        }
         (Some(_), _) => return Err(Status::NOT_IMPLEMENTED),
         (None, Some(length)) => {
             let length: u64 = length.parse().map_err(|_| Status::BAD_REQUEST)?;
-            read_exact(reader, length)?
+            read_exact(reader, length, max_body)?
         }
         (None, None) if request.method == "POST" => return Err(Status::LENGTH_REQUIRED),
         (None, None) => Vec::new(),
@@ -137,8 +144,8 @@ fn read_line(reader: &mut impl BufRead) -> Result<String, Status> {
     String::from_utf8(line).map_err(|_| Status::BAD_REQUEST)
 }
 
-fn read_exact(reader: &mut impl Read, length: u64) -> Result<Vec<u8>, Status> {
-    if length > MAX_BODY {
+fn read_exact(reader: &mut impl Read, length: u64, max_body: u64) -> Result<Vec<u8>, Status> {
+    if length > max_body {
         return Err(Status::TOO_LARGE);
     }
     let mut body = vec![0; usize::try_from(length).map_err(|_| Status::TOO_LARGE)?];
@@ -148,7 +155,7 @@ fn read_exact(reader: &mut impl Read, length: u64) -> Result<Vec<u8>, Status> {
     Ok(body)
 }
 
-fn read_chunked(reader: &mut impl BufRead) -> Result<Vec<u8>, Status> {
+fn read_chunked(reader: &mut impl BufRead, max_body: u64) -> Result<Vec<u8>, Status> {
     let mut body = Vec::new();
     loop {
         let mut line_reader = reader.by_ref().take(MAX_HEAD);
@@ -160,10 +167,10 @@ fn read_chunked(reader: &mut impl BufRead) -> Result<Vec<u8>, Status> {
             while !read_line(&mut reader.by_ref().take(MAX_HEAD))?.is_empty() {}
             return Ok(body);
         }
-        if u64::try_from(body.len()).unwrap_or(u64::MAX) + size > MAX_BODY {
+        if u64::try_from(body.len()).unwrap_or(u64::MAX) + size > max_body {
             return Err(Status::TOO_LARGE);
         }
-        body.extend(read_exact(reader, size)?);
+        body.extend(read_exact(reader, size, max_body)?);
         if !read_line(&mut reader.by_ref().take(2))?.is_empty() {
             return Err(Status::BAD_REQUEST);
         }
@@ -201,7 +208,7 @@ mod tests {
     use super::{MAX_BODY, Status, read_request, write_response};
 
     fn read(raw: &str) -> Result<super::Request, Status> {
-        read_request(&mut Cursor::new(raw.as_bytes().to_vec()))
+        read_request(&mut Cursor::new(raw.as_bytes().to_vec()), MAX_BODY)
     }
 
     #[test]

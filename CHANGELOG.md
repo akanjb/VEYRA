@@ -5,6 +5,12 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **Local capture proxy for API usage** (ADR-039). Apps and scripts that call the OpenAI, Anthropic, Gemini or OpenRouter APIs can send their requests through Veyra, which forwards them unchanged and records the usage each response reports.
+  - A switch on the Sources page, off by default. When on, Veyra listens on `127.0.0.1:4320` only and lists the base URL to give each provider's clients. Commands `get_capture_proxy` and `set_capture_proxy`; the choice is kept across restarts.
+  - Streams are relayed as they arrive. Usage is read from each response on the way; keys, prompts and replies are never stored.
+  - Requests from web pages or for other host names are refused, so no page can use the proxy as a relay.
+  - Anthropic requests use the request id Claude Code's logs use, so a Claude Code request seen both ways is counted once. OpenRouter's reported cost is kept as provider-reported.
+- The OpenTelemetry receiver card shows how many exports arrived and why the latest one was refused, if it was.
 - **Local OpenTelemetry receiver** (ADR-038). Claude Code can send each request's usage to Veyra as it happens, through its official OpenTelemetry log export.
   - A switch on the Sources page, off by default. When on, Veyra listens on `127.0.0.1:4318` only and shows the settings to give Claude Code, what it has received and any port problem. Commands `get_telemetry_receiver` and `set_telemetry_receiver`; the choice is kept across restarts.
   - Accepts OTLP/HTTP JSON log exports. Requests from web pages or for other host names, compressed or protobuf bodies, and oversized requests are refused.

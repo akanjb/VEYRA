@@ -44,3 +44,4 @@ Each record documents one significant decision: its context, the decision itself
 | [036](0036-what-if-repricing.md) | Pricing a period on another model | Accepted |
 | [037](0037-deleting-stored-usage.md) | Deleting stored usage | Accepted |
 | [038](0038-local-opentelemetry-receiver.md) | Local OpenTelemetry receiver | Accepted |
+| [039](0039-local-capture-proxy.md) | Local capture proxy for API usage | Accepted |
