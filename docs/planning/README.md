@@ -16,6 +16,7 @@ Veyra is a local-first, zero-cost desktop application that consolidates AI usage
 | 3 | [03-ux.md](03-ux.md) | Sitemap, navigation, page anatomy, per-module layouts and chart choices, design system, journeys, states, accessibility |
 | 4 | [04-feasibility-risks.md](04-feasibility-risks.md) | Feasibility by feature, risks, hidden costs, licensing, prioritisation into five tiers |
 | 5 | [05-roadmap.md](05-roadmap.md) | Dependency-ordered milestones with tasks, acceptance criteria, tests and release points |
+| 6 | [06-universal-coverage.md](06-universal-coverage.md) | What can be tracked per provider and surface, platform limits, and the collector architecture for universal coverage |
 
 ## Executive summary
 
