@@ -4,12 +4,15 @@
 //! or snapshots of live databases), hands them to
 //! connectors, normalises and prices the records, and commits them to the store together
 //! with each file's checkpoint. Nothing is read until the user enables a source.
-//! Tools can also push usage to an opt-in local OpenTelemetry receiver (ADR-038).
+//! Tools can also push usage to an opt-in local OpenTelemetry receiver (ADR-038) or
+//! through the local capture proxy (ADR-039), and chat apps' data exports can be
+//! imported (ADR-040).
 
 mod discovery;
 mod error;
 mod fs;
 mod http;
+mod import;
 mod normalize;
 mod otlp;
 mod pipeline;
@@ -24,6 +27,7 @@ mod worker;
 pub use discovery::{discover, discovery_env};
 pub use error::IngestError;
 pub use fs::{FoundFile, ScopedFs};
+pub use import::{ImportParts, Importer};
 pub use normalize::{NormalizeError, normalize, project_key};
 pub use pipeline::{DEFAULT_CHUNK_BYTES, IngestContext, ScanReport, scan_all, scan_source};
 pub use proxy::{MAX_CONNECTIONS, PROXY_PORT, Proxy, ProxyParts};

@@ -24,6 +24,8 @@ pub enum AuditAction {
     Restore,
     /// Stored usage was deleted from Veyra.
     Delete,
+    /// Usage was read from a data export the user chose.
+    Import,
 }
 
 impl AuditAction {
@@ -34,6 +36,7 @@ impl AuditAction {
             Self::Export => "export",
             Self::Restore => "restore",
             Self::Delete => "delete",
+            Self::Import => "import",
         }
     }
 
@@ -44,6 +47,7 @@ impl AuditAction {
             "export" => Some(Self::Export),
             "restore" => Some(Self::Restore),
             "delete" => Some(Self::Delete),
+            "import" => Some(Self::Import),
             _ => None,
         }
     }

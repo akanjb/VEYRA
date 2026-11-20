@@ -23,9 +23,11 @@ import type { DeleteBillingEntryRequest } from "./DeleteBillingEntryRequest";
 import type { DeleteBudgetRequest } from "./DeleteBudgetRequest";
 import type { DeleteDataRequest } from "./DeleteDataRequest";
 import type { DeletePreview } from "./DeletePreview";
+import type { ExportImported } from "./ExportImported";
 import type { ExportPreview } from "./ExportPreview";
 import type { ExportRequest } from "./ExportRequest";
 import type { ExportSaved } from "./ExportSaved";
+import type { ImportExportRequest } from "./ImportExportRequest";
 import type { ListSourcesRequest } from "./ListSourcesRequest";
 import type { MergeProjectRequest } from "./MergeProjectRequest";
 import type { Models } from "./Models";
@@ -77,6 +79,7 @@ export interface CommandMap {
   set_telemetry_receiver: { request: SetTelemetryReceiverRequest; response: TelemetryReceiverInfo };
   get_capture_proxy: { request: CaptureProxyRequest; response: CaptureProxyInfo };
   set_capture_proxy: { request: SetCaptureProxyRequest; response: CaptureProxyInfo };
+  import_export: { request: ImportExportRequest; response: ExportImported };
   get_overview: { request: OverviewRequest; response: Overview };
   get_usage: { request: UsageRequest; response: Usage };
   get_cost: { request: CostRequest; response: Cost };
@@ -119,6 +122,7 @@ export const COMMAND_NAMES = [
   "set_telemetry_receiver",
   "get_capture_proxy",
   "set_capture_proxy",
+  "import_export",
   "get_overview",
   "get_usage",
   "get_cost",

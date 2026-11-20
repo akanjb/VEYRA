@@ -20,6 +20,7 @@ macro_rules! for_each_command {
             set_telemetry_receiver($crate::dto::SetTelemetryReceiverRequest) -> $crate::dto::TelemetryReceiverInfo;
             get_capture_proxy($crate::dto::CaptureProxyRequest) -> $crate::dto::CaptureProxyInfo;
             set_capture_proxy($crate::dto::SetCaptureProxyRequest) -> $crate::dto::CaptureProxyInfo;
+            import_export($crate::dto::ImportExportRequest) -> $crate::dto::ExportImported;
             get_overview($crate::dto::OverviewRequest) -> $crate::dto::Overview;
             get_usage($crate::dto::UsageRequest) -> $crate::dto::Usage;
             get_cost($crate::dto::CostRequest) -> $crate::dto::Cost;

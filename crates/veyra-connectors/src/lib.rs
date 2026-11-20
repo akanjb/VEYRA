@@ -8,6 +8,7 @@ pub mod capture;
 pub mod claude_code;
 pub mod codex;
 pub mod copilot_cli;
+pub mod exports;
 pub mod gemini_cli;
 mod lines;
 pub mod opencode;

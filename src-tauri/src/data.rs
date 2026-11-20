@@ -11,13 +11,13 @@ use veyra_app::events::DATA_CHANGED;
 use veyra_app::{Api, AppControl, DataServices, DisplayNames};
 use veyra_domain::time::UtcMillis;
 use veyra_ingest::{
-    ChangeListener, DEFAULT_PORT, IngestWorker, PROXY_PORT, Proxy, ProxyParts, Receiver,
-    ReceiverParts, WorkerConfig, discovery_env,
+    ChangeListener, DEFAULT_PORT, ImportParts, Importer, IngestWorker, PROXY_PORT, Proxy,
+    ProxyParts, Receiver, ReceiverParts, WorkerConfig, discovery_env,
 };
 use veyra_registry::Registry;
 use veyra_store::{Storage, Store};
 
-use crate::files::DialogSaver;
+use crate::files::Dialogs;
 
 /// File name of the database inside the local app-data directory.
 const DATABASE: &str = "veyra.db";
@@ -97,6 +97,7 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
         .iter()
         .cloned()
         .chain(veyra_connectors::capture::descriptors())
+        .chain(veyra_connectors::exports::descriptors())
         .collect();
     let names = DisplayNames::new(
         registry.provider_names(),
@@ -123,6 +124,12 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
         },
         PROXY_PORT,
     );
+    let importer = Importer::new(ImportParts {
+        store: Arc::clone(&store),
+        registry: Arc::clone(&registry),
+        importers: veyra_connectors::exports::all(),
+        on_change: notify_changes(app),
+    });
     let worker = IngestWorker {
         store: Arc::clone(&store),
         registry,
@@ -147,7 +154,9 @@ fn open<R: Runtime>(app: &AppHandle<R>) -> Result<DataServices, String> {
         telemetry: Box::new(telemetry),
         proxy: Box::new(proxy),
         capture_routes: veyra_connectors::capture::all(),
-        files: Box::new(DialogSaver { app: app.clone() }),
+        importer: Box::new(importer),
+        files: Box::new(Dialogs { app: app.clone() }),
+        picker: Box::new(Dialogs { app: app.clone() }),
         control: Box::new(Restart(app.clone())),
     })
 }

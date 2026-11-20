@@ -5,6 +5,10 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 ## [Unreleased]
 
 ### Added
+- **ChatGPT data export import** (ADR-040). A card on the Sources page and command `import_export`: choose the archive ChatGPT emails, or its `conversations.json`, and each assistant reply is recorded once as an Estimated usage record with its time and model.
+  - Input is the text above each reply, capped at 128,000 tokens; output is the reply itself. Tokens are estimated from character counts.
+  - The archive is streamed one conversation at a time. Text is read only to be measured and is never stored. Importing again adds only new replies.
+  - Each import is recorded in the audit log with the app and its counts, never the file name.
 - **Local capture proxy for API usage** (ADR-039). Apps and scripts that call the OpenAI, Anthropic, Gemini or OpenRouter APIs can send their requests through Veyra, which forwards them unchanged and records the usage each response reports.
   - A switch on the Sources page, off by default. When on, Veyra listens on `127.0.0.1:4320` only and lists the base URL to give each provider's clients. Commands `get_capture_proxy` and `set_capture_proxy`; the choice is kept across restarts.
   - Streams are relayed as they arrive. Usage is read from each response on the way; keys, prompts and replies are never stored.

@@ -13,6 +13,7 @@ jiff.workspace = true
 memchr.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+zip.workspace = true
 veyra-domain.workspace = true
 
 [dev-dependencies]

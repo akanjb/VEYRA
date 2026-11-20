@@ -1,6 +1,7 @@
 import { useCommand } from "@/shared/api";
 import { Card, EmptyState, ErrorState, Skeleton } from "@/shared/ui";
 
+import { ImportCard } from "./import-card";
 import { PrivacyPromise } from "./privacy";
 import { ProxyCard } from "./proxy-card";
 import { ReceiverCard } from "./receiver-card";
@@ -8,7 +9,7 @@ import { SourceCard } from "./source-card";
 
 /** Tools Veyra cannot read, and why (docs/planning/00-research.md). */
 const UNSUPPORTED = {
-  name: "Windsurf, Antigravity, Zed, ChatGPT desktop",
+  name: "Windsurf, Antigravity, Zed",
   status: "Unsupported",
   reason: "No usable local usage data; only enterprise analytics APIs exist.",
 };
@@ -43,6 +44,7 @@ export function SourcesPage() {
       )}
       <ReceiverCard />
       <ProxyCard />
+      <ImportCard />
       <Card title="Other tools">
         <ul className="grid gap-3 text-sm">
           {otherTools(sources.data?.notFound ?? []).map((t) => (

@@ -8,6 +8,7 @@ pub(crate) mod capture;
 pub(crate) mod cost;
 pub(crate) mod export;
 mod highlights;
+pub(crate) mod import;
 mod kpis;
 pub(crate) mod models;
 pub(crate) mod overview;

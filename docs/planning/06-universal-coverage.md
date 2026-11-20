@@ -88,8 +88,7 @@ flowchart LR
 4. **Export importers** (new). These are the only route to ChatGPT, Claude.ai and Gemini app usage.
    - The user picks the official export archive. Veyra reads each message transiently to get the timestamp, model, role and length, and stores only counts.
    - Tokens are estimated:
-     - with OpenAI's public tokenizer for ChatGPT;
-     - with a documented characters-per-token ratio for the others.
+     - with a documented characters-per-token ratio (ADR-040 explains why OpenAI's tokenizer is not bundled for ChatGPT).
    - Events are marked Estimated, with a dedup key from the conversation and message ids, so re-importing a newer export adds only new messages.
    - No prompt text is ever stored, as NFR-03 requires.
 

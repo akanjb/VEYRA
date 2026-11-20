@@ -11,6 +11,7 @@ mod cache;
 mod capture;
 mod cost;
 mod export;
+mod import;
 mod models;
 mod pricing;
 mod projects;
@@ -42,6 +43,7 @@ pub use cost::{
 pub use export::{
     ExportFormat, ExportPreset, ExportPreview, ExportRedaction, ExportRequest, ExportSaved,
 };
+pub use import::{ExportImported, ImportExportRequest};
 pub use models::{Matrix, ModelLane, ModelRow, Models, ModelsRequest, ShareDay};
 pub use pricing::{
     AssumptionKind, AssumptionUse, CostAssumptions, CostAssumptionsRequest, ModifierKind,

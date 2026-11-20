@@ -11,6 +11,7 @@ pub mod capture;
 pub mod connector;
 pub mod event;
 pub mod identity;
+pub mod import;
 pub mod money;
 pub mod pricing;
 pub mod project;

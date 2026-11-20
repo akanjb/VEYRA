@@ -1,4 +1,4 @@
-/** The local listeners (OpenTelemetry receiver and capture proxy) in the fixture client. */
+/** The local listeners (OpenTelemetry receiver, capture proxy) and export import in the fixture client. */
 import type { CommandName } from "@veyra/contracts";
 
 import type { CommandRequest, CommandResponse } from "../api-client";
@@ -63,7 +63,28 @@ function proxyHandlers(): Handlers<"get_capture_proxy" | "set_capture_proxy"> {
   };
 }
 
+/** The import dialog, as if the user picked a small ChatGPT export. */
+function importHandlers(): Handlers<"import_export"> {
+  let imports = 0;
+  return {
+    import_export: () => {
+      imports += 1;
+      const first = imports === 1;
+      return {
+        imported: true,
+        app: "ChatGPT",
+        conversations: 12,
+        skipped: 0,
+        replies: 87,
+        added: first ? 87 : 0,
+        updated: 0,
+        unchanged: first ? 0 : 87,
+      };
+    },
+  };
+}
+
 /** Handlers of both listeners' commands, each with its own on/off state. */
 export function listenerHandlers() {
-  return { ...telemetryHandlers(), ...proxyHandlers() };
+  return { ...telemetryHandlers(), ...proxyHandlers(), ...importHandlers() };
 }

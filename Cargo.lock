@@ -4175,6 +4175,7 @@ dependencies = [
  "serde_json",
  "veyra-domain",
  "veyra-testkit",
+ "zip",
 ]
 
 [[package]]

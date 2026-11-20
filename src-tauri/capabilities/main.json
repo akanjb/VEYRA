@@ -12,6 +12,7 @@
     "allow-set-telemetry-receiver",
     "allow-get-capture-proxy",
     "allow-set-capture-proxy",
+    "allow-import-export",
     "allow-get-overview",
     "allow-get-usage",
     "allow-get-cost",

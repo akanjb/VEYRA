@@ -20,4 +20,4 @@ pub use commands::COMMAND_NAMES;
 pub use error::ApiError;
 pub use export::FileSaver;
 pub use names::DisplayNames;
-pub use shell::AppControl;
+pub use shell::{AppControl, FilePicker};

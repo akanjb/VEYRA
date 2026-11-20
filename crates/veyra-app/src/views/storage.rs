@@ -122,6 +122,11 @@ pub(crate) fn deletion_scope(
                 .capture_routes
                 .iter()
                 .any(|r| r.descriptor().id.as_str() == connector)
+            || data
+                .importer
+                .apps()
+                .iter()
+                .any(|a| a.id.as_str() == connector)
     };
     if let Some(connector) = &request.connector_id
         && !known(connector)

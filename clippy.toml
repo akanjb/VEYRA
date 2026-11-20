@@ -5,4 +5,4 @@ allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 
 # Proper nouns that the pedantic `doc_markdown` lint would otherwise want in backticks.
-doc-valid-idents = ["OpenAI", "OpenRouter", "OpenCode", "GitHub", "TypeScript", "SQLite", "WebView2", "..",]
+doc-valid-idents = ["OpenAI", "OpenRouter", "OpenCode", "GitHub", "TypeScript", "SQLite", "WebView2", "ChatGPT", "..",]

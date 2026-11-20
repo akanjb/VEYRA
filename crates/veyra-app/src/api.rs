@@ -9,6 +9,7 @@ use veyra_analytics::sessions::SessionReader;
 use veyra_domain::audit::{AuditAction, AuditActor, AuditEntry, AuditLog};
 use veyra_domain::billing::BillingRepository;
 use veyra_domain::capture::{CaptureProxy, CaptureRoute};
+use veyra_domain::import::ArchiveImport;
 use veyra_domain::pricing::PriceCatalog;
 use veyra_domain::project::ProjectRepository;
 use veyra_domain::settings::SettingsRepository;
@@ -23,20 +24,20 @@ use crate::dto::{
     CacheRequest, CaptureProxyInfo, CaptureProxyRequest, Cost, CostAssumptions,
     CostAssumptionsRequest, CostRequest, CreateBackupRequest, DataDeleted,
     DeleteBillingEntryRequest, DeleteBudgetRequest, DeleteDataRequest, DeletePreview,
-    ExportPreview, ExportRequest, ExportSaved, ListSourcesRequest, MergeProjectRequest, Models,
-    ModelsRequest, Overview, OverviewRequest, ProjectDetail, ProjectInfo, ProjectList,
-    ProjectRequest, ProjectsChanged, ProjectsRequest, RenameProjectRequest, RescanAccepted,
-    RescanRequest, RestorePreview, RestoreRequest, RestoreScheduled, SaveBillingEntryRequest,
-    SaveBudgetRequest, SessionDetail, SessionList, SessionRequest, SessionsRequest,
-    SetCaptureProxyRequest, SetSourceEnabledRequest, SetTelemetryReceiverRequest, SourceList,
-    SourceSummary, StorageOverview, StorageRequest, TelemetryReceiverInfo,
-    TelemetryReceiverRequest, Tools, ToolsRequest, UnmergeProjectRequest, Usage, UsageRequest,
-    WhatIf, WhatIfRequest,
+    ExportImported, ExportPreview, ExportRequest, ExportSaved, ImportExportRequest,
+    ListSourcesRequest, MergeProjectRequest, Models, ModelsRequest, Overview, OverviewRequest,
+    ProjectDetail, ProjectInfo, ProjectList, ProjectRequest, ProjectsChanged, ProjectsRequest,
+    RenameProjectRequest, RescanAccepted, RescanRequest, RestorePreview, RestoreRequest,
+    RestoreScheduled, SaveBillingEntryRequest, SaveBudgetRequest, SessionDetail, SessionList,
+    SessionRequest, SessionsRequest, SetCaptureProxyRequest, SetSourceEnabledRequest,
+    SetTelemetryReceiverRequest, SourceList, SourceSummary, StorageOverview, StorageRequest,
+    TelemetryReceiverInfo, TelemetryReceiverRequest, Tools, ToolsRequest, UnmergeProjectRequest,
+    Usage, UsageRequest, WhatIf, WhatIfRequest,
 };
 use crate::error::ApiError;
 use crate::export::{self, FileSaver};
 use crate::names::DisplayNames;
-use crate::shell::AppControl;
+use crate::shell::{AppControl, FilePicker};
 use crate::{scope, views};
 
 /// Static facts about the build, supplied by the composition root.
@@ -96,8 +97,12 @@ pub struct DataServices {
     pub proxy: Box<dyn CaptureProxy>,
     /// The providers the proxy forwards to, for their base URLs.
     pub capture_routes: Vec<Box<dyn CaptureRoute>>,
+    /// Reads the chat-app data exports the user chooses (ADR-040).
+    pub importer: Box<dyn ArchiveImport>,
     /// Saves reports where the user chooses.
     pub files: Box<dyn FileSaver>,
+    /// Opens files the user chooses.
+    pub picker: Box<dyn FilePicker>,
     /// Restarts Veyra, to apply a restored backup.
     pub control: Box<dyn AppControl>,
 }
@@ -246,6 +251,17 @@ impl Api {
         request: SetCaptureProxyRequest,
     ) -> Result<CaptureProxyInfo, ApiError> {
         views::capture::set(self.data()?, request.enabled)
+    }
+
+    /// Asks the user for a chat app's data export and imports its usage as Estimated
+    /// records. Importing the same export again adds nothing.
+    ///
+    /// # Errors
+    /// [`ApiError::Busy`] while starting; [`ApiError::Validation`] when the file is not an
+    /// export Veyra reads or is damaged; [`ApiError::SourceUnavailable`] when it cannot be
+    /// opened; [`ApiError::Internal`] on database failure.
+    pub fn import_export(&self, _request: ImportExportRequest) -> Result<ExportImported, ApiError> {
+        views::import::import(self.data()?)
     }
 
     /// Queues a scan of every enabled source; changes arrive as `data-changed` events.
@@ -846,6 +862,32 @@ mod tests {
         }
     }
 
+    impl crate::FilePicker for NoFiles {
+        fn pick(
+            &self,
+            _: &str,
+            _: &[&str],
+        ) -> Result<Option<Box<dyn veyra_domain::import::ReadSeek>>, String> {
+            Ok(None)
+        }
+    }
+
+    /// Never imports: these tests pick no file.
+    struct NoImports;
+
+    impl veyra_domain::import::ArchiveImport for NoImports {
+        fn apps(&self) -> Vec<veyra_domain::source::ConnectorDescriptor> {
+            Vec::new()
+        }
+        fn import(
+            &self,
+            _: &mut dyn veyra_domain::import::ReadSeek,
+        ) -> Result<veyra_domain::import::ImportSummary, veyra_domain::import::ImportError>
+        {
+            Err(veyra_domain::import::ImportError::NotRecognized)
+        }
+    }
+
     /// An API with a store in a fresh temporary directory (removed by the caller).
     fn attached(name: &str) -> (Api, Arc<Store>, Arc<Calls>, std::path::PathBuf) {
         let dir = std::env::temp_dir().join(format!("veyra-app-{}-{name}", std::process::id()));
@@ -882,7 +924,9 @@ mod tests {
                 telemetry: Box::new(FakeReceiver(Arc::clone(&calls))),
                 proxy: Box::new(FakeProxy(Arc::clone(&calls))),
                 capture_routes: veyra_connectors::capture::all(),
+                importer: Box::new(NoImports),
                 files: Box::new(NoFiles),
+                picker: Box::new(NoFiles),
                 control: Box::new(NoRestart),
             }))
         );

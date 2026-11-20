@@ -6,7 +6,7 @@
 
 Veyra is a local-first desktop application that consolidates AI usage from model providers, coding agents, IDEs, desktop apps and CLIs into one accurate, privacy-preserving analytics product. Everything runs on your own machine.
 
-![Status](https://img.shields.io/badge/status-early%20development%20(M4)-orange)
+![Status](https://img.shields.io/badge/status-early%20development%20(M6%E2%80%93M7)-orange)
 ![License](https://img.shields.io/badge/license-source--available-red)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Stack](https://img.shields.io/badge/stack-Tauri%202%20%C2%B7%20Rust%20%C2%B7%20React%2019%20%C2%B7%20SQLite-6f42c1)
@@ -27,13 +27,28 @@ Veyra is a local-first desktop application that consolidates AI usage from model
 ---
 
 > [!IMPORTANT]
-> **Project status: Milestones M0 (Foundations), M1 (Data core), M2 (Claude Code ingestion), M3 (Dashboard shell), M4 (more connectors) and M5 (analytics pages) complete.**
+> **Project status: Milestones M0 to M5 complete; M6 and M7 mostly complete; wider provider coverage under way.**
 > - **Built:** the secure desktop shell, generated contracts, the domain model, the verified pricing engine and price catalogue, the SQLite store and the analytics engine.
 > - **M2:** consent-gated, incremental ingestion of Claude Code logs, verified on 1.3 GB of real logs with no content stored.
 > - **M3:** the dashboard. It has three pages (Overview, Sessions with a session timeline, and Sources & Health), a first-run consent flow, light and dark themes, a command palette and full keyboard use, and accessibility checks in CI.
 > - **New in M4:** connectors for Codex, Gemini CLI, OpenCode and GitHub Copilot CLI, each verified against the tool's source code. Compressed archives and live SQLite databases are read through snapshots. Every source shows what it can and cannot report.
 > - **New in M5:** the analytics pages: Usage, Cost (with billing entries, budgets, the month forecast and how cost is estimated), Cache, Models & Providers, Projects (rename and merge), Activity, and highlights on the Overview. Every page is timed against its budget.
-> - **Next:** exports, storage and privacy controls (M6).
+> - **Since M5:**
+>   - Reports as CSV, JSON or XLSX, with presets, redaction and an audit log.
+>   - A Storage page with sizes, daily backups and restore at the next start.
+>   - Deletion of stored usage by application and date range, after a backup.
+>   - The Tools & Agents page.
+>   - What a period would have cost on another model.
+> - **Wider coverage ([assessment](docs/planning/06-universal-coverage.md)):**
+>   - An opt-in local OpenTelemetry receiver for Claude Code.
+>   - An opt-in local capture proxy that records exact usage of the OpenAI, Anthropic, Gemini and OpenRouter APIs.
+>   - Both are off by default and listen only on 127.0.0.1.
+> - **Chat apps:** importing ChatGPT's official data export, with estimated tokens.
+> - **Next:**
+>   - Claude.ai and Gemini app exports.
+>   - Billing pullers for the provider admin APIs.
+>   - Quotas and limits, optimization rules, retention and the remaining settings.
+>   - Installers.
 >
 > This README marks every capability as **Available** or **Planned**.
 
@@ -106,9 +121,18 @@ Veyra answers the questions no single tool can:
 | Pages: Usage, Cost, Cache, Models & Providers, Projects with detail, Activity | **Available** |
 | Billing entries (subscriptions, charges), monthly budgets, run rate and forecast, and how cost is estimated | **Available** |
 | Project renaming and merging | **Available** |
-| Tools & Agents, Quotas & Limits, deterministic Optimization recommendations | Planned (M7) |
-| Opt-in local OpenTelemetry receiver | Planned (M7) |
-| CSV / JSON / XLSX exports with redaction; storage and retention controls | Planned (M6) |
+| Tools & Agents page: tool categories, MCP servers, subagent share | **Available** |
+| CSV / JSON / XLSX reports with presets, redaction (hashed names, no paths) and an audit log | **Available** |
+| Storage page: sizes, daily rotating backups, restore at the next start | **Available** |
+| Deleting stored usage by application and date range, after an automatic backup | **Available** |
+| What-if repricing: what a period would have cost on another model | **Available** |
+| Opt-in local OpenTelemetry receiver (Claude Code), with refusal diagnostics ([ADR-038](docs/adr/0038-local-opentelemetry-receiver.md)) | **Available** |
+| Opt-in local capture proxy for the OpenAI, Anthropic, Gemini and OpenRouter APIs ([ADR-039](docs/adr/0039-local-capture-proxy.md)) | **Available** |
+| Importing the ChatGPT data export, with estimated tokens ([ADR-040](docs/adr/0040-chat-app-export-import.md)) | **Available** |
+| Importing Claude.ai and Gemini app data exports | Planned |
+| Billing pullers: Anthropic and OpenAI admin APIs, OpenRouter activity | Planned |
+| Quotas & Limits (Claude statusline, Codex rate limits), deterministic Optimization recommendations | Planned (M7) |
+| Retention policy, remaining settings (time zone, week start, pricing overrides), diagnostic bundle | Planned (M6) |
 | Installers, opt-in updater, checksums and SBOMs | Planned (M8) |
 | Optional self-hosted organisation hub | Planned (M10) |
 
@@ -150,12 +174,15 @@ The tiers below come from the research in [`docs/planning/00-research.md`](docs/
 | Gemini CLI | CLI | Local chat recordings (JSONL, or JSON before v0.39) | Exact (conversation requests only) | MVP · **Available** ([details](docs/connectors/gemini-cli.md)) |
 | OpenCode | CLI | Local SQLite, read through a snapshot | Exact | MVP · **Available** ([details](docs/connectors/opencode.md)) |
 | GitHub Copilot CLI | CLI | Local session events: totals per session and model | Provider-reported, per session | MVP · **Available** ([details](docs/connectors/copilot-cli.md)) |
-| Claude Code / Codex / Gemini CLI / Copilot (VS Code) | Official OpenTelemetry (opt-in) | OTLP to a local receiver | Exact | Next |
+| Claude Code | Official OpenTelemetry (opt-in) | OTLP/HTTP JSON to a local receiver on 127.0.0.1:4318 | Exact | **Available** |
+| Codex / Gemini CLI / Copilot (VS Code) | Official OpenTelemetry (opt-in) | OTLP to the same receiver | Exact | Next |
+| OpenAI, Anthropic and Gemini APIs; OpenRouter | API | Opt-in local capture proxy on 127.0.0.1:4320 ([details](docs/connectors/api-capture.md)) | Exact | **Available** |
 | Claude Desktop Chat/Cowork, Aider, Cline, Roo Code | Desktop / CLI / IDE | Local files | Exact–Partial | Next |
-| Ollama, LM Studio, OpenAI-compatible endpoints | Local runtime / API | Opt-in local capture proxy | Exact | Later |
+| Ollama, LM Studio, other OpenAI-compatible endpoints | Local runtime / API | The capture proxy, one route each | Exact | Next |
+| ChatGPT, Claude.ai, Gemini app (web, desktop, mobile) | Chat app | The official data export, imported by the user | Estimated | **Available** (ChatGPT); Claude.ai and Gemini next |
 | OpenRouter, OpenAI, Anthropic, xAI admin APIs | API | User-supplied keys, OS keyring | Provider-reported | Next |
 | Cursor | IDE | Local database (estimates); Enterprise Admin API | Estimated / Provider-reported | Later |
-| Windsurf, Antigravity, Zed, ChatGPT desktop | — | No usable local usage data | Unsupported | — |
+| Windsurf, Antigravity, Zed | — | No usable local usage data | Unsupported | — |
 
 ## How it works
 
@@ -697,6 +724,7 @@ flowchart LR
 - **Content Security Policy.** The production CSP allows no `unsafe-inline` and no `unsafe-eval`. This was verified on a built app through WebView2 DevTools.
 - **Plugins.** No shell plugin, no SQL plugin and no global Tauri object. The JavaScript prototype is frozen.
 - **No telemetry.** Network access happens only through features you explicitly enable.
+- **Local listeners (ADR-038, ADR-039).** The OpenTelemetry receiver and the capture proxy are off by default. When enabled they listen only on 127.0.0.1, refuse requests from web pages and from other host names (DNS rebinding), and limit request size and connections. The proxy forwards requests unchanged to the provider's official HTTPS address. API keys pass through and are never stored or logged; only response ids, models and usage counts are kept.
 - **Supply chain.** Exact version pins, a 7-day minimum release age, dependency install scripts disabled, GitHub Actions pinned to commit SHAs, and cargo-deny plus `pnpm audit` in CI. CodeQL and dependency review return when the repository becomes public ([ADR-021](docs/adr/0021-ci-scope-while-private.md)). See [ADR-017](docs/adr/0017-supply-chain-policy.md).
 
 ## Technology stack
@@ -742,8 +770,10 @@ veyra/
 │   ├── veyra-registry/          # loads + validates registry/*.toml (single source of truth)
 │   ├── veyra-analytics/         # metric registry, query specs, time-zone-aware engine
 │   ├── veyra-store/             # SQLite: migrations, idempotent writes, rollups, sources, checkpoints
-│   ├── veyra-connectors/        # pure source parsers: Claude Code, Codex, Gemini CLI, OpenCode, Copilot CLI
-│   ├── veyra-ingest/            # discovery, scoped reads, whole files, SQLite snapshots, pipeline, worker
+│   ├── veyra-connectors/        # pure source parsers: Claude Code, Codex, Gemini CLI, OpenCode, Copilot CLI,
+│   │                            #   API response formats for the capture proxy
+│   ├── veyra-ingest/            # discovery, scoped reads, whole files, SQLite snapshots, pipeline, worker,
+│   │                            #   OpenTelemetry receiver, capture proxy
 │   ├── veyra-app/               # application layer: Api, page views, DTOs, display names, catalogues
 │   └── veyra-testkit/           # test-only: synthetic fixture paths, temporary directories
 ├── src-tauri/                   # Tauri shell: composition root, commands, capabilities
@@ -762,7 +792,7 @@ veyra/
 ├── docs/
 │   ├── planning/                # research, PRD, architecture, UX, risks, roadmap
 │   ├── connectors/              # one page per connector: paths, fields, mapping rules
-│   └── adr/                     # architecture decision records 0001–0025
+│   └── adr/                     # architecture decision records 0001–0040
 ├── .github/workflows/           # CI and security pipelines
 └── .githooks/                   # pre-commit checks
 ```
@@ -819,6 +849,7 @@ pnpm build
 | `pnpm --filter @veyra/desktop dev` | Run the dashboard alone in a browser on synthetic data (add `?fresh` to the URL for a first run) |
 | `pnpm --filter @veyra/desktop test:ui` | Playwright + axe UI tests (set `PLAYWRIGHT_CHANNEL=msedge` or `chrome` to use an installed browser) |
 | `cargo run --release -p veyra-ingest --example scan_root -- <dir> <new-db>` | Ingest a local Claude Code `projects` directory into a scratch database and print counts only |
+| `cargo run -p veyra-ingest --example receive -- <new-db> <seconds>` | Run the OpenTelemetry receiver against a scratch database and print exports, records and the latest refusal |
 
 ### Adding a command
 
@@ -844,6 +875,7 @@ The compiler, the IPC access tests and the contract drift check catch any missed
 | Contract | Generated TypeScript matches Rust DTOs and the command catalogue | `pnpm contracts:check` |
 | Parser | Each connector and format version: synthetic fixtures → expected records, field by field; only allow-listed files are read; no content leaves the parser; running totals add up to the final total and resets start a new baseline (Codex); session summaries count once (Copilot CLI) | `cargo test` (`veyra-connectors`) |
 | Connectors end to end | Discovery, consent, totals, idempotent rescans and no stored content for every connector; compressed copies add nothing; a live SQLite database is never locked while a writer keeps writing; Claude through Copilot attributes vendor, gateway and application separately | `cargo test` (`veyra-ingest/tests/connectors.rs`) |
+| Receiver and proxy | Real loopback sockets: exports and relayed streams stored once, keys passed through, web pages and other hosts refused, unreachable providers reported, ports closed when turned off | `cargo test` (`veyra-ingest/tests/receiver.rs`, `proxy.rs`) |
 | Ingestion | Consent, idempotent rescans, appends, partial lines, truncation, replacement, deletion, oversize lines, cancellation, concurrent writers, shared access, canaries, the watcher | `cargo test` (`veyra-ingest`) |
 | Performance | Overview query and dashboard page budgets on 1M and 10M synthetic events; end-to-end ingest throughput | `veyra-perf`, ignored throughput test, `Performance` workflow |
 | Page contract | Overview equals the metric engine for the same scope; parts add up to the headline; sessions sum to the Overview; one name per model across pages | `cargo test` (`veyra-app/tests/contract.rs`) |
@@ -881,13 +913,16 @@ flowchart LR
   M2 --> M4[M4 Codex · Gemini CLI<br/>OpenCode · Copilot CLI<br/>✅ complete]:::done
   M3 --> M5[M5 Analytics modules<br/>✅ complete]:::done
   M4 --> M5
-  M5 --> M6[M6 Exports · Storage<br/>Settings]
-  M5 --> M7[M7 Tools & Agents · Quotas<br/>Optimization · OTLP]
+  M5 --> M6[M6 Exports · Storage<br/>Settings<br/>🟡 exports, storage, deletion done]:::part
+  M5 --> M7[M7 Tools & Agents · Quotas<br/>Optimization · OTLP<br/>🟡 tools page, OTLP done]:::part
+  M5 --> UC[Universal coverage<br/>🟡 capture proxy done<br/>ChatGPT import done]:::part
   M6 --> M8[M8 Release v1.0]
   M7 --> M8
+  UC --> M9
   M8 --> M9[M9 More connectors<br/>localhost access]
   M9 --> M10[M10 Organisation hub]
   classDef done fill:#d1f7d6,stroke:#2f9e44
+  classDef part fill:#fff3bf,stroke:#f08c00
 ```
 
 | Release | Contents |
@@ -897,7 +932,7 @@ flowchart LR
 | 1.0 | Tools & Agents, Quotas, Optimization, OpenTelemetry receiver, installers, updater |
 | 2.0 | Self-hosted organisation hub |
 
-The detailed, dependency-ordered plan with acceptance criteria is in [`docs/planning/05-roadmap.md`](docs/planning/05-roadmap.md).
+The detailed, dependency-ordered plan with acceptance criteria is in [`docs/planning/05-roadmap.md`](docs/planning/05-roadmap.md). Coverage beyond local tools (APIs, chat apps, billing) follows [`docs/planning/06-universal-coverage.md`](docs/planning/06-universal-coverage.md).
 
 ## Documentation
 
@@ -910,8 +945,9 @@ The detailed, dependency-ordered plan with acceptance criteria is in [`docs/plan
 | [UX plan](docs/planning/03-ux.md) | Sitemap, page anatomy, chart choices, design system, accessibility |
 | [Feasibility and risks](docs/planning/04-feasibility-risks.md) | Feasibility, risk register, hidden costs, prioritisation |
 | [Roadmap](docs/planning/05-roadmap.md) | Milestones, tasks, acceptance criteria |
-| Connectors: [Claude Code](docs/connectors/claude-code.md), [Codex](docs/connectors/codex.md), [Gemini CLI](docs/connectors/gemini-cli.md), [OpenCode](docs/connectors/opencode.md), [GitHub Copilot CLI](docs/connectors/copilot-cli.md) | Per-source paths, fields used, mapping rules, precedence and known gaps |
-| [Decision records](docs/adr/README.md) | ADR 0001–0023 |
+| [Universal coverage](docs/planning/06-universal-coverage.md) | What can and cannot be tracked per provider and surface, and the collectors that cover each |
+| Connectors: [Claude Code](docs/connectors/claude-code.md), [Codex](docs/connectors/codex.md), [Gemini CLI](docs/connectors/gemini-cli.md), [OpenCode](docs/connectors/opencode.md), [GitHub Copilot CLI](docs/connectors/copilot-cli.md), [API capture proxy](docs/connectors/api-capture.md), [ChatGPT export](docs/connectors/chatgpt-export.md) | Per-source paths, fields used, mapping rules, precedence and known gaps |
+| [Decision records](docs/adr/README.md) | ADR 0001–0040 |
 
 ## Author
 

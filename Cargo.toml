@@ -38,6 +38,7 @@ tauri-plugin-dialog = "=2.8.4"
 thiserror = "=2.0.21"
 toml = "=1.1.8"
 ts-rs = "=12.0.1"
+zip = { version = "=9.3.0", default-features = false, features = ["deflate"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -9,9 +9,13 @@ use veyra_app::dto::{
     ModelsRequest, OverviewRequest, ProjectsRequest, Scope, ScopeFilters, SessionSort,
     SessionsRequest, ToolsRequest, UsageRequest, WhatIfRequest,
 };
-use veyra_app::{Api, ApiError, AppControl, AppMetadata, DataServices, DisplayNames, FileSaver};
+use veyra_app::{
+    Api, ApiError, AppControl, AppMetadata, DataServices, DisplayNames, FilePicker, FileSaver,
+};
 use veyra_domain::capture::{CaptureProxy, ProxyStatus};
+use veyra_domain::import::{ArchiveImport, ImportError, ImportSummary, ReadSeek};
 use veyra_domain::pricing::PriceCatalog;
+use veyra_domain::source::ConnectorDescriptor;
 use veyra_domain::source::IngestControl;
 use veyra_domain::telemetry::{ReceiverStatus, TelemetryReceiver};
 use veyra_store::{Storage, Store};
@@ -67,6 +71,24 @@ impl FileSaver for NoFiles {
     }
 }
 
+impl FilePicker for NoFiles {
+    fn pick(&self, _: &str, _: &[&str]) -> Result<Option<Box<dyn ReadSeek>>, String> {
+        Ok(None)
+    }
+}
+
+/// Nothing is imported while pages are timed.
+struct NoImports;
+
+impl ArchiveImport for NoImports {
+    fn apps(&self) -> Vec<ConnectorDescriptor> {
+        Vec::new()
+    }
+    fn import(&self, _: &mut dyn ReadSeek) -> Result<ImportSummary, ImportError> {
+        Err(ImportError::NotRecognized)
+    }
+}
+
 /// An API over the store, wired like the desktop shell.
 fn api(store: &Arc<Store>, catalog: PriceCatalog, names: DisplayNames) -> Api {
     let api = Api::new(AppMetadata {
@@ -94,7 +116,9 @@ fn api(store: &Arc<Store>, catalog: PriceCatalog, names: DisplayNames) -> Api {
         telemetry: Box::new(NoReceiver),
         proxy: Box::new(NoProxy),
         capture_routes: Vec::new(),
+        importer: Box::new(NoImports),
         files: Box::new(NoFiles),
+        picker: Box::new(NoFiles),
         control: Box::new(NoRestart),
     }));
     api

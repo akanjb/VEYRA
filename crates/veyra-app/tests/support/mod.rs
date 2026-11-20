@@ -13,11 +13,12 @@ use veyra_analytics::engine::evaluate;
 use veyra_analytics::metrics::{MetricId, MetricValue};
 use veyra_analytics::query::{Period, QuerySpec, TimeGrain};
 use veyra_app::dto::{Comparison, Scope, ScopeFilters};
-use veyra_app::{Api, AppControl, AppMetadata, DataServices, DisplayNames, FileSaver};
+use veyra_app::{Api, AppControl, AppMetadata, DataServices, DisplayNames, FilePicker, FileSaver};
 use veyra_domain::capture::{CaptureProxy, ProxyStatus};
+use veyra_domain::import::ReadSeek;
 use veyra_domain::source::{DiscoveryEnv, IngestControl};
 use veyra_domain::telemetry::{ReceiverStatus, TelemetryReceiver};
-use veyra_ingest::{DEFAULT_CHUNK_BYTES, IngestContext, discover, scan_all};
+use veyra_ingest::{DEFAULT_CHUNK_BYTES, ImportParts, Importer, IngestContext, discover, scan_all};
 use veyra_registry::Registry;
 use veyra_store::{Storage, Store};
 use veyra_testkit::TempDir;
@@ -62,6 +63,20 @@ impl FileSaver for MemoryFiles {
             .map_err(|e| e.to_string())?
             .push((suggested_name.to_owned(), bytes.to_vec()));
         Ok(true)
+    }
+}
+
+/// Files the user will choose in the open dialog, first chosen first; an empty queue
+/// is a cancelled dialog.
+pub type Picks = Arc<Mutex<Vec<Vec<u8>>>>;
+
+struct QueuedPicks(Picks);
+
+impl FilePicker for QueuedPicks {
+    fn pick(&self, _: &str, _: &[&str]) -> Result<Option<Box<dyn ReadSeek>>, String> {
+        let mut queue = self.0.lock().map_err(|e| e.to_string())?;
+        Ok((!queue.is_empty())
+            .then(|| Box::new(std::io::Cursor::new(queue.remove(0))) as Box<dyn ReadSeek>))
     }
 }
 
@@ -134,6 +149,17 @@ pub fn api_with_files(data: &Ingested) -> (Api, SavedFiles) {
 
 /// An API over the fixtures, with its saved exports and restart requests.
 pub fn api_with_restarts(data: &Ingested) -> (Api, SavedFiles, Arc<AtomicUsize>) {
+    let (api, files, restarts, _) = build(data);
+    (api, files, restarts)
+}
+
+/// An API over the fixtures that imports the files queued in its picks.
+pub fn api_with_picks(data: &Ingested) -> (Api, Picks) {
+    let (api, _, _, picks) = build(data);
+    (api, picks)
+}
+
+fn build(data: &Ingested) -> (Api, SavedFiles, Arc<AtomicUsize>, Picks) {
     let store = &data.store;
     let api = Api::new(AppMetadata {
         product_name: "Veyra".to_owned(),
@@ -151,6 +177,13 @@ pub fn api_with_restarts(data: &Ingested) -> (Api, SavedFiles, Arc<AtomicUsize>)
         &connectors,
     );
     let files = SavedFiles::default();
+    let picks = Picks::default();
+    let importer = Importer::new(ImportParts {
+        store: Arc::clone(store),
+        registry: Arc::new(Registry::bundled().unwrap()),
+        importers: veyra_connectors::exports::all(),
+        on_change: Box::new(|_| {}),
+    });
     let restarts = Arc::new(AtomicUsize::new(0));
     let storage = Storage::new(Arc::clone(store), data.database(), data.backups());
     assert!(api.attach(Ok(DataServices {
@@ -168,10 +201,12 @@ pub fn api_with_restarts(data: &Ingested) -> (Api, SavedFiles, Arc<AtomicUsize>)
         telemetry: Box::new(NoReceiver),
         proxy: Box::new(NoProxy),
         capture_routes: Vec::new(),
+        importer: Box::new(importer),
         files: Box::new(MemoryFiles(Arc::clone(&files))),
+        picker: Box::new(QueuedPicks(Arc::clone(&picks))),
         control: Box::new(Restarts(Arc::clone(&restarts))),
     })));
-    (api, files, restarts)
+    (api, files, restarts, picks)
 }
 
 /// The fixture day, 2026-11-08, in UTC.
