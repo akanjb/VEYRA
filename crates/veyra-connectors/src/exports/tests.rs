@@ -158,7 +158,7 @@ fn other_files_are_not_recognised() {
     ] {
         let (result, usage) = run(bytes);
         assert_eq!(result, Ok(None));
-        assert!(usage.is_empty());
+        assert_eq!(usage.len(), 0, "nothing is recorded");
     }
 }
 
@@ -216,7 +216,7 @@ fn empty_replies_and_other_roles_record_nothing() {
     )]);
     let (result, usage) = run(export.to_string().into_bytes());
     assert_eq!(result.unwrap().unwrap().replies, 0);
-    assert!(usage.is_empty());
+    assert_eq!(usage.len(), 0, "nothing is recorded");
 }
 
 #[test]
